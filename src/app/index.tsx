@@ -8,6 +8,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { WebBadge } from '@/components/web-badge';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+import { authClient } from '@/lib/auth-client';
 
 function getDevMenuHint() {
   if (Platform.OS === 'web') {
@@ -29,30 +30,35 @@ function getDevMenuHint() {
 }
 
 export default function HomeScreen() {
+  const { data: session } = authClient.useSession();
+
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
         <ThemedView style={styles.heroSection}>
           <AnimatedIcon />
           <ThemedText type="title" style={styles.title}>
-            Welcome to&nbsp;Expo
+            Welcome{session?.user.name ? `, ${session.user.name}` : ' to Fave'}
           </ThemedText>
         </ThemedView>
 
         <ThemedText type="code" style={styles.code}>
-          get started
+          {session?.user.email}
         </ThemedText>
 
         <ThemedView type="backgroundElement" style={styles.stepContainer}>
-          <HintRow
-            title="Try editing"
-            hint={<ThemedText type="code">src/app/index.tsx</ThemedText>}
-          />
           <HintRow title="Dev tools" hint={getDevMenuHint()} />
           <HintRow
-            title="Fresh start"
-            hint={<ThemedText type="code">npm run reset-project</ThemedText>}
+            title="Authentication"
+            hint={<ThemedText type="code">Google · Apple</ThemedText>}
           />
+          <ThemedText
+            accessibilityRole="link"
+            onPress={() => void authClient.signOut()}
+            style={styles.signOut}
+          >
+            Sign out
+          </ThemedText>
         </ThemedView>
 
         {Platform.OS === 'web' && <WebBadge />}
@@ -95,4 +101,5 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.four,
     borderRadius: Spacing.four,
   },
+  signOut: { color: '#b42318', fontWeight: '600', paddingVertical: Spacing.two },
 });

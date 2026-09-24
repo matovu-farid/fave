@@ -3,16 +3,15 @@
   "name": "fave-worker",
   "main": "src/index.ts",
   "compatibility_date": "2026-09-24",
+  "compatibility_flags": ["nodejs_compat"],
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "fave-db",
-      "database_id": "99e8531f-eaaa-4de6-a359-0adc1228b3b3"
+      "database_id": "99e8531f-eaaa-4de6-a359-0adc1228b3b3",
+      "migrations_dir": "migrations"
     }
   ]
-  // "compatibility_flags": [
-  //   "nodejs_compat"
-  // ],
   // "vars": {
   //   "MY_VAR": "my-variable"
   // },

@@ -4,10 +4,15 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy --minify",
+    "db:migrate:local": "wrangler d1 migrations apply fave-db --local",
+    "db:migrate:remote": "wrangler d1 migrations apply fave-db --remote",
     "cf-typegen": "wrangler types --env-interface CloudflareBindings"
   },
   "dependencies": {
-    "hono": "^4.13.9"
+    "@better-auth/expo": "^1.7.5",
+    "better-auth": "^1.7.5",
+    "hono": "^4.13.9",
+    "jose": "^6.2.12"
   },
   "devDependencies": {
     "wrangler": "^4.110.0"

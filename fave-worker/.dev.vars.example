@@ -1,0 +1,10 @@
+# Copy to .dev.vars for local development. Keep real values out of Git.
+BETTER_AUTH_URL=http://localhost:8787
+BETTER_AUTH_SECRET=replace-with-a-random-secret-at-least-32-characters-long
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+APPLE_SERVICE_ID=
+APPLE_TEAM_ID=
+APPLE_KEY_ID=
+APPLE_PRIVATE_KEY=
+ENVIRONMENT=development
