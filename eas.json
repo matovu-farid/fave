@@ -1,0 +1,26 @@
+{
+  "build": {
+    "development": {
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://api.fave.fidexa.org"
+      },
+      "developmentClient": true,
+      "distribution": "internal",
+      "ios": {
+        "simulator": true
+      }
+    },
+    "development-device": {
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://api.fave.fidexa.org"
+      },
+      "developmentClient": true,
+      "distribution": "internal"
+    },
+    "production": {
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://api.fave.fidexa.org"
+      }
+    }
+  }
+}

@@ -72,6 +72,21 @@ non-secret variable to the canonical deployed Worker URL. Apply production
 migrations with `npm run db:migrate:remote` after confirming the target database.
 
 The app scheme is `fave`; Better Auth redirects the browser OAuth flow back to
-the app and caches the session in Expo SecureStore. Expo Go is suitable for
-local UI development, but native deep links and SecureStore configuration must
-also be exercised in an EAS development build before release.
+the app and caches the session in Expo SecureStore. Production builds and EAS
+development builds use this stable scheme, which is trusted by the production
+Worker. Build the iOS simulator development client with
+`npx eas-cli@latest build --profile development --platform ios`, then start
+Metro with `npx expo start --dev-client`. Use the `development-device` profile
+instead when building for a physical iPhone. Both EAS development profiles
+currently point to the production auth Worker so they use the already
+registered Google and Apple callback URLs; sign-ins from those builds create
+sessions in the production auth database.
+
+Expo Go generates temporary `exp://` callback URLs. The production Worker
+intentionally rejects those; only a Worker started with
+`ENVIRONMENT=development` trusts `exp://**`. Point an Expo Go app at that local
+development Worker (`EXPO_PUBLIC_API_URL=http://localhost:8787` in the iOS
+simulator) and configure OAuth provider callback URLs for that Worker. For
+end-to-end Apple OAuth, use an HTTPS development Worker because Apple requires
+HTTPS return URLs. Never add Expo Go callback patterns to the production
+Worker's trusted origins.
