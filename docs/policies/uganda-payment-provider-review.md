@@ -4,7 +4,7 @@
 
 **Prepared:** 30 September 2026
 **Issue:** [#16 — Select a Uganda-ready payment provider](https://github.com/matovu-farid/fave/issues/16)
-**Depends on:** [#15 — fare, booking, cancellation, and settlement policy](https://github.com/matovu-farid/fave/issues/15)
+**Product inputs:** Confirmed payment rails and proposed fare treatment in [#15 — fare, booking, cancellation, and settlement policy](https://github.com/matovu-farid/fave/issues/15). Provider fee and settlement findings flow back to #15.
 **Legal gate:** [#14 — Uganda legal, regulatory, privacy, and safety review](https://github.com/matovu-farid/fave/issues/14)
 
 ## Recommendation
@@ -39,7 +39,7 @@ For scale illustration only, assume a UGX 100,000 fare split into a 50% deposit 
 | Mobile money (3%) | Local card (4.8%) | UGX 3,900 total |
 | Local card (4.8%) | Mobile money (3%) | UGX 3,900 total |
 
-These are published-list calculations, not a Fave offer; the UGX 100,000 value is only a scale example. Flutterwave's page says the customer bears transaction charges by default, with a dashboard option to change who pays. Confirm the setting and any surcharge/disclosure rules in Fave's merchant offer, then make the quote show clearly whether processing costs are absorbed into the fare or added as an explicit line.
+These are published-list calculations, not a Fave offer; the UGX 100,000 value is only a scale example. Flutterwave's page says customers bear processing charges by default, with a dashboard option to change who pays. The current working draft in #15 proposes one all-in fare that includes expected provider fees and no undisclosed checkout surcharge. If the owner approves that proposal, Fave must configure the merchant account so the client is charged the quoted total, then confirm the effective fee treatment in writing; do not rely on the provider default or add a surprise checkout fee.
 
 ## Evidence and implementation implications
 
@@ -51,7 +51,7 @@ These are published-list calculations, not a Fave offer; the UGX 100,000 value i
 - [Webhooks](https://developer.flutterwave.com/docs/webhooks) documents a configured secret hash, three retries at 30-minute intervals when a 200 response is not received and retries are enabled, and re-querying critical transaction details before marking a booking paid. Webhook processing must be idempotent because duplicate events can occur.
 - [Uganda bank payouts](https://developer.flutterwave.com/docs/uganda-2) documents UGX bank transfers, beneficiary and branch information, transfer-status lookup, and transfer webhooks. [Mobile-money transfers](https://developer.flutterwave.com/docs/mobile-money) lists Uganda MTN and Airtel.
 - [Split payments](https://developer.flutterwave.com/docs/split-payments) supports Uganda subaccounts with branch code. It explicitly says marketplace owners must vet their merchants and that disputes/chargebacks are logged against the platform owner. Confirm in writing whether Fave’s driver-provider model is eligible and whether each driver needs an approved subaccount.
-- [Refund API](https://developer.flutterwave.com/reference/transaction-refund) supports a requested partial amount and says refunds usually take 3–15 working days. Confirm whether this applies to each payment rail and account, and when the provider treats funds as finally refunded.
+- [Refund API](https://developer.flutterwave.com/docs/refunds) supports a requested partial amount. Its current docs say card refunds take 3–15 days and mobile-money refunds take 3–5 days; a refund may remain pending/processing until completion. Refund webhooks are disabled by default and must be enabled by Flutterwave support for the merchant account. Until enabled, use the documented callback URL or poll the refund status endpoint. Confirm the exact timeline and setup for Fave’s account.
 - [Settlements](https://developer.flutterwave.com/docs/settlements) says the holding period varies by payment method, settlements require live-account approval and a configured bank/wallet destination, balances below a minimum threshold can be batched, and flagged settlements are withheld pending review.
 
 ### Other providers
@@ -79,6 +79,7 @@ These are published-list calculations, not a Fave offer; the UGX 100,000 value i
 | Merchant of record and who receives funds | **Pending #15 / #14** | Owner describes intended funds flow; counsel classifies it |
 | Driver payout/split | **Pending #15 / #14 / provider** | Written provider confirmation, account eligibility, and counsel approval |
 | Current fees and settlement terms | **Pending merchant quote** | Signed/delivered Fave-specific rate and payout schedule |
-| Who bears transaction fees | **Pending #15 / merchant offer** | Confirm whether Fave absorbs collection fees into its fare or displays an explicit client fee; Flutterwave's public page says customer-paid by default but permits changing the setting |
-| Sandbox evidence | **Not run** | Only after account access and policy decisions; test mode only |
+| Who bears transaction fees | **Proposed in #15; not final policy** | Current policy draft proposes including expected fees in the all-in quoted fare without a surprise checkout surcharge. Confirm merchant-account configuration and obtain written provider terms before treating this as final |
+| Refund notification path | **Account-level confirmation needed** | Flutterwave says refund webhooks are off by default; ask support to enable them for Fave or implement callback/polling and verify final refund status in sandbox |
+| Sandbox evidence | **Not run** | Only after merchant sandbox access; test mode only |
 | Production approval | **Not started** | Requires business KYC, applicable licences, and counsel-approved flow |
