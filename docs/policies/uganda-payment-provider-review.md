@@ -41,6 +41,12 @@ For scale illustration only, assume a UGX 100,000 fare split into a 50% deposit 
 
 These are published-list calculations, not a Fave offer; the UGX 100,000 value is only a scale example. Flutterwave's page says customers bear processing charges by default, with a dashboard option to change who pays. The current working draft in #15 proposes one all-in fare that includes expected provider fees and no undisclosed checkout surcharge. If the owner approves that proposal, Fave must configure the merchant account so the client is charged the quoted total, then confirm the effective fee treatment in writing; do not rely on the provider default or add a surprise checkout fee.
 
+## Uganda authorization check
+
+The Bank of Uganda’s [2025 National Payment Systems Oversight Framework](https://bou.or.ug/uploads/Revised_BOU_National_Payment_Systems_Oversight_Framework_2025_698b3e9745.pdf) says PSPs and payment-system operators must be licensed to operate in Uganda. Its eligible activities include domestic money-transfer/payment-gateway services and merchant acquisition. This establishes a compliance check for the actual service and funds flow; it does not establish whether a named provider, contracting affiliate, bank/acquirer, or Fave itself is licensed or exempt.
+
+Before selecting a provider, obtain the contracting entity’s full legal name and written confirmation of the Uganda-authorized entity/partner and its role in each collection, settlement, refund, and payout step. Ask Ugandan counsel to assess the full arrangement, including whether Fave’s merchant, marketplace, collection, or driver-settlement role requires its own authorization or an approved structure. Do not infer authorization from a provider’s ability to accept UGX or from a public product page.
+
 ## Evidence and implementation implications
 
 ### Flutterwave
@@ -65,7 +71,7 @@ These are published-list calculations, not a Fave offer; the UGX 100,000 value i
 
 1. Payment methods are confirmed in #15: MTN/Airtel mobile money plus local cards for both deposit and final balance (owner response, 30 September 2026). Still confirm UGX currency, whether Fave or a driver is merchant of record, whether Fave collects the full fare, when/if drivers are paid, and commission/payout rules.
 2. Ugandan counsel records the #14 conclusion on platform collection, holding, refund, and driver settlement; counsel identifies any licence, agency, safeguarding, or disclosure conditions.
-3. Obtain comparable written merchant offers from Flutterwave and at least one local alternative (DPO or Pesapal), including fees and VAT, who bears processing charges and any surcharge/disclosure rules, onboarding documents, live merchant eligibility, settlement schedule/reserve/minimum, refund and chargeback fees/timelines, split/payout capability, limits, webhook/retry behavior, reconciliation exports, support coverage, and termination/hold rights.
+3. Obtain comparable written merchant offers from Flutterwave and at least one local alternative (DPO or Pesapal), including the full legal name of the contracting/acquiring entity and its Uganda authorization or licensed partner; fees and VAT; who bears processing charges and any surcharge/disclosure rules; onboarding documents; live merchant eligibility; settlement schedule/reserve/minimum; refund and chargeback fees/timelines; split/payout capability; limits; webhook/retry behavior; reconciliation exports; support coverage; and termination/hold rights.
 4. Confirm a registered/eligible Fave business account and the required merchant KYC documents. Flutterwave’s Uganda onboarding guidance lists operating licence where applicable; do not assume onboarding approval before required transport licences are decided under #14.
 5. Use provider sandbox/test credentials to validate UGX deposit and balance charges, failed/pending payments, duplicate/out-of-order notifications, status re-query, full and partial refunds, and reconciliation. Use no real customer funds in this issue.
 6. If provider payouts/splits are not approved or supported, keep booking/payment flows disabled until counsel approves a bank-settlement and manual driver-payout process and the provider confirms the flow in writing. Do not bypass legal review by relabelling a payout or holding arrangement.
@@ -82,4 +88,5 @@ These are published-list calculations, not a Fave offer; the UGX 100,000 value i
 | Who bears transaction fees | **Proposed in #15; not final policy** | Current policy draft proposes including expected fees in the all-in quoted fare without a surprise checkout surcharge. Confirm merchant-account configuration and obtain written provider terms before treating this as final |
 | Refund notification path | **Account-level confirmation needed** | Flutterwave says refund webhooks are off by default; ask support to enable them for Fave or implement callback/polling and verify final refund status in sandbox |
 | Sandbox evidence | **Not run** | Only after merchant sandbox access; test mode only |
+| Uganda authorization | **Not verified for Fave/provider arrangement** | Confirm the contracting/acquiring entities and authorization or licensed-partner structure with written provider evidence and Ugandan counsel under the BoU 2025 framework |
 | Production approval | **Not started** | Requires business KYC, applicable licences, and counsel-approved flow |
