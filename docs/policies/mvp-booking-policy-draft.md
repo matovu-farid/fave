@@ -21,6 +21,22 @@ This document turns the current product direction into policy options for issue 
 - Price should be based on driving distance and the driver's accommodation estimate.
 - Ask the client for a 50% deposit by default, configurable for future policy changes. Collect the balance after the trip is complete.
 
+## Recommended starting defaults for owner approval
+
+| Topic | Proposed MVP default | Why |
+|---|---|---|
+| Currency | UGX; show whole shillings and no separate platform fee initially | Keeps the first quote easy to understand; legal/tax review still applies |
+| Distance | Price by selected vehicle class; show the passenger route and disclose any separately chargeable return distance | Makes car choice and total trip cost visible before payment |
+| Accommodation | Use a location-sensitive nightly allowance, shown as its own line; Fave advances the approved allowance to the driver | Avoids asking a driver to fund a work trip personally and keeps customer estimate predictable |
+| Quote | Expire after 24 hours; lock the accepted quote when the deposit is confirmed | Allows time to pay while preserving an auditable price snapshot |
+| Pending deposit | Hold the selected car for 30 minutes; release it after timeout or confirmed payment failure | Prevents a stalled checkout from blocking availability indefinitely |
+| Client cancellation | Refund all deposit at 72+ hours; refund half of the deposit at 24–72 hours; retain the deposit inside 24 hours | A simple time-based proposal; requires owner and counsel approval before launch |
+| Fave cannot provide a car/driver | Refund all client payments in full | The client should not bear the cost of Fave's inability to fulfill |
+| Phone verification | Africa's Talking SMS, with Fave-managed one-time codes and abuse controls | Lower listed local SMS cost; use only if the team accepts building and operating the OTP safeguards |
+| Driver settlement | Use the selected payment provider and settle only after trip completion/reconciliation | Keeps payment proof and settlement traceable; exact legal structure needs counsel review |
+
+These are recommendations to reduce the decision work, not approved policy. Unresolved values such as the per-kilometre rate and nightly allowance remain deliberately blank until operating-cost inputs are available.
+
 ## Draft pricing rules for owner review
 
 ### Currency and display
