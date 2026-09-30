@@ -30,7 +30,16 @@ Flutterwave’s [current Uganda pricing page](https://www.flutterwave.com/ug/pri
 
 An older [Flutterwave Uganda help article](https://www.flutterwave.com/rw/support/general/heres-all-you-need-to-know-about-operating-a-flutterwave-account-in-uganda) lists 3.2% for local cards and 3.8% for international cards, versus 4.8% on the current pricing page. Treat this as a material pricing discrepancy: obtain a dated written quote for Fave before setting customer prices or the #15 fare model.
 
-For scale illustration only, before taxes and payout costs, a UGX 100,000 local mobile-money charge at 3% would cost UGX 3,000; a local card charge at 4.8% would cost UGX 4,800. These are published-list calculations, not a Fave offer.
+For scale illustration only, assume a UGX 100,000 fare split into a 50% deposit and 50% balance. Applying the current published rates to each installment, before VAT and payout costs:
+
+| Deposit method | Balance method | Published collection-fee estimate |
+|---|---|---:|
+| Mobile money (3%) | Mobile money (3%) | UGX 3,000 total |
+| Local card (4.8%) | Local card (4.8%) | UGX 4,800 total |
+| Mobile money (3%) | Local card (4.8%) | UGX 3,900 total |
+| Local card (4.8%) | Mobile money (3%) | UGX 3,900 total |
+
+These are published-list calculations, not a Fave offer; the UGX 100,000 value is only a scale example. Flutterwave's page says the customer bears transaction charges by default, with a dashboard option to change who pays. Confirm the setting and any surcharge/disclosure rules in Fave's merchant offer, then make the quote show clearly whether processing costs are absorbed into the fare or added as an explicit line.
 
 ## Evidence and implementation implications
 
@@ -56,7 +65,7 @@ For scale illustration only, before taxes and payout costs, a UGX 100,000 local 
 
 1. Payment methods are confirmed in #15: MTN/Airtel mobile money plus local cards for both deposit and final balance (owner response, 30 September 2026). Still confirm UGX currency, whether Fave or a driver is merchant of record, whether Fave collects the full fare, when/if drivers are paid, and commission/payout rules.
 2. Ugandan counsel records the #14 conclusion on platform collection, holding, refund, and driver settlement; counsel identifies any licence, agency, safeguarding, or disclosure conditions.
-3. Obtain comparable written merchant offers from Flutterwave and at least one local alternative (DPO or Pesapal), including fees and VAT, onboarding documents, live merchant eligibility, settlement schedule/reserve/minimum, refund and chargeback fees/timelines, split/payout capability, limits, webhook/retry behavior, reconciliation exports, support coverage, and termination/hold rights.
+3. Obtain comparable written merchant offers from Flutterwave and at least one local alternative (DPO or Pesapal), including fees and VAT, who bears processing charges and any surcharge/disclosure rules, onboarding documents, live merchant eligibility, settlement schedule/reserve/minimum, refund and chargeback fees/timelines, split/payout capability, limits, webhook/retry behavior, reconciliation exports, support coverage, and termination/hold rights.
 4. Confirm a registered/eligible Fave business account and the required merchant KYC documents. Flutterwave’s Uganda onboarding guidance lists operating licence where applicable; do not assume onboarding approval before required transport licences are decided under #14.
 5. Use provider sandbox/test credentials to validate UGX deposit and balance charges, failed/pending payments, duplicate/out-of-order notifications, status re-query, full and partial refunds, and reconciliation. Use no real customer funds in this issue.
 6. If provider payouts/splits are not approved or supported, keep booking/payment flows disabled until counsel approves a bank-settlement and manual driver-payout process and the provider confirms the flow in writing. Do not bypass legal review by relabelling a payout or holding arrangement.
@@ -70,5 +79,6 @@ For scale illustration only, before taxes and payout costs, a UGX 100,000 local 
 | Merchant of record and who receives funds | **Pending #15 / #14** | Owner describes intended funds flow; counsel classifies it |
 | Driver payout/split | **Pending #15 / #14 / provider** | Written provider confirmation, account eligibility, and counsel approval |
 | Current fees and settlement terms | **Pending merchant quote** | Signed/delivered Fave-specific rate and payout schedule |
+| Who bears transaction fees | **Pending #15 / merchant offer** | Confirm whether Fave absorbs collection fees into its fare or displays an explicit client fee; Flutterwave's public page says customer-paid by default but permits changing the setting |
 | Sandbox evidence | **Not run** | Only after account access and policy decisions; test mode only |
 | Production approval | **Not started** | Requires business KYC, applicable licences, and counsel-approved flow |
