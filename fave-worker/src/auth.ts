@@ -2,7 +2,7 @@ import { expo } from '@better-auth/expo'
 import { betterAuth } from 'better-auth'
 import { importPKCS8, SignJWT } from 'jose'
 
-export type AuthBindings = CloudflareBindings & {
+export type AuthBindings = Omit<CloudflareBindings, 'BETTER_AUTH_URL' | 'ENVIRONMENT'> & {
   BETTER_AUTH_SECRET?: string
   BETTER_AUTH_URL?: string
   GOOGLE_CLIENT_ID?: string

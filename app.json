@@ -8,6 +8,7 @@
     "scheme": "fave",
     "userInterfaceStyle": "automatic",
     "ios": {
+      "bundleIdentifier": "org.fidexa.fave",
       "icon": "./assets/expo.icon"
     },
     "android": {
@@ -37,6 +38,13 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "5a731a51-0af6-4146-98c6-941e3006db63"
+      }
+    },
+    "owner": "farid90"
   }
 }
