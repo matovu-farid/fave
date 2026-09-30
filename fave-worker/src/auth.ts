@@ -11,6 +11,7 @@ export type AuthBindings = Omit<CloudflareBindings, 'BETTER_AUTH_URL' | 'ENVIRON
   APPLE_TEAM_ID?: string
   APPLE_KEY_ID?: string
   APPLE_PRIVATE_KEY?: string
+  GOOGLE_MAPS_API_KEY?: string
   ENVIRONMENT?: string
 }
 

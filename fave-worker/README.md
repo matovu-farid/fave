@@ -90,3 +90,29 @@ simulator) and configure OAuth provider callback URLs for that Worker. For
 end-to-end Apple OAuth, use an HTTPS development Worker because Apple requires
 HTTPS return URLs. Never add Expo Go callback patterns to the production
 Worker's trusted origins.
+
+## Google Maps
+
+The Worker uses Google Maps Geocoding to check whether a pickup address or map
+pin is identified as being in Kampala, Mukono, or Wakiso. It uses the Routes API
+for driving distance and duration, and only returns the fields the app needs.
+The pickup check fails closed if Google cannot verify the country or area.
+
+Enable the Geocoding API and Routes API in the Google Cloud project, create an
+API key restricted to those APIs, and set quotas before using it with real
+customers. Keep the key in Worker secrets; never put it in Expo app config or
+the mobile bundle.
+
+For local development, set `GOOGLE_MAPS_API_KEY` in the ignored `.dev.vars` file
+copied from `.dev.vars.example`. For production, run this from `fave-worker`
+and enter the key at Wrangler's prompt:
+
+```sh
+npx wrangler secret put GOOGLE_MAPS_API_KEY
+```
+
+The authenticated `POST /api/maps/pickup-eligibility` endpoint accepts either
+`{ "address": "..." }` or `{ "latitude": 0.0, "longitude": 0.0 }`. The
+authenticated `POST /api/maps/driving-route` endpoint accepts `origin` and
+`destination` with either shape and returns driving distance in meters and
+duration in seconds. Neither endpoint logs addresses or coordinates.
