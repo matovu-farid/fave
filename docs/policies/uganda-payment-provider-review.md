@@ -15,6 +15,17 @@ Flutterwave has the clearest publicly verifiable fit for the current product dir
 
 This is a provisional recommendation, not approval to collect, hold, split, or remit customer funds. Flutterwave’s split-payment documentation places vendor diligence and disputes/chargebacks on the marketplace owner, and Uganda’s payment-law treatment of Fave’s precise funds flow still needs counsel review.
 
+## Funds-flow models to compare
+
+These are options for owner and counsel review, not selected designs. Both must support the confirmed deposit and final-balance methods. Currency and merchant-of-record decisions remain open.
+
+| Model | What the client pays and who receives it | Provider capability to verify | Main tradeoff and review |
+|---|---|---|---|
+| **Fave collects; pays driver after the trip** | Client pays the deposit and remaining balance to Fave. Fave pays the driver after completion under the approved settlement policy. | Merchant account must support both collections, refunds/chargebacks, reconciliation, and an eligible payout route to drivers. Confirm payout timing, limits, reserves, and costs. | One customer-facing merchant/payment history is simpler. Fave may carry settlement, refund, chargeback, and payout obligations, and needs working capital if it advances approved trip costs. Counsel must assess whether this role needs authorization or a regulated partner structure. |
+| **Provider marketplace/subaccounts** | Drivers are onboarded as provider vendors/subaccounts; the provider routes or splits funds according to the configured transaction and settlement terms. | Confirm Uganda availability, driver onboarding/KYC, per-rail split behavior, refund/dispute allocation, settlement timing, and whether deposit and final-balance transactions can both use the model. | Could reduce manual payout operations, but adds driver onboarding and reconciliation complexity. Flutterwave’s public split-payment docs say the marketplace owner must vet vendors and receives disputes/chargebacks; written eligibility and counsel review are essential. |
+
+Do not assume the second model avoids Fave's legal responsibilities. The actual contracting entities and who controls, receives, holds, refunds, or transfers each payment must be reviewed by Ugandan counsel before selecting either model.
+
 ## Provider comparison
 
 | Provider | Uganda collections | Settlement and payouts | Integration and controls | Gaps to resolve |
