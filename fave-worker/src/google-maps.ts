@@ -215,17 +215,15 @@ export async function classifyLocation(
       )
       .filter(hasAdministrativeComponent)
     const candidateCountries = new Set(
-      candidateComponents
-        .map(extractCountryCode)
-        .filter((countryCode): countryCode is string => countryCode !== null),
+      candidateComponents.map(extractCountryCode),
     )
     const candidateAreas = new Set(
       candidateComponents.map((candidate) => extractPickupArea(candidate)),
     )
 
-    // Geocoding can return multiple candidates. Accept only when the candidates
-    // that identify an administrative area agree; otherwise the pickup is not
-    // verified well enough to make a service-area decision.
+    // Geocoding can return multiple candidates. Missing country or area data
+    // counts as ambiguity when another candidate resolves it; do not trust one
+    // plausible candidate if Google's alternatives disagree or are incomplete.
     if (candidateCountries.size > 1 || candidateAreas.size > 1) {
       return { kind: 'unresolved' }
     }

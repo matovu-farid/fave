@@ -96,8 +96,8 @@ Worker's trusted origins.
 The Worker uses Google Maps Geocoding to check whether a pickup address or map
 pin is identified as being in Kampala, Mukono, or Wakiso. It uses the Routes API
 for driving distance and duration, and only returns the fields the app needs.
-The pickup check fails closed if Google cannot verify the country or area, or
-if administrative-area candidates disagree about the pickup location.
+The pickup check fails closed if Google cannot verify the country or area, or if
+administrative-area candidates disagree or return incomplete country/area data.
 
 Enable the Geocoding API and Routes API in the Google Cloud project, create an
 API key restricted to those APIs, and set quotas before using it with real
