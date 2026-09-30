@@ -115,6 +115,18 @@ function extractPickupArea(
   return null
 }
 
+function hasAdministrativeComponent(components: AddressComponent[]): boolean {
+  return components.some(
+    (component) =>
+      Array.isArray(component.types) &&
+      component.types.some(
+        (type) =>
+          typeof type === 'string' &&
+          ADMINISTRATIVE_COMPONENT_TYPES.has(type),
+      ),
+  )
+}
+
 function buildGeocodeUrl(input: LocationInput): URL {
   if ('address' in input) {
     const url = new URL(
@@ -189,8 +201,32 @@ export async function classifyLocation(
     }
 
     const data = (await response.json()) as GeocodeResponse
-    const components = data.results?.[0]?.addressComponents
+    const results = data.results ?? []
+    const components = results[0]?.addressComponents
     if (!components || components.length === 0) {
+      return { kind: 'unresolved' }
+    }
+
+    const candidateComponents = results
+      .map((result) => result.addressComponents)
+      .filter(
+        (candidate): candidate is AddressComponent[] =>
+          Array.isArray(candidate) && candidate.length > 0,
+      )
+      .filter(hasAdministrativeComponent)
+    const candidateCountries = new Set(
+      candidateComponents
+        .map(extractCountryCode)
+        .filter((countryCode): countryCode is string => countryCode !== null),
+    )
+    const candidateAreas = new Set(
+      candidateComponents.map((candidate) => extractPickupArea(candidate)),
+    )
+
+    // Geocoding can return multiple candidates. Accept only when the candidates
+    // that identify an administrative area agree; otherwise the pickup is not
+    // verified well enough to make a service-area decision.
+    if (candidateCountries.size > 1 || candidateAreas.size > 1) {
       return { kind: 'unresolved' }
     }
 
