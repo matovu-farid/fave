@@ -54,3 +54,16 @@ Join our community of developers creating universal apps.
 
 - [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
 - [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+
+## Continuous integration
+
+GitHub Actions runs the following checks for pull requests and pushes to `main`:
+
+- **CI / Expo checks** installs the root dependencies, then runs `npm run lint`
+  and `npm run typecheck`.
+- **CI / Worker checks** installs `fave-worker` dependencies, then runs its
+  `npm run typecheck` script.
+
+Both jobs use the committed npm lockfiles and read-only repository access. They
+never deploy the app or Worker. Require both job checks above before merging if
+branch protection is enabled.
