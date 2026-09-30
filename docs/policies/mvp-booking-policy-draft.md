@@ -34,9 +34,9 @@ This document turns the current product direction into policy options for issue 
 | Fave cannot provide a car/driver | Refund all client payments in full | The client should not bear the cost of Fave's inability to fulfill |
 | Phone verification | Compare Africa's Talking SMS with Twilio Verify using expected volume and total fees | Published per-message cost alone can miss sender-ID charges and the engineering needed to operate OTP safely |
 | Driver settlement | Use the selected payment provider and settle only after trip completion/reconciliation | Keeps payment proof and settlement traceable; exact legal structure needs counsel review |
-| Client payment methods | Owner choice: MTN/Airtel mobile money only, or mobile money plus local cards | Defines which provider methods #16 must support and the fees included in quotes |
+| Client payment methods | **Confirmed:** MTN/Airtel mobile money plus local cards for both deposit and final balance | Defines which provider methods #16 must support and the fees included in quotes |
 
-These are recommendations to reduce the decision work, not approved policy. Unresolved values such as the per-kilometre rate and nightly allowance remain deliberately blank until operating-cost inputs are available.
+These are recommendations to reduce the decision work, not approved policy. Unresolved values such as the per-kilometre rate and nightly allowance remain deliberately blank until operating-cost inputs are available. The client payment methods above are confirmed product direction; legal, provider, and merchant terms remain subject to review.
 
 ## Draft pricing rules for owner review
 
@@ -75,7 +75,7 @@ Count one accommodation night for each planned overnight stop where the driver m
 - Default deposit: 50% of the accepted quote, configurable by an authorized admin with a versioned change history.
 - Remaining balance: due after trip completion, according to the completion confirmation process below.
 - Payment provider: choose in issue #16. A server-confirmed provider event, not a client redirect or screenshot, is the source of truth for a successful payment.
-- **Client payment methods — owner choice:** accept MTN/Airtel mobile money only, or accept mobile money and local cards for both the deposit and final balance. Flutterwave's current Uganda list price is 3% for local wallets/mobile money and 4.8% for local cards, before VAT and other applicable taxes; these are published rates, not a Fave merchant offer. This choice determines the provider requirements in issue #16 and the payment costs to account for in fares.
+- **Client payment methods — owner-confirmed 2026-09-30:** accept MTN/Airtel mobile money and local cards for both the deposit and final balance. Issue #16 should select a provider or provider combination that supports both. Flutterwave's current Uganda list price is 3% for local wallets/mobile money and 4.8% for local cards, before VAT and other applicable taxes; these are published rates, not a Fave merchant offer. Include the applicable fees in the fare model before launch.
 - Pending checkout hold: **proposal** — reserve the selected car for 30 minutes while the deposit is pending; release it on timeout or confirmed failure. The hold duration and provider callback grace period need owner approval.
 - Quote and policy versions accepted by the client must be stored with the booking. Existing bookings retain their accepted quote and policy version when rates change.
 
@@ -126,7 +126,7 @@ Daily driving limits, rest breaks, overnight planning, insurance/transport oblig
 | Nightly allowance and settlement | Not set; options above | Pending | Pending | Show accommodation separately | Versioned allowance, if approved |
 | Quote expiry and price lock | Propose 24 hours; lock after confirmed deposit | Pending | Pending | Give the client a clear price before paying | Versioned settings, if approved |
 | Deposit and balance | 50% default; balance after trip, per owner direction | Fave owner | Pending | Confirmed product direction; completion evidence pending | Configurable deposit with audit history |
-| Client payment methods | Choose mobile money only vs. mobile money plus local cards for deposit and balance | Pending | Pending | Sets provider requirements and transaction costs | Provider config must match approved methods |
+| Client payment methods | MTN/Airtel mobile money plus local cards for deposit and final balance | Fave product owner | 2026-09-30 | Confirmed in owner response; both methods should be available at each payment stage | Provider config must match approved methods |
 | Client cancellation/refunds | Open; option above | Pending | Pending | Requires owner and counsel approval | Versioned policy, if approved |
 | No-driver refund | Propose full refund | Pending | Pending | Client should not pay when Fave cannot provide a car/driver | Recorded refund action |
 | Checkout hold | Propose 30 minutes | Pending | Pending | Release cars when deposit is not completed | Versioned timeout, if approved |
