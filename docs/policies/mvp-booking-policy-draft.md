@@ -25,10 +25,10 @@ This document turns the current product direction into policy options for issue 
 
 | Topic | Proposed MVP default | Why |
 |---|---|---|
-| Currency | UGX; show whole shillings and no separate platform fee initially | Keeps the first quote easy to understand; legal/tax review still applies |
+| Currency and fees | UGX; show whole shillings and one quoted total that includes expected payment-provider fees; do not add an undisclosed fee at checkout | Keeps the first quote easy to understand; #16 must confirm merchant-specific fees, and legal/tax review still applies |
 | Distance | Price by selected vehicle class; quote the passenger route only, with average repositioning costs included in the published per-kilometre rate | Keeps the client price tied to the route they requested and avoids a surprise return fee; itemize any return charge only if the owner explicitly chooses it |
 | Accommodation | Use a location-sensitive nightly allowance, shown as its own line; Fave advances the approved allowance to the driver | Avoids asking a driver to fund a work trip personally and keeps customer estimate predictable |
-| Quote | Expire after 24 hours; lock the accepted quote when the deposit is confirmed | Allows time to pay while preserving an auditable price snapshot |
+| Quote and deposit deadline | Quote expires 24 hours after issue; the deposit is due within that window; lock the accepted quote when the deposit is confirmed | Gives a clear payment deadline while preserving an auditable price snapshot |
 | Pending deposit | Hold the selected car for 30 minutes; release it after timeout or confirmed payment failure | Prevents a stalled checkout from blocking availability indefinitely |
 | Client cancellation | Refund all deposit at 72+ hours; refund half of the deposit at 24–72 hours; retain the deposit inside 24 hours | A simple time-based proposal; requires owner and counsel approval before launch |
 | Fave cannot provide a car/driver | Refund all client payments in full | The client should not bear the cost of Fave's inability to fulfill |
@@ -42,7 +42,7 @@ These are recommendations to reduce the decision work, not approved policy. Unre
 
 ### Currency and display
 
-**Proposal:** Quote and collect in Uganda shillings (UGX), display whole shillings, and show the fare as separate distance and driver-accommodation line items. Do not add a fee or tax that was not shown before the client paid.
+**Proposal, added for owner review on 2026-09-30:** Quote and collect in Uganda shillings (UGX), display whole shillings, and show distance and driver-accommodation as separate line items inside one total. Include expected provider processing fees in that quoted total rather than adding an undisclosed checkout surcharge. Issue #16 must confirm actual Fave merchant fees before the rates are finalized.
 
 **Owner decision:** Confirm currency, rounding, and any separate booking/platform fee.
 
@@ -66,7 +66,7 @@ Count one accommodation night for each planned overnight stop where the driver m
 
 ### Quote and changes
 
-**Proposal:** Quotes expire after 24 hours. A successful deposit locks the quote snapshot. Before payment, a changed rate or itinerary creates a new quote that the client must accept. After payment, do not silently add charges. Reprice only when the client asks to change the itinerary and accepts the revised quote.
+**Proposal, added for owner review on 2026-09-30:** A quote expires 24 hours after issue, and the deposit is due within that period. A successful deposit locks the quote snapshot. During an active checkout, hold the selected car for 30 minutes; if the hold expires, recheck availability before accepting payment. Before payment, a changed rate or itinerary creates a new quote that the client must accept. After payment, do not silently add charges. Reprice only when the client asks to change the itinerary and accepts the revised quote.
 
 **Owner decisions:** Confirm quote validity and whether Fave absorbs route/accommodation estimate differences that are not caused by a client-requested change.
 
@@ -76,7 +76,7 @@ Count one accommodation night for each planned overnight stop where the driver m
 - Remaining balance: due after trip completion, according to the completion confirmation process below.
 - Payment provider: choose in issue #16. A server-confirmed provider event, not a client redirect or screenshot, is the source of truth for a successful payment.
 - **Client payment methods — owner-confirmed 2026-09-30:** accept MTN/Airtel mobile money and local cards for both the deposit and final balance. Issue #16 should select a provider or provider combination that supports both. Flutterwave's current Uganda list price is 3% for local wallets/mobile money and 4.8% for local cards, before VAT and other applicable taxes; these are published rates, not a Fave merchant offer. Include the applicable fees in the fare model before launch.
-- Pending checkout hold: **proposal** — reserve the selected car for 30 minutes while the deposit is pending; release it on timeout or confirmed failure. The hold duration and provider callback grace period need owner approval.
+- Pending checkout hold: **proposal** — reserve the selected car for 30 minutes while the deposit is actively pending; release it on timeout or confirmed failure. The 24-hour quote/deposit deadline does not reserve a car for 24 hours. Recheck availability if the 30-minute checkout hold expires.
 - Quote and policy versions accepted by the client must be stored with the booking. Existing bookings retain their accepted quote and policy version when rates change.
 
 **Completion proposal:** The driver submits completion; the client confirms or reports a problem. A dispute pauses final-balance collection until an authorized review is recorded. No completion timeout or automatic balance charge is defined yet.
@@ -120,11 +120,11 @@ Daily driving limits, rest breaks, overnight planning, insurance/transport oblig
 
 | Decision | Draft / current state | Owner | Date | Rationale / client wording | Admin control |
 |---|---|---|---|---|---|
-| Currency and rounding | Propose UGX, whole shillings; pending | Pending | Pending | Avoid foreign-currency surprise; wording pending | Pending |
+| Currency, fees, and rounding | Propose UGX, whole shillings, provider fees included in the quoted total; pending #16 merchant terms and owner approval | Pending | Pending | Avoid foreign-currency surprise and checkout fee surprises; wording pending | Pending |
 | Distance rate | Not set | Pending | Pending | Needs operating-cost and margin inputs | Versioned rate, if approved |
 | Chargeable distance | Pickup-to-destination only vs. include empty return/repositioning | Pending | Pending | Must be visible before the client accepts | Versioned rule, if approved |
 | Nightly allowance and settlement | Not set; options above | Pending | Pending | Show accommodation separately | Versioned allowance, if approved |
-| Quote expiry and price lock | Propose 24 hours; lock after confirmed deposit | Pending | Pending | Give the client a clear price before paying | Versioned settings, if approved |
+| Quote and deposit deadline | Propose 24 hours; lock quote after confirmed deposit | Pending | Pending | Give the client a clear price and payment deadline | Versioned settings, if approved |
 | Deposit and balance | 50% default; balance after trip, per owner direction | Fave owner | Pending | Confirmed product direction; completion evidence pending | Configurable deposit with audit history |
 | Client payment methods | MTN/Airtel mobile money plus local cards for deposit and final balance | Fave product owner | 2026-09-30 | Confirmed in owner response; both methods should be available at each payment stage | Provider config must match approved methods |
 | Client cancellation/refunds | Open; option above | Pending | Pending | Requires owner and counsel approval | Versioned policy, if approved |
