@@ -99,10 +99,14 @@ for driving distance and duration, and only returns the fields the app needs.
 The pickup check fails closed if Google cannot verify the country or area, or if
 administrative-area candidates disagree or return incomplete country/area data.
 
-Enable the Geocoding API and Routes API in the Google Cloud project, create an
-API key restricted to those APIs, and set quotas before using it with real
-customers. Keep the key in Worker secrets; never put it in Expo app config or
-the mobile bundle.
+Google Maps Platform requires an active billing account for API use. Before
+enabling these APIs for production, review the current [Geocoding API pricing
+and billing](https://developers.google.com/maps/documentation/geocoding/usage-and-billing)
+and [Routes API pricing and
+billing](https://developers.google.com/maps/documentation/routes/usage-and-billing).
+Then enable both APIs, create an API key restricted to those APIs, and set
+quotas before real-customer use. Keep the key in Worker secrets; never put it
+in Expo app config or the mobile bundle.
 
 For local development, set `GOOGLE_MAPS_API_KEY` in the ignored `.dev.vars` file
 copied from `.dev.vars.example`. For production, run this from `fave-worker`
