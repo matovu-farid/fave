@@ -105,10 +105,10 @@ Phone possession must be verified before an application can be approved or a boo
 
 **Options researched:**
 
-- **Africa's Talking SMS:** Uganda entry-tier SMS pricing is published at about UGX 25–35 per segment. This is the cost-focused option, but Fave would own code generation, expiry, attempt limits, abuse controls, and verification state. Confirm sender-ID setup and actual account pricing before launch.
+- **Africa's Talking SMS:** Its published Uganda basic-tier rates are UGX 27 per MTN local SMS segment, UGX 25 for Airtel local traffic, and UGX 35 for other telcos. These are volume-tier rates, not a complete OTP cost: the listed sender-ID charges add UGX 250,000 monthly maintenance for MTN or UGX 250,000 setup for Airtel. This may be economical at volume but is not automatically the cheapest for a small MVP. Fave would also own code generation, expiry, attempt limits, abuse controls, and verification state. Confirm sender-ID approval and account pricing before launch.
 - **Twilio Verify:** Managed verification with built-in code-flow features; published base fee is $0.05 per successful verification plus channel fees. Twilio lists Uganda outbound SMS at $0.3289 per segment before possible carrier fees. This reduces OTP implementation work but has a higher listed message cost.
 
-**Recommendation for review:** Prefer Africa's Talking for the Uganda-focused MVP if the team is willing to implement and operate secure OTP controls. Otherwise choose Twilio Verify and accept its higher per-verification cost. Restrict phone verification traffic to Uganda, add spend/attempt alerts, and provide a support fallback for failed delivery.
+**Recommendation for review:** Compare expected monthly verification volume against Africa's Talking's sender-ID charges; prefer it only if its total cost is lower and the team is willing to implement and operate secure OTP controls. Otherwise choose Twilio Verify and accept its higher listed per-verification and Uganda SMS costs in exchange for managed verification safeguards. Restrict phone verification traffic to Uganda, add spend/attempt alerts, and provide a support fallback for failed delivery.
 
 ## Safety and legal review gates
 
