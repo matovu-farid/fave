@@ -26,7 +26,7 @@ This document turns the current product direction into policy options for issue 
 | Topic | Proposed MVP default | Why |
 |---|---|---|
 | Currency | UGX; show whole shillings and no separate platform fee initially | Keeps the first quote easy to understand; legal/tax review still applies |
-| Distance | Price by selected vehicle class; show the passenger route and disclose any separately chargeable return distance | Makes car choice and total trip cost visible before payment |
+| Distance | Price by selected vehicle class; quote the passenger route only, with average repositioning costs included in the published per-kilometre rate | Keeps the client price tied to the route they requested and avoids a surprise return fee; itemize any return charge only if the owner explicitly chooses it |
 | Accommodation | Use a location-sensitive nightly allowance, shown as its own line; Fave advances the approved allowance to the driver | Avoids asking a driver to fund a work trip personally and keeps customer estimate predictable |
 | Quote | Expire after 24 hours; lock the accepted quote when the deposit is confirmed | Allows time to pay while preserving an auditable price snapshot |
 | Pending deposit | Hold the selected car for 30 minutes; release it after timeout or confirmed payment failure | Prevents a stalled checkout from blocking availability indefinitely |
@@ -59,7 +59,9 @@ Count one accommodation night for each planned overnight stop where the driver m
 
 **Rate-setting worksheet (no rates invented):** Set a per-car or per-class rate from fuel use and price, maintenance/tyre reserve, driver compensation, vehicle wear, taxes/provider costs, and Fave's margin. Validate it against real operating costs on pilot trips before publishing it. Check accommodation rates by destination area rather than assuming one hotel cost fits every Ugandan town.
 
-**Distance owner decision:** Decide whether the client pays for the occupied pickup-to-destination route only, or also for the driver's empty repositioning/return journey. If return distance is chargeable, show it separately in the quote. Do not include an undisclosed return-distance multiplier.
+**Distance recommendation:** Charge for the passenger's pickup-to-destination route. Build expected driver repositioning costs into the approved per-car/per-class rate rather than adding an undisclosed round-trip multiplier. If the owner instead chooses to charge a specific empty return leg, show its route and cost separately before confirmation.
+
+**Owner decision:** Approve passenger-route-only pricing with repositioning included in the base rate, or approve a separately itemized empty return leg.
 
 ### Quote and changes
 
