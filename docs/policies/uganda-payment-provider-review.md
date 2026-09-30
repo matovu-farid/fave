@@ -4,12 +4,12 @@
 
 **Prepared:** 30 September 2026
 **Issue:** [#16 — Select a Uganda-ready payment provider](https://github.com/matovu-farid/fave/issues/16)
-**Product inputs:** Confirmed payment rails and proposed fare treatment in [#15 — fare, booking, cancellation, and settlement policy](https://github.com/matovu-farid/fave/issues/15). Provider fee and settlement findings flow back to #15.
+**Product inputs:** Confirmed payment rails and draft proposals in [#15 — fare, booking, cancellation, and settlement policy](https://github.com/matovu-farid/fave/issues/15). #15 now proposes UGX quotes, including expected payment fees in the all-in fare, a 50% default deposit, and payment to drivers after trip completion and reconciliation. These proposals are not final launch terms. Provider fee and settlement findings flow back to #15.
 **Legal gate:** [#14 — Uganda legal, regulatory, privacy, and safety review](https://github.com/matovu-farid/fave/issues/14)
 
 ## Recommendation
 
-Use **Flutterwave as the provisional first choice for merchant onboarding and sandbox validation** for the owner-confirmed MTN/Airtel mobile money and local-card methods, subject to confirming currency, Ugandan counsel approving the collection and driver-payout model in #14, and Flutterwave giving Fave a written merchant offer confirming eligibility, current fees, payment methods, refunds, settlement, and driver payout support.
+Use **Flutterwave as the provisional first choice for merchant onboarding and sandbox validation** for the owner-confirmed MTN/Airtel mobile money and local-card methods, using UGX and Fave collection followed by post-trip driver payout as the current #15 working assumptions. Both remain proposals pending final owner policy approval and Ugandan counsel's review in #14. Flutterwave must also give Fave a written merchant offer confirming eligibility, current fees, payment methods, refunds, settlement, and driver payout support.
 
 Flutterwave has the clearest publicly verifiable fit for the current product direction: its Uganda documentation describes UGX charges over MTN or Airtel, its current Uganda pricing page lists local cards and mobile-money pricing, and its API documentation covers Uganda bank and mobile-money payouts, sandbox mode, refunds, and marketplace subaccounts. The platform is Hono on Cloudflare Workers, so a server-to-server REST integration can keep secret credentials in Worker secrets; the Expo client should only receive a hosted payment URL or other provider-approved client-safe checkout details.
 
@@ -17,7 +17,7 @@ This is a provisional recommendation, not approval to collect, hold, split, or r
 
 ## Funds-flow models to compare
 
-These are options for owner and counsel review, not selected designs. Both must support the confirmed deposit and final-balance methods. Currency and merchant-of-record decisions remain open.
+These are options for owner and counsel review, not selected or approved designs. The current #15 working draft proposes UGX, collection of the deposit and final balance by Fave, and paying drivers after trip completion and reconciliation. The owner has approved including those as proposals for review only. The final currency, merchant-of-record classification, and funds flow still need owner and counsel approval.
 
 | Model | What the client pays and who receives it | Provider capability to verify | Main tradeoff and review |
 |---|---|---|---|
@@ -41,7 +41,7 @@ Flutterwave’s [current Uganda pricing page](https://www.flutterwave.com/ug/pri
 
 An older [Flutterwave Uganda help article](https://www.flutterwave.com/rw/support/general/heres-all-you-need-to-know-about-operating-a-flutterwave-account-in-uganda) lists 3.2% for local cards and 3.8% for international cards, versus 4.8% on the current pricing page. Treat this as a material pricing discrepancy: obtain a dated written quote for Fave before setting customer prices or the #15 fare model.
 
-For scale illustration only, assume a UGX 100,000 fare split into a 50% deposit and 50% balance. Applying the current published rates to each installment, before VAT and payout costs:
+For scale illustration only, assume a UGX 100,000 fare split into a 50% deposit and 50% balance, consistent with the proposed #15 defaults. Applying current published rates to each collection installment, before VAT and any driver-payout cost:
 
 | Deposit method | Balance method | Published collection-fee estimate |
 |---|---|---:|
@@ -50,7 +50,7 @@ For scale illustration only, assume a UGX 100,000 fare split into a 50% deposit 
 | Mobile money (3%) | Local card (4.8%) | UGX 3,900 total |
 | Local card (4.8%) | Mobile money (3%) | UGX 3,900 total |
 
-These are published-list calculations, not a Fave offer; the UGX 100,000 value is only a scale example. Flutterwave's page says customers bear processing charges by default, with a dashboard option to change who pays. The current working draft in #15 proposes one all-in fare that includes expected provider fees and no undisclosed checkout surcharge. If the owner approves that proposal, Fave must configure the merchant account so the client is charged the quoted total, then confirm the effective fee treatment in writing; do not rely on the provider default or add a surprise checkout fee.
+These are published-list collection-fee calculations, not a Fave offer; the UGX 100,000 value is only a scale example. Flutterwave currently lists UGX 5,000 for a bank payout or UGX 1,000 for a mobile-money payout below UGX 125,000 (1.2% from UGX 125,000), before VAT. Therefore, if the full UGX 100,000 example were paid to a driver in one transfer, a mobile-money payout would add UGX 1,000 or a bank payout UGX 5,000 to the provider-cost illustration. Actual payout costs depend on the amount, payout method, any Fave commission, transfer frequency, and Fave's merchant terms; commission and payout frequency are still undecided. Flutterwave's page says customers bear processing charges by default, with a dashboard option to change who pays. The current working draft in #15 proposes one all-in fare that includes expected provider fees and no undisclosed checkout surcharge. If the owner approves that proposal as final, Fave must configure the merchant account so the client is charged the quoted total, then confirm the effective fee treatment in writing; do not rely on the provider default or add a surprise checkout fee.
 
 ## Uganda authorization check
 
@@ -80,7 +80,7 @@ Before selecting a provider, obtain the contracting entity’s full legal name a
 
 ## Required confirmations before closing #16
 
-1. Payment methods are confirmed in #15: MTN/Airtel mobile money plus local cards for both deposit and final balance (owner response, 30 September 2026). Still confirm UGX currency, whether Fave or a driver is merchant of record, whether Fave collects the full fare, when/if drivers are paid, and commission/payout rules.
+1. Payment methods are confirmed in #15: MTN/Airtel mobile money plus local cards for both deposit and final balance (owner response, 30 September 2026). Use UGX as the current working assumption because it is proposed in #15; final currency approval, merchant-of-record classification, whether Fave collects the full fare, when/if drivers are paid, and commission/payout rules remain open.
 2. Ugandan counsel records the #14 conclusion on platform collection, holding, refund, and driver settlement; counsel identifies any licence, agency, safeguarding, or disclosure conditions.
 3. Obtain comparable written merchant offers from Flutterwave and at least one local alternative (DPO or Pesapal), including the full legal name of the contracting/acquiring entity and its Uganda authorization or licensed partner; fees and VAT; who bears processing charges and any surcharge/disclosure rules; onboarding documents; live merchant eligibility; settlement schedule/reserve/minimum; refund and chargeback fees/timelines; split/payout capability; limits; webhook/retry behavior; reconciliation exports; support coverage; and termination/hold rights.
 4. Confirm a registered/eligible Fave business account and the required merchant KYC documents. Flutterwave’s Uganda onboarding guidance lists operating licence where applicable; do not assume onboarding approval before required transport licences are decided under #14.
@@ -92,9 +92,9 @@ Before selecting a provider, obtain the contracting entity’s full legal name a
 | Decision | Status | Owner / evidence needed |
 |---|---|---|
 | Candidate provider | **Provisional: Flutterwave** | Owner confirmation after policy #15 and merchant quote; counsel review #14 |
-| Currency and methods | Methods confirmed; **currency pending #15** | Owner confirmed MTN/Airtel mobile money plus local cards for deposit and final balance on 30 September 2026; owner still needs to confirm currency |
-| Merchant of record and who receives funds | **Pending #15 / #14** | Owner describes intended funds flow; counsel classifies it |
-| Driver payout/split | **Pending #15 / #14 / provider** | Written provider confirmation, account eligibility, and counsel approval |
+| Currency and methods | Methods confirmed; **UGX proposed in #15, not final** | Use UGX for comparison and sandbox planning; owner must approve final fare currency |
+| Merchant of record and who receives funds | **Draft proposal: Fave collects; final classification pending #14 / #15** | Counsel classifies actual contracting and funds flow; provider confirms merchant-account eligibility |
+| Driver payout/split | **Draft proposal: pay driver after trip completion and reconciliation; not approved** | Written provider confirmation, account eligibility, and counsel approval; owner still needs to decide commission and payout method/frequency |
 | Current fees and settlement terms | **Pending merchant quote** | Signed/delivered Fave-specific rate and payout schedule |
 | Who bears transaction fees | **Proposed in #15; not final policy** | Current policy draft proposes including expected fees in the all-in quoted fare without a surprise checkout surcharge. Confirm merchant-account configuration and obtain written provider terms before treating this as final |
 | Refund notification path | **Account-level confirmation needed** | Flutterwave says refund webhooks are off by default; ask support to enable them for Fave or implement callback/polling and verify final refund status in sandbox |
