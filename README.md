@@ -57,13 +57,13 @@ Join our community of developers creating universal apps.
 
 ## Continuous integration
 
-GitHub Actions runs the following checks for pull requests and pushes to `main`:
+The `CI` workflow runs these checks for pull requests and pushes to `main`:
 
-- **CI / Expo checks** installs the root dependencies, then runs `npm run lint`
+- **Expo checks** installs the root dependencies, then runs `npm run lint`
   and `npm run typecheck`.
-- **CI / Worker checks** installs `fave-worker` dependencies, then runs its
+- **Worker checks** installs `fave-worker` dependencies, then runs its
   `npm run typecheck` script.
 
 Both jobs use the committed npm lockfiles and read-only repository access. They
-never deploy the app or Worker. Require both job checks above before merging if
-branch protection is enabled.
+never deploy the app or Worker. Require the `Expo checks` and `Worker checks`
+status checks before merging if branch protection is enabled.
