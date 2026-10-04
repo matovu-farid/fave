@@ -25,6 +25,88 @@ local D1 database by default; it does not connect to or modify the Cloudflare
 database unless remote bindings are explicitly enabled. The `/health` endpoint
 checks that the Worker can query D1.
 
+## Driver marketplace and trip requests
+
+The marketplace routes are backed by the D1 migrations in `migrations/`.
+Apply them locally with `npm run db:migrate:local` and remotely only after the
+production migration target has been reviewed. Configure the private R2 bucket
+named `fave-private-driver-files` before accepting driver ID or vehicle files;
+the bucket must not have public access enabled. `wrangler.jsonc` binds it as
+`DRIVER_FILES`. An Images binding is also required for vehicle listing photos:
+the Worker converts them to WebP before writing them to the private bucket, so
+embedded metadata such as EXIF GPS is discarded before client publication.
+Previously stored photos are sanitized and rewritten on their first approved
+photo read, then marked so subsequent reads skip the transformation.
+Driver identity and vehicle verification evidence stays unmodified and private.
+Cloudflare Images must be enabled for the Worker on a paid Images plan;
+transformation usage is billed per unique source image and parameter set per
+calendar month. The Worker uses opaque object keys, checks image/PDF signatures
+and file size, and returns customer photos only after individual photo approval.
+Only Ugandan citizen drivers may apply in the first release. The application
+records the applicant's affirmative eligibility attestation and approval also
+requires that attestation. The client trip flow collects profile details and
+verified phone information; it does not collect National ID, passport, or
+refugee ID documents.
+
+Set `DRIVER_ID_ENCRYPTION_KEY` to a randomly generated base64 encoding of 32
+bytes (`openssl rand -base64 32`) as a Worker secret and local `.dev.vars`
+value. Submitted national ID numbers are encrypted with AES-GCM before D1
+storage; the key is never stored in D1 or the Expo bundle. Keep a protected
+backup and plan a key rotation before replacing it, since encrypted IDs cannot
+be opened with a different key. An hourly Worker cron removes expired driver ID
+images and clears the encrypted ID fields; each completed purge is recorded as
+a system audit event.
+
+Before opening applications or bookings, an authorized operator must publish
+the counsel-approved `policy_documents`, `driver_verification_requirements`,
+`vehicle_verification_requirements`, and active `retention_policies` records in
+D1. Add initial `admin_memberships` out-of-band after verifying the operator;
+there is no self-service admin promotion route. Driver and vehicle approval
+fails closed until their approved checklist and retention rules are present.
+Admin rejection APIs accept a private `reason` for the audit record and a separate
+`applicantMessage` for the driver; driver status responses never return internal
+review notes. Vehicle listing and photo rejection APIs follow the same split, so
+driver-facing correction messages are stored separately from staff review notes.
+Migration `0009_checklist_requirement_versions.sql` binds submitted driver and
+vehicle evidence to the exact approved checklist version. Evidence from an older
+version remains private and must be resubmitted before the application or listing
+can be approved under a changed checklist. If already-approved driver evidence
+expires or no longer matches the checklist, the driver can submit a fresh
+application for staff review; client vehicle eligibility remains blocked until
+that review is approved. A newer driver terms or privacy version requires explicit
+acceptance without another identity-file upload when verification evidence is
+still current. Driver evidence records also retain the exact approved retention
+policy ID used for that submission, and the driver status view shows its deletion
+deadline. Vehicle editing and availability changes also recheck current
+driver evidence and policy eligibility on the server, so a stale UI cannot bypass
+the listing gate through direct API calls. Drivers can remove an upcoming or active
+unavailability block; removals are audited and past blocks are retained in history.
+Phone verification records are owned by the phone-verification flow tracked in
+issue #22. Client booking disclosures, consent, and the profile gates depend on
+the policy and client setup work tracked in #14, #15, and #21.
+
+The trip quote endpoint requires an active, approved `fare_policies` record.
+`rules_json` is an object with a non-empty `components` array and integer
+`depositBasisPoints` (100–9900). Each component has `key`, `label`, integer
+`amount`, and `unit` (`fixed`, `per_kilometer`, `per_night`, or
+`per_passenger`). Store all amounts in the smallest currency unit and set the
+policy currency to an ISO 4217 code. Confirm with counsel and operations before
+activating pricing; the application deliberately contains no default fare.
+
+For browser development, set `WEB_APP_ORIGINS` to a comma-separated list of
+exact trusted origins and include the web app origin in the Better Auth
+`trustedOrigins` allowlist. Development mode also allows Expo web on
+`http://localhost:8081` and `http://127.0.0.1:8081`; production does not. Keep
+credentials enabled only with exact origins and never use a wildcard origin.
+
+The native trip form uses the platform map picker for a private pickup pin.
+For production Android builds, set the restricted `GOOGLE_MAPS_ANDROID_SDK_KEY`
+EAS environment variable; restrict it to the Maps SDK for Android and the Fave
+application id plus signing certificate. iOS uses Apple Maps by default. This
+client map-rendering key is separate from the restricted server-side
+`GOOGLE_MAPS_API_KEY` used for pickup-area validation and route estimates. The
+web fallback accepts latitude/longitude coordinates directly.
+
 ## Better Auth
 
 The Hono Worker mounts Better Auth under `/api/auth/*`. The D1 binding is passed

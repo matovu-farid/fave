@@ -13,6 +13,9 @@ export type LocationClassification =
       kind: 'resolved'
       countryCode: string | null
       pickupArea: SupportedPickupArea | null
+      formattedAddress: string | null
+      latitude: number
+      longitude: number
     }
   | { kind: 'unresolved' }
   | { kind: 'provider_error' }
@@ -26,6 +29,8 @@ type AddressComponent = {
 type GeocodeResponse = {
   results?: Array<{
     addressComponents?: AddressComponent[]
+    formattedAddress?: unknown
+    location?: { latitude?: unknown; longitude?: unknown }
   }>
 }
 
@@ -38,7 +43,7 @@ type RouteResponse = {
 
 const GEOCODING_URL = 'https://geocode.googleapis.com/v4/geocode/'
 const ROUTES_URL = 'https://routes.googleapis.com/directions/v2:computeRoutes'
-const GEOCODE_FIELD_MASK = 'results.addressComponents'
+const GEOCODE_FIELD_MASK = 'results.addressComponents,results.formattedAddress,results.location'
 const ROUTE_FIELD_MASK = 'routes.distanceMeters,routes.duration'
 
 const AREA_NAMES: Record<string, SupportedPickupArea> = {
@@ -202,7 +207,8 @@ export async function classifyLocation(
 
     const data = (await response.json()) as GeocodeResponse
     const results = data.results ?? []
-    const components = results[0]?.addressComponents
+    const firstResult = results[0]
+    const components = firstResult?.addressComponents
     if (!components || components.length === 0) {
       return { kind: 'unresolved' }
     }
@@ -228,10 +234,25 @@ export async function classifyLocation(
       return { kind: 'unresolved' }
     }
 
+    const latitude = 'latitude' in input ? input.latitude : firstResult.location?.latitude
+    const longitude = 'longitude' in input ? input.longitude : firstResult.location?.longitude
+    if (
+      typeof latitude !== 'number' || !Number.isFinite(latitude) || latitude < -90 || latitude > 90 ||
+      typeof longitude !== 'number' || !Number.isFinite(longitude) || longitude < -180 || longitude > 180
+    ) {
+      return { kind: 'unresolved' }
+    }
+    const formattedAddress = typeof firstResult.formattedAddress === 'string' && firstResult.formattedAddress.trim()
+      ? firstResult.formattedAddress.trim()
+      : 'address' in input ? input.address : null
+
     return {
       kind: 'resolved',
       countryCode: extractCountryCode(components),
       pickupArea: extractPickupArea(components),
+      formattedAddress,
+      latitude,
+      longitude,
     }
   } catch {
     console.error(JSON.stringify({ event: 'google_maps_geocode_unavailable' }))

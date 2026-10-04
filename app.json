@@ -33,6 +33,13 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Fave uses selected photos to review national ID and vehicle documents.",
+          "microphonePermission": false
+        }
       ]
     ],
     "experiments": {

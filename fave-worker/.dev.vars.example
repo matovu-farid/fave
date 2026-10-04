@@ -1,6 +1,7 @@
 # Copy to .dev.vars for local development. Keep real values out of Git.
 BETTER_AUTH_URL=http://localhost:8787
 BETTER_AUTH_SECRET=replace-with-a-random-secret-at-least-32-characters-long
+DRIVER_ID_ENCRYPTION_KEY=replace-with-a-base64-encoded-32-byte-key
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
 APPLE_SERVICE_ID=

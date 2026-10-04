@@ -4,6 +4,9 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-09-24",
   "compatibility_flags": ["nodejs_compat"],
+  "triggers": {
+    "crons": ["0 * * * *"]
+  },
   "routes": [
     {
       "pattern": "api.fave.fidexa.org",
@@ -21,7 +24,16 @@
       "database_id": "99e8531f-eaaa-4de6-a359-0adc1228b3b3",
       "migrations_dir": "migrations"
     }
-  ]
+  ],
+  "r2_buckets": [
+    {
+      "binding": "DRIVER_FILES",
+      "bucket_name": "fave-private-driver-files"
+    }
+  ],
+  "images": {
+    "binding": "IMAGES"
+  }
   // "vars": {
   //   "MY_VAR": "my-variable"
   // },

@@ -1,8 +1,16 @@
 import { authClient } from '@/lib/auth-client'
+import { Platform } from 'react-native'
 
-const apiUrl = process.env.EXPO_PUBLIC_API_URL
+export class ApiError extends Error {
+  constructor(message: string, readonly code: string | undefined, readonly status: number) {
+    super(message)
+    this.name = 'ApiError'
+  }
+}
 
-if (!apiUrl) {
+export const apiBaseUrl = process.env.EXPO_PUBLIC_API_URL
+
+if (!apiBaseUrl) {
   throw new Error('EXPO_PUBLIC_API_URL must point to the Fave API Worker')
 }
 
@@ -10,17 +18,26 @@ export async function authenticatedFetch<T>(path: string, init?: RequestInit): P
   const cookie = await authClient.getCookie()
   const headers = new Headers(init?.headers)
 
-  if (cookie) headers.set('Cookie', cookie)
+  if (cookie && Platform.OS !== 'web') headers.set('Cookie', cookie)
 
-  const response = await fetch(new URL(path, apiUrl), {
+  const response = await fetch(new URL(path, apiBaseUrl), {
     ...init,
     headers,
-    credentials: 'omit',
+    credentials: Platform.OS === 'web' ? 'include' : 'omit',
   })
 
+  const payload = await response.json().catch(() => null) as { error?: { code?: string; message?: string } } | null
   if (!response.ok) {
-    throw new Error(`Authenticated request failed with status ${response.status}`)
+    throw new ApiError(
+      payload?.error?.message ?? `Request failed with status ${response.status}`,
+      payload?.error?.code,
+      response.status,
+    )
   }
 
-  return (await response.json()) as T
+  return payload as T
+}
+
+export async function authenticatedUpload<T>(path: string, form: FormData): Promise<T> {
+  return authenticatedFetch<T>(path, { method: 'POST', body: form })
 }

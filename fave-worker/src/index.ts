@@ -1,14 +1,38 @@
 import { Hono } from 'hono'
-import { createAuth, type AuthBindings } from './auth'
+import { cors } from 'hono/cors'
+import { createAuth, getWebAppOrigins, type AuthBindings } from './auth'
 import {
   classifyLocation,
   computeDrivingRoute,
   parseLocationInput,
 } from './google-maps'
+import policiesApp from './marketplace-policies'
+import { adminDriversApp, driversApp } from './drivers'
+import { adminVehiclesApp, purgeExpiredVehicleEvidence, vehiclesApp } from './vehicles'
+import tripsApp, { expireDepositPendingBookings } from './bookings'
+import { purgeExpiredDriverEvidence } from './drivers'
 
 const app = new Hono<{ Bindings: AuthBindings }>()
 
+app.use(
+  '/api/*',
+  cors({
+    origin: (origin, context) =>
+      getWebAppOrigins(context.env).includes(origin) ? origin : '',
+    allowHeaders: ['Content-Type', 'Authorization', 'Cookie'],
+    allowMethods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+    credentials: true,
+    maxAge: 600,
+  }),
+)
+
 app.all('/api/auth/*', (c) => createAuth(c.env).handler(c.req.raw))
+app.route('/api/marketplace', policiesApp)
+app.route('/api/drivers', driversApp)
+app.route('/api/admin/drivers', adminDriversApp)
+app.route('/api/vehicles', vehiclesApp)
+app.route('/api/admin/vehicles', adminVehiclesApp)
+app.route('/api/trips', tripsApp)
 
 app.get('/', (c) => {
   return c.text('Hello Hono!')
@@ -230,4 +254,14 @@ app.post('/api/maps/driving-route', async (c) => {
   })
 })
 
-export default app
+export default {
+  fetch: (request: Request, env: AuthBindings, executionContext: ExecutionContext) =>
+    app.fetch(request, env, executionContext),
+  scheduled: (_controller: ScheduledController, env: AuthBindings, executionContext: ExecutionContext) => {
+    executionContext.waitUntil(Promise.all([
+      purgeExpiredDriverEvidence(env),
+      purgeExpiredVehicleEvidence(env),
+      expireDepositPendingBookings(env),
+    ]).then(() => undefined))
+  },
+}
