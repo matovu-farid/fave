@@ -2,9 +2,11 @@
 
 > **For agentic workers:** Implement this plan inline in the current workspace, in task order. Keep the four GitHub issues in progress until all acceptance criteria are met. Steps use checkbox syntax for tracking.
 
+> **Scope update — 2026-10-04:** Ugandan counsel approved decision D-13: V1 does not require one-time-code phone verification for driver applications or approvals, client bookings, or assignment-time contact release. Phone numbers remain contact details, and separate client consent is still required before sharing them with an assigned driver. This supersedes the older phone-verification steps below. Other legal documents, verification checklists, retention rules, and regulatory decisions remain subject to their own approval.
+
 **Goal:** Add secure driver application and verification workflows, approved vehicle listings and date availability, and a client trip request flow to the Expo app and Hono Worker.
 
-**Architecture:** Keep identity/session handling in Better Auth, add role-checked domain APIs backed by D1, and store private ID and vehicle evidence in a private R2 bucket served only through authenticated Worker routes. The mobile app consumes those APIs through authenticatedFetch and keeps public vehicle data separate from reviewer-only evidence. Terms, phone verification, counsel-required checklists, retention, and fare/hold policy are configuration gates; missing prerequisites prevent submission, approval, publishing, or booking rather than falling back to demo values.
+**Architecture:** Keep identity/session handling in Better Auth, add role-checked domain APIs backed by D1, and store private ID and vehicle evidence in a private R2 bucket served only through authenticated Worker routes. The mobile app consumes those APIs through authenticatedFetch and keeps public vehicle data separate from reviewer-only evidence. Terms, counsel-required checklists, retention, and fare/hold policy are configuration gates; missing prerequisites prevent submission, approval, publishing, or booking rather than falling back to demo values.
 
 **Tech Stack:** Expo SDK 57, Expo Router, React Native, expo-image-picker, Hono, Cloudflare D1, private R2, TypeScript.
 
@@ -77,10 +79,10 @@
 
 ## Current hard gates
 
-- #14 has not supplied counsel-approved driver/client terms, verification checklist, or retention/deletion policy.
+- #14 has not supplied counsel-approved driver/client terms, verification checklist, or retention/deletion policy. Decision D-13 removes phone OTP as a prerequisite; it does not approve the remaining policies.
 - #15 has not finalized fare calculation or hold expiry policy; its dated defaults are explicitly working proposals.
-- #21 has not supplied client profile, phone verification, and contact-sharing consent records.
-- #22 has not supplied the Uganda phone-code verification service.
+- #21 still owns client profile and contact-sharing consent records. Phone verification is out of V1 scope under D-13.
+- #22 phone-code verification is out of V1 scope under D-13.
 - #17 owns the full staff operations console; the requested #7 scope here is its protected review API/workflow, not a replacement console.
 - GitHub CLI authentication is currently invalid (`gh auth status` on 2026-10-03). Local branch changes are writable; use the signed-in GitHub browser for project tracking and PR creation until CLI authentication is restored.
 
@@ -90,9 +92,9 @@ This is an implementation audit, not a release approval. The draft policy docume
 
 | Issue | Implemented in this branch | Acceptance evidence still missing |
 | --- | --- | --- |
-| #6 Driver registration | `src/app/driver/index.tsx` and `fave-worker/src/drivers.ts` collect a Ugandan citizen affirmation, National ID number and images, private checklist evidence, policy acknowledgement, verified phone metadata, and applicant-visible status/resubmission. Driver identity is not requested in client routes. | Current counsel-approved driver terms/privacy, checklist, retention policy, and a working protected phone-code verification provider (#14/#22). User-directed scope is citizen drivers only; foreign nationals and refugees are declined. The passport-style image is a separate driver photo, not another identity document. |
-| #7 Admin verification | `fave-worker/src/drivers.ts` provides role-checked pending review, reasoned identity/document access with audit events, approve/reject/suspend transitions, and server-side approval eligibility checks. | Counsel-approved checklist and retention rules (#14), provisioned designated reviewers, and the operations console owned by #17. |
+| #6 Driver registration | `src/app/driver/index.tsx` and `fave-worker/src/drivers.ts` collect a Ugandan citizen affirmation, National ID number and images, private checklist evidence, policy acknowledgement, and applicant-visible status/resubmission. Driver identity is not requested in client routes. | Current counsel-approved driver terms/privacy, checklist, and retention policy (#14). Phone OTP is not required under counsel-approved decision D-13. User-directed scope is citizen drivers only; foreign nationals and refugees are declined. The passport-style image is a separate driver photo, not another identity document. |
+| #7 Admin verification | `fave-worker/src/drivers.ts` provides role-checked pending review, reasoned identity/document access with audit events, approve/reject/suspend transitions, and server-side approval eligibility checks. | Counsel-approved checklist and retention rules (#14), provisioned designated reviewers, and the operations console owned by #17. Phone OTP is not required under D-13. |
 | #8 Vehicle listings | `fave-worker/src/vehicles.ts` and `src/app/driver/index.tsx` provide driver-owned listings, private evidence, individually approved client photos, corrections, and unavailable-date/hold views. Vehicle and driver approval are rechecked server-side. | Counsel/authority-approved vehicle checklist and retention policy (#14), including required permits, roadworthiness and insurance evidence. The Cloudflare Images binding must be enabled before vehicle photo uploads can run in production. |
-| #10 Trip request | `fave-worker/src/bookings.ts`, `src/app/trips/index.tsx`, and the Maps API provide private pickup address/pin handling, Uganda destination checks, approved-vehicle selection, quote snapshots, separate phone-sharing consent, and atomic expiring holds. Client APIs omit driver identity and ID fields. | Current client/booking disclosures and fare/hold policy (#14/#15), client profile and phone verification (#21/#22), configured Maps key (#18), and deposit processing (#11). The production app hostname did not resolve in the browser on 2026-10-03, so rendered runtime behavior remains unverified. |
+| #10 Trip request | `fave-worker/src/bookings.ts`, `src/app/trips/index.tsx`, and the Maps API provide private pickup address/pin handling, Uganda destination checks, approved-vehicle selection, quote snapshots, separate phone-sharing consent, and atomic expiring holds. Client APIs omit driver identity and ID fields. | Current client/booking disclosures and fare/hold policy (#14/#15), client profile and contact-sharing consent (#21), configured Maps key (#18), and deposit processing (#11). Phone OTP is not required under D-13. Authenticated end-to-end behavior remains unverified. |
 
 Static verification on 2026-10-03: `npx expo lint`, `npx tsc --noEmit`, `npx tsc --noEmit -p fave-worker/tsconfig.json`, and `git diff --check` passed. These checks do not replace browser, D1 integration, or external-provider verification. The marketplace branch is based on the open Maps PR #23 because trip pickup and route validation depend on it; keep #23 unchanged and target it as the base for any dependent marketplace review.
