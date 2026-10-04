@@ -1,5 +1,10 @@
 type GoogleMapsBindings = {
   GOOGLE_MAPS_API_KEY?: string
+  GOOGLE_MAPS_APIKEY?: string
+}
+
+export function getGoogleMapsApiKey(bindings: GoogleMapsBindings): string | undefined {
+  return bindings.GOOGLE_MAPS_API_KEY ?? bindings.GOOGLE_MAPS_APIKEY
 }
 
 export type SupportedPickupArea = 'Kampala' | 'Mukono' | 'Wakiso'
@@ -183,7 +188,7 @@ export async function classifyLocation(
   bindings: GoogleMapsBindings,
   input: LocationInput,
 ): Promise<LocationClassification> {
-  const apiKey = bindings.GOOGLE_MAPS_API_KEY
+  const apiKey = getGoogleMapsApiKey(bindings)
   if (!apiKey) return { kind: 'provider_error' }
 
   try {
@@ -283,7 +288,7 @@ export async function computeDrivingRoute(
   origin: LocationInput,
   destination: LocationInput,
 ): Promise<DrivingRouteResult> {
-  const apiKey = bindings.GOOGLE_MAPS_API_KEY
+  const apiKey = getGoogleMapsApiKey(bindings)
   if (!apiKey) return { kind: 'provider_error' }
 
   try {

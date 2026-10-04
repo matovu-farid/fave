@@ -4,6 +4,7 @@ import { createAuth, getWebAppOrigins, type AuthBindings } from './auth'
 import {
   classifyLocation,
   computeDrivingRoute,
+  getGoogleMapsApiKey,
   parseLocationInput,
 } from './google-maps'
 import policiesApp from './marketplace-policies'
@@ -90,7 +91,7 @@ app.post('/api/maps/pickup-eligibility', async (c) => {
     return c.json(
       {
         error: {
-          code: c.env.GOOGLE_MAPS_API_KEY
+          code: getGoogleMapsApiKey(c.env)
             ? 'GOOGLE_MAPS_UNAVAILABLE'
             : 'GOOGLE_MAPS_NOT_CONFIGURED',
           message: 'Pickup location checks are temporarily unavailable.',
@@ -165,7 +166,7 @@ app.post('/api/maps/driving-route', async (c) => {
     return c.json(
       {
         error: {
-          code: c.env.GOOGLE_MAPS_API_KEY
+          code: getGoogleMapsApiKey(c.env)
             ? 'GOOGLE_MAPS_UNAVAILABLE'
             : 'GOOGLE_MAPS_NOT_CONFIGURED',
           message: 'We could not check this pickup or route right now.',
@@ -225,7 +226,7 @@ app.post('/api/maps/driving-route', async (c) => {
     return c.json(
       {
         error: {
-          code: c.env.GOOGLE_MAPS_API_KEY
+          code: getGoogleMapsApiKey(c.env)
             ? 'GOOGLE_MAPS_UNAVAILABLE'
             : 'GOOGLE_MAPS_NOT_CONFIGURED',
           message: 'We could not calculate this road route right now.',
