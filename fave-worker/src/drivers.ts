@@ -6,7 +6,7 @@ import {
   isMarketplaceAdmin,
   writeMarketplaceAudit,
 } from './marketplace-auth'
-import { getCurrentPolicies, getVerifiedPhone, hasCurrentPolicyAcceptance } from './marketplace-policies'
+import { getCurrentPolicies, hasCurrentPolicyAcceptance } from './marketplace-policies'
 import { readPrivateEvidence, storePrivateEvidence, storePrivateImage } from './private-files'
 import { decryptPrivateField, encryptPrivateField } from './private-fields'
 
@@ -97,11 +97,6 @@ export function approvedDriverEvidencePredicate(driverApplicationId: string): st
             AND retention.active = 1 AND retention.approved_at IS NOT NULL
        )
        AND ${currentDriverEvidencePredicate('eligible_driver')}
-       AND EXISTS (
-         SELECT 1 FROM phone_verifications AS phone
-          WHERE phone.user_id = eligible_driver.user_id
-            AND phone.phone_e164 = eligible_driver.phone_e164
-       )
        AND (
          SELECT COUNT(DISTINCT acceptance.document_id)
            FROM policy_acceptances AS acceptance
@@ -229,7 +224,7 @@ driversApp.get('/application', async (c) => {
   let needsEvidenceRefresh = false
   let needsPolicyAcceptance = false
   if (application.status === 'approved') {
-    const [currentEvidence, currentPolicies, verifiedPhone] = await Promise.all([
+    const [currentEvidence, currentPolicies] = await Promise.all([
       c.env.DB.prepare(
         `SELECT ${currentDriverEvidencePredicate('driver_applications')} AS current
            FROM driver_applications WHERE id = ? LIMIT 1`,
@@ -237,7 +232,6 @@ driversApp.get('/application', async (c) => {
         .bind(now, now, application.id)
         .first<{ current: number }>(),
       getCurrentPolicies(c.env, ['driver_terms', 'driver_privacy'], 'en'),
-      getVerifiedPhone(c.env, user.id),
     ])
     const acceptedCurrentPolicies = await Promise.all(
       currentPolicies.map((document) =>
@@ -247,7 +241,6 @@ driversApp.get('/application', async (c) => {
     needsEvidenceRefresh =
       currentEvidence?.current !== 1 ||
       application.retention_expires_at === null || application.retention_expires_at <= now ||
-      verifiedPhone?.phone_e164 !== application.phone_e164 ||
       application.citizenship_attested_at === null
     needsPolicyAcceptance =
       currentPolicies.length !== 2 || acceptedCurrentPolicies.some((accepted) => !accepted)
@@ -313,12 +306,7 @@ driversApp.post('/application', async (c) => {
     typeof nationalIdNumber !== 'string' || !/^[\p{L}\p{N}-]{5,40}$/u.test(nationalIdNumber.trim()) ||
     citizenshipConfirmation !== 'ugandan_citizen'
   ) {
-    return c.json(apiError('INVALID_APPLICATION', 'This driver application is for Ugandan citizens. Enter a legal name, verified phone number, and valid National ID, and confirm your eligibility.'), 400)
-  }
-
-  const verifiedPhone = await getVerifiedPhone(c.env, user.id)
-  if (!verifiedPhone || verifiedPhone.phone_e164 !== phoneNumber) {
-    return c.json(apiError('PHONE_NOT_VERIFIED', 'Verify control of this phone number before applying.'), 409)
+    return c.json(apiError('INVALID_APPLICATION', 'This driver application is for Ugandan citizens. Enter a legal name, contact phone number, and valid National ID, and confirm your eligibility.'), 400)
   }
 
   const documents = await getCurrentPolicies(c.env, ['driver_terms', 'driver_privacy'], 'en')
@@ -446,11 +434,6 @@ driversApp.post('/application', async (c) => {
                 OR (status = 'approved' AND (
                   NOT (${currentDriverEvidencePredicate('driver_applications')})
                   OR retention_expires_at IS NULL OR retention_expires_at <= ?
-                  OR NOT EXISTS (
-                    SELECT 1 FROM phone_verifications AS phone
-                     WHERE phone.user_id = driver_applications.user_id
-                       AND phone.phone_e164 = driver_applications.phone_e164
-                  )
                 ))
               )
               AND submission_version = ?`,
@@ -837,8 +820,7 @@ adminDriversApp.post('/:applicationId/decision', async (c) => {
   const targetState = decision === 'approve' ? 'approved' : decision === 'reject' ? 'rejected' : 'suspended'
   let approvalPolicyIds: string[] = []
   if (decision === 'approve') {
-    const [phone, policies, requirements, retention, documentsApproved] = await Promise.all([
-      getVerifiedPhone(c.env, application.user_id),
+    const [policies, requirements, retention, documentsApproved] = await Promise.all([
       getCurrentPolicies(c.env, ['driver_terms', 'driver_privacy'], 'en'),
       getRequiredDocuments(c.env),
       c.env.DB.prepare(
@@ -855,12 +837,11 @@ adminDriversApp.post('/:applicationId/decision', async (c) => {
     )
     approvalPolicyIds = policies.map((document) => document.id)
     if (
-      !phone || phone.phone_e164 !== application.phone_e164 ||
       application.citizenship_attested_at === null ||
       policies.length !== 2 || acceptance.some((value) => !value) ||
       requirements.length === 0 || !retention || !documentsApproved
     ) {
-      return c.json(apiError('APPROVAL_REQUIREMENTS_INCOMPLETE', 'Verify the application phone number, current policy acceptance, active checklist, retention policy, and each required document before approval.'), 409)
+      return c.json(apiError('APPROVAL_REQUIREMENTS_INCOMPLETE', 'Confirm current policy acceptance, active checklist, retention policy, citizenship eligibility, and each required document before approval.'), 409)
     }
   }
 
@@ -878,11 +859,6 @@ adminDriversApp.post('/:applicationId/decision', async (c) => {
   const now = Date.now()
   const approvalGuard = targetState === 'approved'
     ? `
-          AND EXISTS (
-            SELECT 1 FROM phone_verifications AS phone
-             WHERE phone.user_id = driver_applications.user_id
-               AND phone.phone_e164 = driver_applications.phone_e164
-          )
           AND driver_applications.citizenship_attested_at IS NOT NULL
           AND (
             SELECT COUNT(DISTINCT acceptance.document_id)

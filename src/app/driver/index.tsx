@@ -98,7 +98,7 @@ export default function DriverScreen() {
       setVehicles(mine.vehicles)
       if (result.application?.needsEvidenceRefresh || result.application?.needsPolicyAcceptance) setAccepted(false)
       setLegalName(result.application?.legalName ?? '')
-      setPhoneNumber(requirements.phone.number ?? result.application?.phoneNumber ?? '')
+      setPhoneNumber(result.application?.phoneNumber ?? '')
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not load driver requirements.')
     } finally { setLoading(false) }
@@ -146,9 +146,6 @@ export default function DriverScreen() {
   const canResubmit = !application || ['draft', 'needs_correction', 'rejected'].includes(application.status) ||
     (application.status === 'pending_verification' && application.needsCitizenshipConfirmation === true) ||
     (application.status === 'approved' && application.needsEvidenceRefresh === true)
-  const phoneMatchesVerification = Boolean(
-    prerequisites?.phone.verified && prerequisites.phone.number === phoneNumber.trim(),
-  )
   const hasAllFiles = Boolean(files.national_id_front && files.national_id_back && files.passport_photo && prerequisites?.verificationChecklist.every((item) => files[item.document_type]))
 
   if (loading) return <ThemedView style={styles.loading}><ThemedText>Loading driver requirements…</ThemedText></ThemedView>
@@ -174,8 +171,7 @@ export default function DriverScreen() {
         {prerequisites.documents.length !== 2 ? <Message>Current approved driver terms and privacy notice are not available yet.</Message> : null}
         <ActionButton title="Accept updated driver terms" onPress={() => void acceptUpdatedPolicies()} disabled={!accepted || prerequisites.documents.length !== 2} busy={busy} />
       </Card> : null}
-      {!prerequisites?.phone.verified ? <Card><ThemedText type="subtitle">Verify your phone first</ThemedText><Message>Your phone number must be verified before we can accept a driver application. Phone verification is not configured yet.</Message></Card> : null}
-      {!prerequisites?.retentionPolicy.active || !prerequisites.readyToApply ? <Card><ThemedText type="subtitle">Application requirements</ThemedText><Message>Current approved driver terms, privacy notice, evidence checklist, phone verification, and document retention rules are all required before submission.</Message></Card> : null}
+      {!prerequisites?.retentionPolicy.active || !prerequisites.readyToApply ? <Card><ThemedText type="subtitle">Application requirements</ThemedText><Message>Current approved driver terms, privacy notice, evidence checklist, and document retention rules are required before submission.</Message></Card> : null}
       {canResubmit && prerequisites ? <>
         {application?.status === 'approved' && application.needsEvidenceRefresh ? <Message>Your current verification evidence must be refreshed. Submitting it returns the application to staff review, and your vehicles stay hidden until approval.</Message> : null}
         <Card>
@@ -189,8 +185,7 @@ export default function DriverScreen() {
         <Card>
           <ThemedText type="subtitle">Your details</ThemedText>
           <Field label="Legal name" value={legalName} onChangeText={setLegalName} placeholder="As shown on your identity document" />
-          <Field label="Verified phone number" value={phoneNumber} onChangeText={setPhoneNumber} placeholder="+256…" keyboardType="phone-pad" />
-          {prerequisites.phone.verified && !phoneMatchesVerification ? <Message>The number must match the phone verified for this account. Verify a new number before applying with it.</Message> : null}
+          <Field label="Phone number" value={phoneNumber} onChangeText={setPhoneNumber} placeholder="+256…" keyboardType="phone-pad" />
           <CheckRow title="I am a Ugandan citizen and have a National ID" detail="Fave is not accepting foreign-national or refugee driver applications in this release." checked={citizenshipConfirmed} onPress={() => setCitizenshipConfirmed(!citizenshipConfirmed)} disabled={busy} />
           <Field label="National ID number" value={nationalId} onChangeText={setNationalId} placeholder="Enter the number on your ID" autoCapitalize="characters" />
           <ThemedText type="smallBold">National ID images</ThemedText>
@@ -202,7 +197,7 @@ export default function DriverScreen() {
           {prerequisites.verificationChecklist.filter((item) => !builtInIdentityTypes.has(item.document_type)).map((item) => <PickButton key={item.document_type} label={item.document_type.replaceAll('_', ' ')} file={files[item.document_type]} onPress={() => void pick(item.document_type, true)} />)}
           <Message>Your National ID is the only identity document requested. The passport-style photo is a separate driver photo, not another identity document. Keep both private; only designated staff can review them. Accepted formats: JPEG, PNG, or WebP for identity images; checklist evidence accepts those formats or PDF. Each file can be up to 8 MB.</Message>
           {prerequisites.retentionPolicy.active ? <Message>Your application evidence will be deleted {prerequisites.retentionPolicy.retentionDays} days after submission under approved retention policy{prerequisites.retentionPolicy.version ? ` v${prerequisites.retentionPolicy.version}` : ''}. Cleanup runs hourly.</Message> : null}
-          <ActionButton title={application ? 'Resubmit application' : 'Submit application'} onPress={() => void submit()} disabled={!accepted || !prerequisites.readyToApply || !phoneMatchesVerification || !citizenshipConfirmed || !hasAllFiles || !legalName.trim() || !nationalId.trim()} busy={busy} />
+          <ActionButton title={application ? 'Resubmit application' : 'Submit application'} onPress={() => void submit()} disabled={!accepted || !prerequisites.readyToApply || !citizenshipConfirmed || !hasAllFiles || !legalName.trim() || !phoneNumber.trim() || !nationalId.trim()} busy={busy} />
         </Card>
       </> : null}
       {application?.status === 'approved' && !application.needsEvidenceRefresh && !application.needsPolicyAcceptance ? <VehicleSection vehicles={vehicles} refresh={refresh} /> : null}

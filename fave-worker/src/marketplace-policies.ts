@@ -60,23 +60,6 @@ export async function hasCurrentPolicyAcceptance(
   return acceptance !== null
 }
 
-export type VerifiedPhone = {
-  phone_e164: string
-  verified_at: number
-  method: string
-}
-
-export async function getVerifiedPhone(
-  env: AuthBindings,
-  userId: string,
-): Promise<VerifiedPhone | null> {
-  return env.DB.prepare(
-    'SELECT phone_e164, verified_at, method FROM phone_verifications WHERE user_id = ? LIMIT 1',
-  )
-    .bind(userId)
-    .first<VerifiedPhone>()
-}
-
 const policiesApp = new Hono<{ Bindings: AuthBindings }>()
 
 policiesApp.get('/driver-prerequisites', async (c) => {
@@ -84,7 +67,7 @@ policiesApp.get('/driver-prerequisites', async (c) => {
   if (!user) return c.json(apiError('UNAUTHORIZED', 'Sign in to continue.'), 401)
 
   const language = c.req.query('language')?.slice(0, 16) || 'en'
-  const [documents, requirements, retentionPolicy, phone] = await Promise.all([
+  const [documents, requirements, retentionPolicy] = await Promise.all([
     getCurrentPolicies(c.env, ['driver_terms', 'driver_privacy'], language),
     c.env.DB.prepare(
       `SELECT document_type, version, required
@@ -98,7 +81,6 @@ policiesApp.get('/driver-prerequisites', async (c) => {
         WHERE record_type = 'driver_application' AND active = 1 AND approved_at IS NOT NULL
         ORDER BY approved_at DESC LIMIT 1`,
     ).first<{ version: string; retention_days: number }>(),
-    getVerifiedPhone(c.env, user.id),
   ])
 
   const acceptedIds = await c.env.DB.prepare(
@@ -118,14 +100,6 @@ policiesApp.get('/driver-prerequisites', async (c) => {
       body: document.body,
       accepted: accepted.has(document.id),
     })),
-    phone: phone
-      ? {
-          verified: true,
-          number: phone.phone_e164,
-          verifiedAt: phone.verified_at,
-          method: phone.method,
-        }
-      : { verified: false },
     verificationChecklist: requirements.results,
     retentionPolicy: retentionPolicy
       ? {
@@ -136,7 +110,6 @@ policiesApp.get('/driver-prerequisites', async (c) => {
       : { active: false },
     readyToApply:
       documents.length === 2 &&
-      phone !== null &&
       requirements.results.length > 0 &&
       retentionPolicy !== null,
   })
@@ -235,7 +208,7 @@ policiesApp.get('/client-prerequisites', async (c) => {
   if (!user) return c.json(apiError('UNAUTHORIZED', 'Sign in to continue.'), 401)
 
   const language = c.req.query('language')?.slice(0, 16) || 'en'
-  const [onboardingDocuments, bookingDocuments, profile, phone] = await Promise.all([
+  const [onboardingDocuments, bookingDocuments, profile] = await Promise.all([
     getCurrentPolicies(c.env, ['client_terms', 'client_privacy'], language),
     getCurrentPolicies(
       c.env,
@@ -247,7 +220,6 @@ policiesApp.get('/client-prerequisites', async (c) => {
     )
       .bind(user.id)
       .first<{ legal_name: string; phone_e164: string }>(),
-    getVerifiedPhone(c.env, user.id),
   ])
 
   const acceptances = await c.env.DB.prepare(
@@ -277,15 +249,10 @@ policiesApp.get('/client-prerequisites', async (c) => {
     profile: profile
       ? { legalName: profile.legal_name, phoneNumber: profile.phone_e164 }
       : null,
-    phone: phone
-      ? { verified: true, number: phone.phone_e164, verifiedAt: phone.verified_at, method: phone.method }
-      : { verified: false },
     bookingReady:
       onboardingDocuments.length === 2 &&
       bookingDocuments.length === 6 &&
-      profile !== null &&
-      phone !== null &&
-      phone.phone_e164 === profile.phone_e164,
+      profile !== null,
   })
 })
 
@@ -350,7 +317,7 @@ policiesApp.post('/client-profile', async (c) => {
        VALUES (?, ?, 'user', 'client_profile_updated', 'user', ?, ?)`,
     ).bind(crypto.randomUUID(), user.id, user.id, now),
   ])
-  return c.json({ legalName: name, phoneNumber, phoneVerified: false })
+  return c.json({ legalName: name, phoneNumber })
 })
 
 export default policiesApp

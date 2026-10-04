@@ -52,7 +52,7 @@ Electronic Transactions Act section 23 includes online disclosures and a 14-day 
 
 ### 7. Client account and contact sharing
 
-Provide accurate name and reachable phone number. The phone must be verified through the in-app verification process before a deposit/order is accepted. Assignment-time sharing of the client's phone and trip details is a separate, specific choice, shown with recipient, purpose and timing. Declining that optional contact sharing **[effect on booking to be defined; do not silently bundle consent]**. Emergency disclosures and legally required disclosures will be handled under the privacy notice and law.
+Provide an accurate name and phone number for trip contact. Phone ownership verification is not required in V1. Assignment-time sharing of the client's phone and trip details is a separate, specific choice, shown with recipient, purpose and timing. Declining that optional contact sharing **[effect on booking to be defined; do not silently bundle consent]**. Emergency disclosures and legally required disclosures will be handled under the privacy notice and law.
 
 Do not use another person's account, submit another person's phone number without authority, harass a driver, or share driver/client contact information outside the trip purpose. For account access, correction or complaints contact **[support contact]**.
 
@@ -70,7 +70,7 @@ Complaints: **[email, phone, postal/service address and process]**. Alternative 
 
 ## Part B. Proposed client privacy notice
 
-The client onboarding flow requests a legal name and verified phone number for account and trip administration. Fave does not request clients to upload a National ID, passport, or refugee ID for these workflows. Any later client identity check would require a separate necessity, lawful-basis, notice, and counsel review before collection.
+The client onboarding flow requests a legal name and phone number for account and trip administration. Phone ownership verification is not required in V1. Fave does not request clients to upload a National ID, passport, or refugee ID for these workflows. Any later client identity check would require a separate necessity, lawful-basis, notice, and counsel review before collection.
 
 ### 10. Controller and privacy contact
 
@@ -80,7 +80,7 @@ Proposed controller: **[Fidexa LLC—verify legal name and controller/joint-cont
 
 | Information | Purpose | Required status/basis |
 | --- | --- | --- |
-| Account ID, name, phone and phone-verification result | Client registration, authentication, booking contact and provider registration requirements | **[legal basis, mandatory/optional status, consequences]** |
+| Account ID, name and phone number | Client registration, authentication and booking contact | **[legal basis, mandatory/optional status, consequences]** |
 | Pickup/drop-off text, map pin/coordinates, dates and route estimate | Check coverage, quote, booking, driver/provider matching and support | **[precise use, visibility, retention and basis]** |
 | Party size and luggage/accessibility details | Match capacity and deliver requested trip | **[ask only what is necessary; avoid health details unless counsel approves basis]** |
 | Vehicle choice and quote/booking/payment records | Confirm service, charge/refund, reconcile and maintain transaction evidence | **[merchant, recipients, legal basis and retention]** |

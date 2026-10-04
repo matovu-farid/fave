@@ -6,7 +6,7 @@ import {
   writeMarketplaceAudit,
 } from './marketplace-auth'
 import { computeDrivingRoute, classifyLocation, parseLocationInput } from './google-maps'
-import { getCurrentPolicies, getVerifiedPhone } from './marketplace-policies'
+import { getCurrentPolicies } from './marketplace-policies'
 import { approvedVehicleEvidencePredicate } from './vehicles'
 
 type FareComponent = {
@@ -493,21 +493,20 @@ tripsApp.post('/confirm', async (c) => {
     return c.json(apiError('QUOTE_CHANGED', 'The fare changed. Review a new quote before confirming.'), 409)
   }
 
-  const [profile, phone, currentDocuments] = await Promise.all([
+  const [profile, currentDocuments] = await Promise.all([
     c.env.DB.prepare(
       `SELECT legal_name, phone_e164 FROM client_profiles WHERE user_id = ? LIMIT 1`,
     )
       .bind(user.id)
       .first<{ legal_name: string; phone_e164: string }>(),
-    getVerifiedPhone(c.env, user.id),
     getCurrentPolicies(
       c.env,
       ['client_terms', 'client_privacy', 'booking_policy', 'payment_policy', 'cancellation_policy', 'safety_policy'],
       'en',
     ),
   ])
-  if (!profile || !phone || phone.phone_e164 !== profile.phone_e164) {
-    return c.json(apiError('PHONE_NOT_VERIFIED', 'Complete client profile and verify control of the same phone number before booking.'), 409)
+  if (!profile) {
+    return c.json(apiError('CLIENT_PROFILE_REQUIRED', 'Complete your client details before booking.'), 409)
   }
   if (currentDocuments.length !== 6) {
     return c.json(apiError('BOOKING_TERMS_UNAVAILABLE', 'Current approved booking disclosures are not available.'), 409)
@@ -567,11 +566,6 @@ tripsApp.post('/confirm', async (c) => {
              AND (active.status = 'confirmed' OR
                   (active.status = 'deposit_pending' AND active.hold_expires_at > ?))
         )
-        AND EXISTS (
-          SELECT 1 FROM client_profiles AS profile
-          JOIN phone_verifications AS phone ON phone.user_id = profile.user_id
-           WHERE profile.user_id = ? AND profile.phone_e164 = phone.phone_e164
-        )
         AND (SELECT COUNT(*) FROM policy_documents
               WHERE document_type IN ('client_terms', 'client_privacy', 'booking_policy',
                 'payment_policy', 'cancellation_policy', 'safety_policy')
@@ -615,7 +609,6 @@ tripsApp.post('/confirm', async (c) => {
     quote.end_date,
     quote.start_date,
     now,
-    user.id,
     now,
     ...currentDocuments.map((document) => document.id),
   )

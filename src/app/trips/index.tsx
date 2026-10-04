@@ -48,16 +48,13 @@ export default function TripsScreen() {
       setPrerequisites(result)
       setBookings(bookingResult.bookings)
       setLegalName(result.profile?.legalName ?? '')
-      setPhone(result.profile?.phoneNumber ?? result.phone.number ?? '')
+      setPhone(result.profile?.phoneNumber ?? '')
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not load booking requirements.') }
     finally { setLoading(false) }
   }, [])
   useEffect(() => { void Promise.resolve().then(refresh) }, [refresh])
 
-  const phoneMatchesVerification = Boolean(
-    prerequisites?.phone.verified && prerequisites.phone.number === phone.trim(),
-  )
-  const canProfile = Boolean(legalName.trim() && phoneMatchesVerification && acceptedClientTerms && prerequisites?.documents.length === 2)
+  const canProfile = Boolean(legalName.trim() && phone.trim() && acceptedClientTerms && prerequisites?.documents.length === 2)
   const configureProfile = async () => {
     if (!prerequisites) return
     setBusy(true); setError('')
@@ -147,11 +144,9 @@ export default function TripsScreen() {
         </View>) : <Message>Current approved client terms and privacy notice are not available. Client setup is paused until they are published.</Message>}
         <CheckRow title="I agree to the current client terms and privacy notice" checked={acceptedClientTerms} onPress={() => setAcceptedClientTerms(!acceptedClientTerms)} disabled={busy} />
         <Field label="Legal name" value={legalName} onChangeText={setLegalName} placeholder="Your full name" />
-        <Field label="Verified phone number" value={phone} onChangeText={(value) => { setPhone(value); setSharePhone(false) }} placeholder="+256…" keyboardType="phone-pad" editable={!busy} />
+        <Field label="Phone number" value={phone} onChangeText={(value) => { setPhone(value); setSharePhone(false) }} placeholder="+256…" keyboardType="phone-pad" editable={!busy} />
         <ActionButton title="Save client details" onPress={() => void configureProfile()} disabled={!canProfile} busy={busy} />
-        {!prerequisites?.phone.verified ? <Message>Your number must be verified before a trip can be requested. Phone verification is not configured yet.</Message> : null}
-        {prerequisites?.phone.verified && !phoneMatchesVerification ? <Message>The number must match the phone verified for this account. Verify a new number before saving it.</Message> : null}
-        {prerequisites?.phone.verified && prerequisites.profile?.phoneNumber !== prerequisites.phone.number ? <Message>Save the same verified phone number to continue.</Message> : null}
+        <Message>Phone verification is not required in V1. Your number is shared with a driver only if you give separate consent for that trip.</Message>
       </Card>
       {bookings.length > 0 ? <Card>
         <ThemedText type="subtitle">Your trip requests</ThemedText>
@@ -176,7 +171,7 @@ export default function TripsScreen() {
         <View style={formStyles.row}><Field label="Start date (YYYY-MM-DD)" value={startDate} onChangeText={(value) => { setStartDate(value); invalidateTripSearch() }} placeholder="2026-10-04" editable={!busy} /><Field label="End date (YYYY-MM-DD)" value={endDate} onChangeText={(value) => { setEndDate(value); invalidateTripSearch() }} placeholder="2026-10-05" editable={!busy} /></View>
         <View style={formStyles.row}><Field label="Passengers" value={partySize} onChangeText={(value) => { setPartySize(value); invalidateTripSearch() }} keyboardType="numeric" editable={!busy} /><Field label="Luggage pieces" value={luggageCount} onChangeText={(value) => { setLuggageCount(value); invalidateTripSearch() }} keyboardType="numeric" editable={!busy} /></View>
         <ActionButton title="Find available vehicles" onPress={() => void findVehicles()} disabled={(!pickupPin && !pickup.trim()) || (pinPickerOpen && !pickupPin) || !destination.trim() || !startDate || !endDate} busy={busy} />
-        {!prerequisites?.bookingReady ? <Message>Booking requires a matching verified phone, saved client profile, current client terms, and all current booking disclosures.</Message> : null}
+        {!prerequisites?.bookingReady ? <Message>Booking requires saved client details, current client terms, and all current booking disclosures.</Message> : null}
       </Card>
       {vehicles.map((vehicle) => <Card key={vehicle.id}>
         {vehicle.photos?.length ? <ScrollView

@@ -3,7 +3,6 @@ import { authenticatedFetch, authenticatedUpload } from '@/lib/api'
 export type PolicyDocument = { id: string; type: string; version: string; language: string; body: string; accepted?: boolean }
 export type DriverPrerequisites = {
   documents: PolicyDocument[]
-  phone: { verified: boolean; number?: string }
   verificationChecklist: { document_type: string; version: string; required: number }[]
   retentionPolicy: { active: boolean; version?: string; retentionDays?: number }
   readyToApply: boolean
@@ -62,7 +61,6 @@ export type ClientPrerequisites = {
   documents: PolicyDocument[]
   bookingDocuments: PolicyDocument[]
   profile: { legalName: string; phoneNumber: string } | null
-  phone: { verified: boolean; number?: string }
   bookingReady: boolean
 }
 export type TripQuote = {
@@ -152,7 +150,7 @@ export function getMyBookings() {
   return authenticatedFetch<{ bookings: TripBooking[] }>('/api/trips/mine')
 }
 export function updateClientProfile(legalName: string, phoneNumber: string, acceptedDocumentIds: string[]) {
-  return authenticatedFetch<{ phoneVerified: boolean }>('/api/marketplace/client-profile', {
+  return authenticatedFetch<{ legalName: string; phoneNumber: string }>('/api/marketplace/client-profile', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ legalName, phoneNumber, accepted: true, acceptedDocumentIds }),
   })

@@ -45,7 +45,8 @@ and file size, and returns customer photos only after individual photo approval.
 Only Ugandan citizen drivers may apply in the first release. The application
 records the applicant's affirmative eligibility attestation and approval also
 requires that attestation. The client trip flow collects profile details and
-verified phone information; it does not collect National ID, passport, or
+phone contact information without requiring phone ownership verification in
+V1; it does not collect National ID, passport, or
 refugee ID documents.
 
 Set `DRIVER_ID_ENCRYPTION_KEY` to a randomly generated base64 encoding of 32
@@ -81,9 +82,10 @@ deadline. Vehicle editing and availability changes also recheck current
 driver evidence and policy eligibility on the server, so a stale UI cannot bypass
 the listing gate through direct API calls. Drivers can remove an upcoming or active
 unavailability block; removals are audited and past blocks are retained in history.
-Phone verification records are owned by the phone-verification flow tracked in
-issue #22. Client booking disclosures, consent, and the profile gates depend on
-the policy and client setup work tracked in #14, #15, and #21.
+One-time-code phone verification is deferred from V1. No driver application,
+approval, client booking, or assignment-time contact release requires a
+`phone_verifications` record. Client booking disclosures, consent, and profile
+gates depend on the policy and client setup work tracked in #14, #15, and #21.
 
 The trip quote endpoint requires an active, approved `fare_policies` record.
 `rules_json` is an object with a non-empty `components` array and integer
