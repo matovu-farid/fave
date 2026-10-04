@@ -2,7 +2,7 @@ import { expo } from '@better-auth/expo'
 import { betterAuth } from 'better-auth'
 import { importPKCS8, SignJWT } from 'jose'
 
-export type AuthBindings = CloudflareBindings & {
+export type AuthBindings = Omit<CloudflareBindings, 'BETTER_AUTH_URL' | 'ENVIRONMENT'> & {
   BETTER_AUTH_SECRET?: string
   BETTER_AUTH_URL?: string
   GOOGLE_CLIENT_ID?: string
@@ -11,7 +11,24 @@ export type AuthBindings = CloudflareBindings & {
   APPLE_TEAM_ID?: string
   APPLE_KEY_ID?: string
   APPLE_PRIVATE_KEY?: string
+  GOOGLE_MAPS_API_KEY?: string
+  WEB_APP_ORIGINS?: string
+  DRIVER_ID_ENCRYPTION_KEY?: string
+  DRIVER_FILES?: R2Bucket
   ENVIRONMENT?: string
+}
+
+export function getWebAppOrigins(env: AuthBindings): string[] {
+  const configured = (env.WEB_APP_ORIGINS ?? '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean)
+
+  if (env.ENVIRONMENT === 'development') {
+    configured.push('http://localhost:8081', 'http://127.0.0.1:8081')
+  }
+
+  return [...new Set(configured)]
 }
 
 async function createAppleClientSecret(env: AuthBindings) {
@@ -67,6 +84,7 @@ export function createAuth(env: AuthBindings) {
       'fave://',
       'fave://*',
       'https://appleid.apple.com',
+      ...getWebAppOrigins(env),
       ...(env.ENVIRONMENT === 'development' ? ['exp://**'] : []),
     ],
   })

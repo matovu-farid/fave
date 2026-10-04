@@ -8,6 +8,7 @@
     "scheme": "fave",
     "userInterfaceStyle": "automatic",
     "ios": {
+      "bundleIdentifier": "org.fidexa.fave",
       "icon": "./assets/expo.icon"
     },
     "android": {
@@ -32,11 +33,25 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Fave uses selected photos to review national ID and vehicle documents.",
+          "microphonePermission": false
+        }
       ]
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "5a731a51-0af6-4146-98c6-941e3006db63"
+      }
+    },
+    "owner": "farid90"
   }
 }

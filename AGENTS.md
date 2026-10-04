@@ -39,3 +39,16 @@ Docs: https://docs.expo.dev/eas/index.md
 - If `ios/` and `android/` directories do not exist, they are generated (Continuous Native Generation). Never create or edit them by hand — configure native behavior in `app.json` and config plugins.
 - Expo Go only includes its bundled native modules. After adding a library with native code, the app needs a development build: `npx expo run:ios|android` locally, or `eas build --profile development`.
 - Prefer recommended Expo modules over third-party libraries, and check your available skills before adding dependencies. Docs: https://docs.expo.dev/versions/latest/index.md
+
+## GitHub Project workflow for agents
+
+For implementation work in this repository, track the work in the [Fave GitHub Project](https://github.com/users/matovu-farid/projects/11) before changing code:
+
+1. Reuse an existing issue if one already covers the task. Otherwise, create a concise issue with the goal and acceptance criteria, add it to the Fave project, and place it in **Backlog**.
+2. Pick up the issue from the project before implementation by moving it to **In progress**. Keep the issue updated as work proceeds. Read-only investigation does not need an issue.
+3. Open a pull request for completed work and include `Closes #<issue-number>` in the PR description so GitHub closes the issue when the PR is merged. Keep the PR linked to its issue.
+4. Do not mark work **Done** manually before it is merged. The project workflows move linked PRs to **In review**, move issues back to **In progress** when changes are requested, and move closed or merged work to **Done**.
+
+### Reviews for PRs authored as the repository owner
+
+GitHub does not allow a pull request author to approve their own PR. Agents operating through the repository owner's account must not try to self-approve or work around that rule. Request an approval from another eligible reviewer when branch rules require one. If no separate reviewer is available, run the applicable checks and report that a human approval is still needed. Repository administrators may be able to merge without an approval by changing branch protection or using an allowed bypass, but this does not count as self-review; do not change those protections as part of routine agent work.
