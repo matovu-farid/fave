@@ -7,6 +7,7 @@ import { ThemedText } from '@/components/themed-text'
 import { ThemedView } from '@/components/themed-view'
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme'
 import { ApiError, apiBaseUrl } from '@/lib/api'
+import { createLatestRequestGuard } from '@/lib/latest-request'
 import { ClientPrerequisites, confirmTrip, getAvailableVehicles, getClientPrerequisites, getMyBookings, PolicyDocument, requestTripQuote, TripBooking, TripQuote, updateClientProfile, Vehicle } from '@/lib/marketplace'
 
 function asAddress(value: string) { return { address: value } }
@@ -25,7 +26,7 @@ export default function TripsScreen() {
   const [startDate, setStartDate] = useState(''); const [endDate, setEndDate] = useState('')
   const [partySize, setPartySize] = useState('1'); const [luggageCount, setLuggageCount] = useState('0')
   const [checkedPolicies, setCheckedPolicies] = useState<string[]>([]); const [sharePhone, setSharePhone] = useState(false)
-  const searchRevision = useRef(0); const quoteRevision = useRef(0)
+  const searchRevision = useRef(createLatestRequestGuard()); const quoteRevision = useRef(0)
 
   const invalidateQuote = useCallback(() => {
     quoteRevision.current += 1
@@ -35,7 +36,7 @@ export default function TripsScreen() {
   }, [])
 
   const invalidateTripSearch = useCallback(() => {
-    searchRevision.current += 1
+    searchRevision.current.invalidate()
     invalidateQuote()
     setVehicles([])
     setSelectedVehicle('')
@@ -66,15 +67,18 @@ export default function TripsScreen() {
   }
 
   const findVehicles = async () => {
-    const revision = searchRevision.current
+    const revision = searchRevision.current.begin()
     setBusy(true); setError(''); setSuccess(''); invalidateQuote(); setVehicles([]); setSelectedVehicle('')
     try {
       const result = await getAvailableVehicles({ startDate, endDate, partySize: Number(partySize), luggageCount: Number(luggageCount) })
-      if (revision !== searchRevision.current) return
+      if (!searchRevision.current.isCurrent(revision)) return
       setVehicles(result.vehicles); setSelectedVehicle(result.vehicles[0]?.id ?? '')
       if (!result.vehicles.length) setSuccess('No approved vehicles match these dates and passenger requirements yet.')
-    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not check available vehicles.') }
-    finally { setBusy(false) }
+    } catch (cause) {
+      if (searchRevision.current.isCurrent(revision)) setError(cause instanceof Error ? cause.message : 'Could not check available vehicles.')
+    } finally {
+      if (searchRevision.current.isCurrent(revision)) setBusy(false)
+    }
   }
 
   const getQuote = async () => {
