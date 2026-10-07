@@ -6,7 +6,7 @@
 
 ### 1. Parties and start date
 
-This proposed agreement is between **[full registered name and legal status: Fidexa LLC—verify exact legal name and jurisdiction]**, registration number **[number]**, with registered address **[address]** and service address in Uganda **[address]** (called **Fave** or **the Platform**), and the driver/provider named in the completed application (**you**).
+This proposed agreement is between **Fidexa LLC**, a limited liability company formed in **[jurisdiction of formation]**, registration number **[number]**, with registered address **[address]** and service address in Uganda **[address]** (called **Fave** or **the Platform**), and the driver/provider named in the completed application (**you**).
 
 It takes effect only after both parties' required electronic acceptance, all required licences/authorizations have been obtained, and Fave confirms activation in writing. Submitting an application or receiving an application receipt does not authorize you to accept or provide a trip.
 
@@ -70,7 +70,7 @@ Fave notices and complaints: **[Uganda postal/service address]**, **[email]**, *
 
 ### 11. Who is responsible
 
-Proposed data controller: **[verify whether Fidexa LLC is the controller, joint controller, or another entity]**, legal and service addresses **[complete]**, privacy contact/Data Protection Officer **[name or role, email, phone, postal address]**. Fave must complete PDPO registration and determine each vendor's processor/controller role before collection. Data is processed in Uganda and may be processed/stored elsewhere only after the cross-border analysis and safeguards required by law are documented.
+Proposed data controller and platform operator: **Fidexa LLC**. Legal and service addresses **[complete]**, privacy contact/Data Protection Officer **[name or role, email, phone, postal address]**. Before collection, counsel must confirm any joint-controller relationships, document each vendor's processor/controller role, and complete applicable PDPO registration. Data is processed in Uganda and may be processed/stored elsewhere only after the cross-border analysis and safeguards required by law are documented.
 
 ### 12. Information collected and why
 

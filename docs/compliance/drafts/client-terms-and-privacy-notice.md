@@ -6,7 +6,7 @@
 
 ### 1. Supplier identity and agreement parties
 
-Online supplier: **[full registered name and legal status: Fidexa LLC—verify; registration jurisdiction/number]**, physical address **[Uganda service address]**, phone **[number]**, email **[address]**, director names/place of registration as legally required **[complete]**, place for service of documents **[address]**. Website/app address **[complete]**. Codes/accreditation or alternative dispute-resolution membership: **[state accurately or say none, if counsel approves]**.
+Online supplier: **Fidexa LLC**, a limited liability company formed in **[jurisdiction of formation]**, registration number **[number]**, physical address **[Uganda service address]**, phone **[number]**, email **[address]**, director names/place of registration as legally required **[complete]**, place for service of documents **[address]**. Website/app address **[complete]**. Codes/accreditation or alternative dispute-resolution membership: **[state accurately or say none, if counsel approves]**.
 
 The transport service is supplied by **[driver / Fidexa LLC / identified provider]**. Fave acts as **[booking platform / agent / transport supplier / other—counsel to determine]**. This relationship determines who accepts the order, owes the transport service, receives funds, handles refunds and complaints, and carries insurance. No statement in this draft decides that allocation.
 
@@ -74,7 +74,7 @@ The client onboarding flow requests a legal name and phone number for account an
 
 ### 10. Controller and privacy contact
 
-Proposed controller: **[Fidexa LLC—verify legal name and controller/joint-controller role]**, physical/service address **[address]**, DPO/privacy contact **[name or role, email, phone, address]**. Payment provider, driver, vehicle owner, map provider and hosting vendors may separately control or process information; identify each actual role and country before launch. Cross-border storage/processing requires a documented legal basis and safeguards.
+Proposed data controller and platform operator: **Fidexa LLC**. Physical/service address **[address]**, DPO/privacy contact **[name or role, email, phone, address]**. Before launch, counsel must confirm any joint-controller relationships and document each payment provider, driver, vehicle owner, map provider and hosting vendor's role and country. Cross-border storage/processing requires a documented legal basis and safeguards.
 
 ### 11. Information and purposes
 
