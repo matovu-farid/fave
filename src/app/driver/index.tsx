@@ -186,6 +186,7 @@ export default function DriverScreen() {
           <ThemedText type="subtitle">Your details</ThemedText>
           <Field label="Legal name" value={legalName} onChangeText={setLegalName} placeholder="As shown on your identity document" />
           <Field label="Phone number" value={phoneNumber} onChangeText={setPhoneNumber} placeholder="+256…" keyboardType="phone-pad" />
+          <Message>Your phone number is for contact only. Fave does not require a verification code in V1.</Message>
           <CheckRow title="I am a Ugandan citizen and have a National ID" detail="Fave is not accepting foreign-national or refugee driver applications in this release." checked={citizenshipConfirmed} onPress={() => setCitizenshipConfirmed(!citizenshipConfirmed)} disabled={busy} />
           <Field label="National ID number" value={nationalId} onChangeText={setNationalId} placeholder="Enter the number on your ID" autoCapitalize="characters" />
           <ThemedText type="smallBold">National ID images</ThemedText>
@@ -404,8 +405,8 @@ function AvailabilityCard({ vehicle, start, end, setStart, setEnd }: { vehicle: 
   return <Card>
     <ThemedText type="subtitle">Availability · {vehicle.make} {vehicle.model}</ThemedText>
     <ThemedText>Current holds and confirmed booking dates stay visible only to you.</ThemedText>
-    <Field label="Unavailable from (YYYY-MM-DD)" value={start} onChangeText={setStart} placeholder="2026-10-01" />
-    <Field label="Available again (YYYY-MM-DD)" value={end} onChangeText={setEnd} placeholder="2026-10-03" />
+    <Field label="Unavailable from (YYYY-MM-DD)" value={start} onChangeText={setStart} placeholder="YYYY-MM-DD" />
+    <Field label="Available again (YYYY-MM-DD)" value={end} onChangeText={setEnd} placeholder="YYYY-MM-DD" />
     {availability?.unavailable.map((range) => <View key={range.id} style={styles.availabilityRow}>
       <ThemedText type="small">Unavailable · {range.start_date} to {range.end_date}</ThemedText>
       <ActionButton
