@@ -52,7 +52,7 @@ All draft documents start with a conspicuous **DRAFT FOR UGANDAN COUNSEL REVIEW 
 - **#8 Vehicle listings:** define registration details, ownership/authorization evidence, photo review/publication, availability declarations, and unresolved regulatory vehicle-marking requirements.
 - **#10 Client trip request:** define client terms and privacy notice, quote/booking disclosures, contact-sharing consent, cancellation/refund and payment placeholders, and the point at which a booking becomes binding.
 
-The documents support these issues but do not satisfy unrelated prerequisites such as implementing a phone verification provider (#22), client profile/consent storage (#21), production payment processing, or obtaining regulatory approvals.
+The documents support these issues but do not satisfy unrelated prerequisites such as client profile and contact-sharing consent storage (#21), production payment processing, or obtaining regulatory approvals. Under counsel-approved decision D-13, a phone-verification provider is not a V1 prerequisite; phone numbers remain contact details, and separate consent is required before assignment-time sharing.
 
 ## Drafting and review rules
 
