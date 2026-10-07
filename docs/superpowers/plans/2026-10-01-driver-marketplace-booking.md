@@ -30,25 +30,25 @@
 
 ## Task 1: Add domain schema and authorization primitives
 
-1. Add D1 tables for user roles, versioned policy documents, acknowledgements, phone verification metadata, driver applications, review decisions, audit events, vehicles, vehicle media metadata, vehicle decisions, availability, quote policy, quotes, and bookings.
+1. Add D1 tables for user roles, versioned policy documents, acknowledgements, driver applications, review decisions, audit events, vehicles, vehicle media metadata, vehicle decisions, availability, quote policy, quotes, and bookings.
 2. Add constraints and indexes for user ownership, permitted state values, overlapping date lookup, unique current application, and idempotent hold references.
 3. Add session and role helpers that return `401` for unauthenticated requests and `403` for insufficient role. Admin membership comes only from provisioned server-side role rows; there is no self-service admin grant endpoint.
-4. Add fail-closed prerequisite readers. An absent current counsel-approved document, approved verification checklist, phone-verification provider record, retention policy, or active fare/hold policy is unavailable, never inferred from a proposed default.
-5. Add a restricted audit helper which records actor, action, target, prior/new state, reason, and timestamp without including national IDs, file bytes, addresses, phone-verification codes, or raw request bodies.
+4. Add fail-closed prerequisite readers. An absent current counsel-approved document, approved verification checklist, retention policy, or active fare/hold policy is unavailable, never inferred from a proposed default.
+5. Add a restricted audit helper which records actor, action, target, prior/new state, reason, and timestamp without including national IDs, file bytes, addresses, or raw request bodies.
 
 ## Task 2: Implement private file handling and driver registration
 
 1. Bind a private R2 bucket and add an authenticated upload route accepting one image/PDF with a strict byte limit, allowlisted MIME type, and file-signature validation. Generate opaque object keys server-side and omit client filenames and keys from public responses.
 2. Add a private-file read route requiring an authorized role and reason for sensitive ID evidence; audit each read. Keep original documents private and never return bucket URLs.
-3. Add driver application submission/status/resubmission routes. Validate legal name and phone, require a current driver policy acknowledgement and verified-phone metadata, require every active checklist item, save sensitive ID fields only in the protected application store, and begin submitted applications as `pending_verification`.
+3. Add driver application submission/status/resubmission routes. Validate legal name and contact phone, require a current driver policy acknowledgement and every active checklist item, save sensitive ID fields only in the protected application store, and begin submitted applications as `pending_verification`. Phone numbers are contact details only; V1 does not require one-time-code verification.
 4. Expose a driver-safe status response containing state, next action, and the applicant-visible rejection reason only.
-5. Add driver onboarding and application-status screens with purpose/reviewer disclosure, image selection, policy acceptance records from the current policy registry, and a visible blocked state when required documents, policy, or phone verification are unavailable.
+5. Add driver onboarding and application-status screens with purpose/reviewer disclosure, image selection, policy acceptance records from the current policy registry, and a visible blocked state when required documents, policy, or retention rules are unavailable.
 
 ## Task 3: Implement protected driver verification
 
 1. Add an admin-only pending-application queue which omits national-ID values and file contents.
 2. Add a narrow evidence-review route requiring an admin role and audit reason; return only documents named in the active checklist.
-3. Add approve, reject, and suspend actions with a non-empty reason, valid state transition, active checklist completion, verified phone, policy acceptance, actor/time, and prior/new state in one D1 batch.
+3. Add approve, reject, and suspend actions with a non-empty reason, valid state transition, active checklist completion, current policy acceptance, actor/time, and prior/new state in one D1 batch. Phone verification is not required under D-13.
 4. Make every vehicle creation, vehicle publication, client selection, and assignment eligibility check read the authoritative driver state server-side.
 5. Document operator provisioning of admin role rows and private R2 setup without adding a bootstrap admin secret or self-promotion path.
 
@@ -65,7 +65,7 @@
 1. Add a trip request route that validates Uganda pickup coverage via the existing Google Maps helper, destination in Uganda, party/luggage limits, Kampala-local dates, and maximum seven-day duration.
 2. Return only approved, available vehicles with approved client-facing photos and vehicle facts. Do not include driver identity or contact information.
 3. Build immutable quote records from the current active fare policy and existing Maps route estimate. Return distance/time, price breakdown/currency, policy version, expiry, and an opaque quote ID; return a clear unavailable error when fare rules are not configured.
-4. Add booking confirmation that rechecks client phone verification, contact-sharing consent, current required terms, quote freshness, and vehicle availability in an atomic D1 batch before creating a configurable expiring hold.
+4. Add booking confirmation that rechecks client profile/contact details, separate contact-sharing consent, current required terms, quote freshness, and vehicle availability in an atomic D1 batch before creating a configurable expiring hold. Phone verification is not required under D-13.
 5. Store exact itinerary, party details, selected vehicle, quote snapshot, and accepted policy versions with the booking. Release expired holds using the active hold policy and require explicit reconfirmation for changed quotes.
 6. Add trip request, available vehicle selection, quote review, and booking status screens. Keep the submit action disabled with a concrete explanation while any required prerequisite is unavailable.
 
