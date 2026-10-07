@@ -6,7 +6,7 @@
 
 ### 1. Supplier identity and agreement parties
 
-Online supplier: **Fidexa LLC**, a limited liability company formed in **[jurisdiction of formation]**, registration number **[number]**, physical address **[Uganda service address]**, phone **[number]**, email **[address]**, director names/place of registration as legally required **[complete]**, place for service of documents **[address]**. Website/app address **[complete]**. Codes/accreditation or alternative dispute-resolution membership: **[state accurately or say none, if counsel approves]**.
+Proposed online-service supplier and platform operator: **Fidexa LLC**, formed in **[jurisdiction of formation]**, registration number **[number]**, physical address **[Uganda service address]**, phone **[number]**, email **[address]**, director names/place of registration as legally required **[complete]**, place for service of documents **[address]**. Website/app address **[complete]**. Codes/accreditation or alternative dispute-resolution membership: **[state accurately or say none, if counsel approves]**.
 
 The transport service is supplied by **[driver / Fidexa LLC / identified provider]**. Fave acts as **[booking platform / agent / transport supplier / other—counsel to determine]**. This relationship determines who accepts the order, owes the transport service, receives funds, handles refunds and complaints, and carries insurance. No statement in this draft decides that allocation.
 
