@@ -25,6 +25,18 @@ In the output, you'll find options to open the app in a
 
 You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
 
+## iOS 27 startup
+
+Fave enables `ios.enableSceneSupport` through `expo-build-properties` because
+apps built with Xcode 27 must adopt the UIKit scene lifecycle to launch on
+iOS 27. See [Expo's SDK 57 scene support guide](https://github.com/expo/fyi/blob/main/ios-scene-lifecycle.md#staying-on-sdk-57-with-xcode-27).
+
+After changing native configuration, rebuild the development app for a physical
+iPhone with `npx eas-cli@latest build --profile development-device --platform ios`
+and install the new build. Start Metro with `npx expo start --dev-client`.
+Scanning a Metro QR code reloads JavaScript; it does not replace an older native
+app that lacks scene support.
+
 ## Get a fresh project
 
 When you're ready, run:
