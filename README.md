@@ -79,3 +79,11 @@ The `CI` workflow runs these checks for pull requests and pushes to `main`:
 Both jobs use the committed npm lockfiles and read-only repository access. They
 never deploy the app or Worker. Require the `Expo checks` and `Worker checks`
 status checks before merging if branch protection is enabled.
+
+After this workflow revision is on GitHub's default branch, verify that GitHub
+Actions reports a real typecheck failure by opening the repository's **Actions**
+tab, selecting **CI**, choosing **Run workflow**, and setting `fail_check` to
+`expo` or `worker`. The selected typecheck receives a temporary
+invalid TypeScript file, then removes it when the check exits; the other job
+runs normally. Choose `none` for a normal run. These files exist only in the
+GitHub runner checkout and are never committed.

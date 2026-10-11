@@ -5,6 +5,17 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
+    inputs:
+      fail_check:
+        description: Deliberately fail one typecheck to validate CI reporting.
+        required: true
+        default: none
+        type: choice
+        options:
+          - none
+          - expo
+          - worker
 
 permissions:
   contents: read
@@ -31,7 +42,15 @@ jobs:
       - name: Lint Expo app
         run: npm run lint
       - name: Typecheck Expo app
-        run: npm run typecheck
+        env:
+          CI_FAILURE_CHECK: ${{ inputs.fail_check || 'none' }}
+        run: |
+          if [ "$CI_FAILURE_CHECK" = expo ]; then
+            failure_file="ci-validation-failure-${GITHUB_RUN_ID}.ts"
+            trap 'rm -f "$failure_file"' EXIT
+            printf 'const ciValidationFailure: string = 1;\n' > "$failure_file"
+          fi
+          npm run typecheck
 
   worker:
     name: Worker checks
@@ -51,4 +70,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
       - name: Typecheck Worker
-        run: npm run typecheck
+        env:
+          CI_FAILURE_CHECK: ${{ inputs.fail_check || 'none' }}
+        run: |
+          if [ "$CI_FAILURE_CHECK" = worker ]; then
+            failure_file="ci-validation-failure-${GITHUB_RUN_ID}.ts"
+            trap 'rm -f "$failure_file"' EXIT
+            printf 'const ciValidationFailure: string = 1;\n' > "$failure_file"
+          fi
+          npm run typecheck
