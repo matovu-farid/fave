@@ -7,6 +7,7 @@ import {
 } from './marketplace-auth'
 import { computeDrivingRoute, classifyLocation, parseLocationInput } from './google-maps'
 import { getCurrentPolicies } from './marketplace-policies'
+import { daysBetween, parseTripDateRange } from './trip-dates'
 import { approvedVehicleEvidencePredicate } from './vehicles'
 
 type FareComponent = {
@@ -89,22 +90,6 @@ function matchesStoredLocation(value: unknown, current: TripLocationSnapshot): b
   const input = parseLocationInput(stored.input)
   return !input || !('latitude' in input) ||
     (input.latitude === current.latitude && input.longitude === current.longitude)
-}
-
-function isDate(value: unknown): value is string {
-  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/u.test(value)) return false
-  const parsed = new Date(`${value}T00:00:00.000Z`)
-  return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value
-}
-
-function daysBetween(startDate: string, endDate: string): number {
-  return (Date.parse(`${endDate}T00:00:00.000Z`) - Date.parse(`${startDate}T00:00:00.000Z`)) / 86_400_000
-}
-
-function kampalaToday(): string {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Africa/Kampala', year: 'numeric', month: '2-digit', day: '2-digit',
-  }).format(new Date())
 }
 
 function parseFareRules(
@@ -220,13 +205,11 @@ async function validateTripRequest(
   const input = body as Record<string, unknown>
   const origin = parseLocationInput(input.origin)
   const destination = parseLocationInput(input.destination)
-  const startDate = input.startDate
-  const endDate = input.endDate
+  const dateRange = parseTripDateRange(input.startDate, input.endDate)
   const partySize = input.partySize
   const luggageCount = input.luggageCount
   if (
-    !origin || !destination || !isDate(startDate) || !isDate(endDate) || startDate < kampalaToday() || startDate >= endDate ||
-    daysBetween(startDate, endDate) > 7 ||
+    !origin || !destination || !dateRange ||
     !Number.isInteger(partySize) || Number(partySize) < 1 || Number(partySize) > 20 ||
     !Number.isInteger(luggageCount) || Number(luggageCount) < 0 || Number(luggageCount) > 20
   ) {
@@ -256,8 +239,8 @@ async function validateTripRequest(
     destination,
     originSnapshot,
     destinationSnapshot,
-    startDate,
-    endDate,
+    startDate: dateRange.startDate,
+    endDate: dateRange.endDate,
     partySize: Number(partySize),
     luggageCount: Number(luggageCount),
   }
