@@ -25,6 +25,45 @@ local D1 database by default; it does not connect to or modify the Cloudflare
 database unless remote bindings are explicitly enabled. The `/health` endpoint
 checks that the Worker can query D1.
 
+## Google sign-in
+
+Google Auth Platform is configured in project `omega-strand-319223` with a
+Web application client named **Fave API**. Its authorized redirect URI is
+`https://api.fave.fidexa.org/api/auth/callback/google`. Better Auth completes
+the Google callback on the Worker before returning to the native app through
+the `fave://` scheme.
+
+The consent screen uses an External audience in Testing mode. Add intended
+test accounts under Google Auth Platform → Audience → Test users before
+testing sign-in. Publishing the app requires completing Google's branding
+configuration and reviewing the publishing requirements.
+
+`GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are deployed Worker secrets.
+Keep them out of the Expo environment, source control, and logs. When rotating
+the client, create its replacement with the same redirect URI and update both
+Worker secrets together using Wrangler's `secret bulk` command and a protected
+JSON file or stdin.
+
+Use an installed Fave development build with `npx expo start --dev-client`.
+The production API trusts `fave://` callbacks; temporary Expo Go `exp://`
+callbacks are accepted only by a development Worker.
+
+## Apple sign-in
+
+The existing Apple Services ID is `org.fidexa.fave.auth` (**Fave Web Auth**).
+Its HTTPS return URL is
+`https://api.fave.fidexa.org/api/auth/callback/apple`. The Worker uses the
+`APPLE_SERVICE_ID`, `APPLE_TEAM_ID`, `APPLE_KEY_ID`, and `APPLE_PRIVATE_KEY`
+secrets to generate the Apple client-secret JWT dynamically.
+
+Both Apple and Google use the same native callback in `AuthGate`. An
+`INVALID_CALLBACK_URL` response mentioning `exp://` means the Worker rejected
+the app return URL before contacting either provider. Reload the installed
+Fave development build to pick up the explicit `fave` callback scheme; Expo Go
+cannot handle that custom scheme. App Store Connect's Users and Access page
+manages team access; Apple's Services ID and return URL settings live in the
+Apple Developer portal under Certificates, Identifiers & Profiles.
+
 ## Driver marketplace and trip requests
 
 The marketplace routes are backed by the D1 migrations in `migrations/`.
@@ -95,11 +134,23 @@ The trip quote endpoint requires an active, approved `fare_policies` record.
 policy currency to an ISO 4217 code. Confirm with counsel and operations before
 activating pricing; the application deliberately contains no default fare.
 
-For browser development, set `WEB_APP_ORIGINS` to a comma-separated list of
-exact trusted origins and include the web app origin in the Better Auth
-`trustedOrigins` allowlist. Development mode also allows Expo web on
-`http://localhost:8081` and `http://127.0.0.1:8081`; production does not. Keep
-credentials enabled only with exact origins and never use a wildcard origin.
+For browser development, `WEB_APP_ORIGINS` explicitly allows
+`http://localhost:8081` and `http://127.0.0.1:8081` on the shared Worker.
+The same list feeds the CORS middleware and Better Auth's `trustedOrigins`.
+Add the deployed website's exact origin to this comma-separated configuration
+when publishing web. Keep credentials enabled only with exact origins and never
+use a wildcard origin. Allowing localhost web does not enable Expo Go callbacks.
+
+Local web uses Metro's `/api/*` forwarding middleware to reach this same Worker.
+Restart `npx expo start --dev-client` after changing `metro.config.js`, then open
+`http://localhost:8081`. Better Auth's OAuth proxy keeps Google's and Apple's
+registered HTTPS callbacks on the API, and completes the login on localhost.
+Session cookies stay first-party on localhost, including in Safari. The Worker
+accepts the forwarding origin only for the two configured loopback addresses;
+native apps retain secure API cookies and their `fave:///` return address.
+There is no second Worker, database, or copy of application logic. For a deployed
+website, provide an equivalent same-origin API proxy or use a shared site domain;
+CORS alone does not overcome browsers blocking third-party session cookies.
 
 The native trip form uses the platform map picker for a private pickup pin.
 For production Android builds, set the restricted `GOOGLE_MAPS_ANDROID_SDK_KEY`

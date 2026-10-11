@@ -1,5 +1,6 @@
 import { expo } from '@better-auth/expo'
 import { betterAuth } from 'better-auth'
+import { oAuthProxy } from 'better-auth/plugins/oauth-proxy'
 import { importPKCS8, SignJWT } from 'jose'
 
 export type AuthBindings = Omit<CloudflareBindings, 'BETTER_AUTH_URL' | 'ENVIRONMENT'> & {
@@ -52,7 +53,14 @@ async function createAppleClientSecret(env: AuthBindings) {
     .sign(key)
 }
 
-export function createAuth(env: AuthBindings) {
+export function createAuth(env: AuthBindings, headers?: Headers) {
+  // Only the two explicitly enabled loopback origins may receive local cookies.
+  const forwardedOrigin = headers?.get('x-fave-web-origin')
+  const localOrigin = forwardedOrigin
+    && ['http://localhost:8081', 'http://127.0.0.1:8081'].includes(forwardedOrigin)
+    && getWebAppOrigins(env).includes(forwardedOrigin)
+    ? forwardedOrigin
+    : undefined
   const socialProviders = {
     ...(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET
       ? {
@@ -75,10 +83,14 @@ export function createAuth(env: AuthBindings) {
 
   return betterAuth({
     appName: 'Fave',
-    baseURL: env.BETTER_AUTH_URL,
+    baseURL: localOrigin ?? env.BETTER_AUTH_URL,
     secret: env.BETTER_AUTH_SECRET,
     database: env.DB,
-    plugins: [expo()],
+    plugins: [expo(), oAuthProxy({
+      productionURL: env.BETTER_AUTH_URL,
+      currentURL: localOrigin ?? env.BETTER_AUTH_URL,
+    })],
+    ...(localOrigin ? { advanced: { useSecureCookies: false } } : {}),
     socialProviders,
     trustedOrigins: [
       'fave://',

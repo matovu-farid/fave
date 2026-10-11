@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import type { ReactNode } from 'react'
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import Constants, { ExecutionEnvironment } from 'expo-constants'
 import * as Linking from 'expo-linking'
 
 import { authClient } from '@/lib/auth-client'
@@ -47,11 +48,18 @@ export function AuthGate({ children }: { children: ReactNode }) {
 
   async function signIn(provider: 'google' | 'apple') {
     setError(null)
+
+    if (Platform.OS !== 'web' && Constants.executionEnvironment === ExecutionEnvironment.StoreClient) {
+      setError('Google and Apple sign-in require the Fave development app. Open the installed Fave app instead of Expo Go, then reload this project.')
+      return
+    }
+
     setIsSigningIn(true)
-    const callbackURL = Linking.createURL('/')
+    // Native OAuth must return to the registered app scheme, independently of Metro's URL.
+    const callbackURL = Platform.OS === 'web' ? Linking.createURL('/') : 'fave:///'
 
     try {
-      const result = await authClient.signIn.social({ provider, callbackURL: '/' })
+      const result = await authClient.signIn.social({ provider, callbackURL })
       if (result.error) {
         const details = getErrorDetails(result.error)
         if (__DEV__) {

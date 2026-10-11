@@ -42,11 +42,13 @@ Docs: https://docs.expo.dev/eas/index.md
 
 ## GitHub Project workflow for agents
 
-For implementation work in this repository, track the work in the [Fave GitHub Project](https://github.com/users/matovu-farid/projects/11) before changing code:
+Use a quick prototyping posture: favor the smallest useful implementation and iterate directly from feedback. Stay on `main` for implementation work, including work picked up from issues or kanban boards. Do not create a branch or worktree unless the user explicitly asks for one. Create a pull request only when the user explicitly asks for a branch or pull request.
+
+When an implementation task is tracked in the [Fave GitHub Project](https://github.com/users/matovu-farid/projects/11), track it there before changing code:
 
 1. Reuse an existing issue if one already covers the task. Otherwise, create a concise issue with the goal and acceptance criteria, add it to the Fave project, and place it in **Backlog**.
 2. Pick up the issue from the project before implementation by moving it to **In progress**. Keep the issue updated as work proceeds. Read-only investigation does not need an issue.
-3. Open a pull request for completed work and include `Closes #<issue-number>` in the PR description so GitHub closes the issue when the PR is merged. Keep the PR linked to its issue.
+3. If the user asked for a branch or pull request, open a pull request for completed work and include `Closes #<issue-number>` in the PR description so GitHub closes the issue when the PR is merged. Keep the PR linked to its issue.
 4. Do not mark work **Done** manually before it is merged. The project workflows move linked PRs to **In review**, move issues back to **In progress** when changes are requested, and move closed or merged work to **Done**.
 
 ### Reviews for PRs authored as the repository owner

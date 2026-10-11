@@ -27,7 +27,7 @@ app.use(
   }),
 )
 
-app.all('/api/auth/*', (c) => createAuth(c.env).handler(c.req.raw))
+app.all('/api/auth/*', (c) => createAuth(c.env, c.req.raw.headers).handler(c.req.raw))
 app.route('/api/marketplace', policiesApp)
 app.route('/api/drivers', driversApp)
 app.route('/api/admin/drivers', adminDriversApp)
@@ -49,7 +49,7 @@ app.get('/health', async (c) => {
 })
 
 app.get('/api/me', async (c) => {
-  const session = await createAuth(c.env).api.getSession({
+  const session = await createAuth(c.env, c.req.raw.headers).api.getSession({
     headers: c.req.raw.headers,
   })
 
@@ -61,7 +61,7 @@ app.get('/api/me', async (c) => {
 })
 
 app.post('/api/maps/pickup-eligibility', async (c) => {
-  const session = await createAuth(c.env).api.getSession({
+  const session = await createAuth(c.env, c.req.raw.headers).api.getSession({
     headers: c.req.raw.headers,
   })
 
@@ -122,7 +122,7 @@ app.post('/api/maps/pickup-eligibility', async (c) => {
 })
 
 app.post('/api/maps/driving-route', async (c) => {
-  const session = await createAuth(c.env).api.getSession({
+  const session = await createAuth(c.env, c.req.raw.headers).api.getSession({
     headers: c.req.raw.headers,
   })
 

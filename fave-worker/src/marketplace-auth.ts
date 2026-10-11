@@ -10,7 +10,7 @@ export async function getSignedInUser(
   env: AuthBindings,
   request: Request,
 ): Promise<SignedInUser | null> {
-  const session = await createAuth(env).api.getSession({
+  const session = await createAuth(env, request.headers).api.getSession({
     headers: request.headers,
   })
 
