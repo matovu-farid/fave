@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Image, ScrollView, StyleSheet, View } from 'react-native'
 
 import { ActionButton, Card, CheckRow, Field, Message, SectionTitle, formStyles } from '@/components/marketplace-ui'
+import { GoogleMapsAttribution } from '@/components/google-maps-attribution'
 import PickupMap, { type MapCoordinate } from '@/components/pickup-map'
 import { ThemedText } from '@/components/themed-text'
 import { ThemedView } from '@/components/themed-view'
@@ -204,6 +205,7 @@ export default function TripsScreen() {
         <ThemedText>Destination · {quote.destination.formattedAddress ?? quote.destination.address} ({quote.destination.latitude.toFixed(5)}, {quote.destination.longitude.toFixed(5)})</ThemedText>
         <ThemedText>Dates · {startDate} to {endDate} · {partySize} passengers · {luggageCount} luggage pieces</ThemedText>
         <ThemedText>Route · {(quote.route.distanceMeters / 1000).toFixed(1)} km · approx. {Math.ceil(quote.route.durationSeconds / 60)} min</ThemedText>
+        <GoogleMapsAttribution />
         {quote.quote.components.map((component) => <View key={component.key} style={styles.quoteLine}><ThemedText>{component.label}</ThemedText><ThemedText>{component.amount.toLocaleString()} {quote.quote.currency}</ThemedText></View>)}
         <View style={styles.quoteLine}><ThemedText type="smallBold">Trip total</ThemedText><ThemedText type="smallBold">{quote.quote.totalAmount.toLocaleString()} {quote.quote.currency}</ThemedText></View>
         <ThemedText>Deposit to place a time-limited vehicle hold: {quote.quote.depositAmount.toLocaleString()} {quote.quote.currency}. Quote expires {new Date(quote.expiresAt).toLocaleString()}.</ThemedText>
