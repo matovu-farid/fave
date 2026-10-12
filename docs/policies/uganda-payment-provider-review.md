@@ -1,11 +1,13 @@
 # Uganda MVP payment provider review
 
-**Status:** Research and provisional recommendation only. The owner confirmed MTN/Airtel mobile money plus local cards for both deposit and final balance on 30 September 2026. No provider has been selected, merchant account approved, payment integration built, or real payment attempted.
+**Status:** Research and provisional recommendation only. The owner confirmed MTN/Airtel mobile money plus local cards for both deposit and final balance on 30 September 2026. Pesapal has confirmed core Uganda online collection support and sent an unsigned merchant sign-up/contract pack, but Fave has not selected a provider, completed onboarding, signed a contract, built payment integration, or attempted a real payment.
 
 **Prepared:** 30 September 2026
 **Issue:** [#16 — Select a Uganda-ready payment provider](https://github.com/matovu-farid/fave/issues/16)
 **Product inputs:** Confirmed payment rails and draft proposals in [#15 — fare, booking, cancellation, and settlement policy](https://github.com/matovu-farid/fave/issues/15). #15 now proposes UGX quotes, including expected payment fees in the all-in fare, a 50% default deposit, and payment to drivers after trip completion and reconciliation. These proposals are not final launch terms. Provider fee and settlement findings flow back to #15.
 **Legal gate:** [#14 — Uganda legal, regulatory, privacy, and safety review](https://github.com/matovu-farid/fave/issues/14)
+
+**Owner report (12 October 2026):** counsel has approved the payment-provider terms. The written advice and exact scope have not been added here. Provider onboarding, the actual merchant/funds-flow structure, refunds, driver payouts, and any regulatory conditions remain separate checks.
 
 ## Recommendation
 
@@ -108,3 +110,13 @@ Before selecting a provider, obtain the contracting entity’s full legal name a
 | Sandbox evidence | **Not run** | Only after merchant sandbox access; test mode only |
 | Uganda authorization | **Not verified for Fave/provider arrangement** | Confirm the contracting/acquiring entities and authorization or licensed-partner structure with written provider evidence and Ugandan counsel under the BoU 2025 framework |
 | Production approval | **Not started** | Requires business KYC, applicable licences, and counsel-approved flow |
+
+### Pesapal response and draft contract (6 October 2026)
+
+Pesapal Uganda's Head of Payment Services confirmed by email that its online Uganda service supports MTN Mobile Money, Airtel Money, and bank-card collection in UGX, subject to standard merchant onboarding, KYC, and compliance review. Pesapal asked Fave to clarify whether it acts as principal or marketplace/intermediary and requested information about Fave's transport operations and applicable licences before confirming the suitable settlement and KYC model.
+
+The email says the attached contract contains applicable rates and displays: online card 3.5%, online mobile 3% (rendered in the email as `3.%`), onsite card 2.9%, and onsite mobile 2.0%. However, the attached sign-up form's fee schedule is blank and the online mobile figure is malformed. Treat these as indicative only; obtain a corrected, dated, Fave-specific schedule before comparing providers or updating fares.
+
+The reply defers driver bank/mobile-money payouts, fees/timing/limits, driver KYC, refunds, refund status/timing, and chargeback allocation to later commercial/compliance review. The unsigned contract template says settlement occurs within two Business Days after Fave's instruction, permits set-off of charges/taxes, and defines chargeback reserve holds up to 180 days plus verification holds. Those are template provisions, not accepted terms or confirmed account settings. The template also makes the merchant responsible for payer dispute resolution and customer-diligence obligations. Have counsel review the complete agreement before it is signed.
+
+The client-facing [Payment Terms draft](../compliance/drafts/client-payment-terms.md) records the confirmed product requirements and does not present the incomplete rate table as customer pricing or promise an unconfirmed settlement, refund, or payout timeline.
