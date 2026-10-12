@@ -71,8 +71,8 @@ Join our community of developers creating universal apps.
 
 The `CI` workflow runs these checks for pull requests and pushes to `main`:
 
-- **Expo checks** installs the root dependencies, then runs `npm run lint`
-  and `npm run typecheck`.
+- **Expo checks** installs the root dependencies, then runs `npm run lint`,
+  `npm test`, and `npm run typecheck`.
 - **Worker checks** installs `fave-worker` dependencies, then runs its
   `npm run typecheck` script.
 
