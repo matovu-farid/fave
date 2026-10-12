@@ -71,7 +71,14 @@ export type TripQuote = {
   route: { distanceMeters: number; durationSeconds: number }
   quote: {
     currency: string
-    components: { key: string; label: string; amount: number }[]
+    components: {
+      key: string
+      label: string
+      unit: 'fixed' | 'per_kilometer' | 'per_night' | 'per_passenger'
+      unitRate: number
+      quantity: number
+      amount: number
+    }[]
     totalAmount: number
     depositAmount: number
     depositBasisPoints: number

@@ -10,7 +10,7 @@
 
 **Decision date:** Pending approval
 
-This document turns the current product direction into policy options for issue #15. Proposed rules below are not approved policy and must not be used to charge customers until the owner approves them and the review required by issue #14 is complete.
+This document turns the current product direction into policy options for issue #15. Proposed rules remain draft; owner-confirmed product directions do not by themselves constitute counsel approval or authorize launch or customer charges.
 
 ## Confirmed product direction
 
@@ -20,6 +20,7 @@ This document turns the current product direction into policy options for issue 
 - A trip may last up to seven days; interpret trip dates in Kampala time.
 - Price should be based on driving distance and the driver's accommodation estimate.
 - Ask the client for a 50% deposit by default, configurable for future policy changes. Collect the balance after the trip is complete.
+- **Client-requested trip extensions — owner-confirmed 2026-10-12:** additional accommodation nights use the per-night rate saved in the accepted quote. Show the revised total and obtain client acceptance before changing the booking; the remaining extension and reconciliation rules still require issue #15 and counsel review under #14.
 
 ## Recommended starting defaults for owner approval
 
@@ -32,7 +33,7 @@ This document turns the current product direction into policy options for issue 
 | Pending deposit | Hold the selected car for 30 minutes; release it after timeout or confirmed payment failure | Prevents a stalled checkout from blocking availability indefinitely |
 | Client cancellation | Refund all deposit at 72+ hours; refund half of the deposit at 24–72 hours; retain the deposit inside 24 hours | A simple time-based proposal; requires owner and counsel approval before launch |
 | Fave cannot provide a car/driver | Refund all client payments in full | The client should not bear the cost of Fave's inability to fulfill |
-| Phone verification | Compare Africa's Talking SMS with Twilio Verify using expected volume and total fees | Published per-message cost alone can miss sender-ID charges and the engineering needed to operate OTP safely |
+| Phone verification | **V1 does not require OTP.** Phone numbers are contact details only, under counsel-approved decision D-13 | Avoids making SMS verification a prerequisite for applications, bookings, or assignment-time contact sharing |
 | Driver settlement | Use the selected payment provider and settle only after trip completion/reconciliation | Keeps payment proof and settlement traceable; exact legal structure needs counsel review |
 | Client payment methods | **Confirmed:** MTN/Airtel mobile money plus local cards for both deposit and final balance | Defines which provider methods #16 must support and the fees included in quotes |
 
@@ -68,6 +69,8 @@ Count one accommodation night for each planned overnight stop where the driver m
 
 **Proposal, added for owner review on 2026-09-30:** A quote expires 24 hours after issue, and the deposit is due within that period. A successful deposit locks the quote snapshot. During an active checkout, hold the selected car for 30 minutes; if the hold expires, recheck availability before accepting payment. Before payment, a changed rate or itinerary creates a new quote that the client must accept. After payment, do not silently add charges. Reprice only when the client asks to change the itinerary and accepts the revised quote.
 
+**Owner-confirmed extension rate — 2026-10-12:** for a client-requested extension, additional accommodation nights use the per-night rate captured in the accepted quote. Present the revised total and obtain the client's acceptance before amending the booking. This records the rate basis only; the complete extension, route-change, cancellation, and reconciliation rules remain open for owner/counsel review and must be finalized before launch.
+
 **Owner decisions:** Confirm quote validity and whether Fave absorbs route/accommodation estimate differences that are not caused by a client-requested change.
 
 ## Draft payment and booking rules for owner review
@@ -101,16 +104,9 @@ Count one accommodation night for each planned overnight stop where the driver m
 
 The Bank of Uganda's 2025 National Payment Systems Oversight Framework says payment service providers require BoU licensing. Counsel must determine which obligations apply to Fave's proposed collection and driver-settlement arrangement.
 
-## Phone verification provider
+## Phone verification
 
-Phone possession must be verified before an application can be approved or a booking can share contact details, as specified in issues #6 and #21.
-
-**Options researched:**
-
-- **Africa's Talking SMS:** Its published Uganda basic-tier rates are UGX 27 per MTN local SMS segment, UGX 25 for Airtel local traffic, and UGX 35 for other telcos. These are volume-tier rates, not a complete OTP cost: the listed sender-ID charges add UGX 250,000 monthly maintenance for MTN or UGX 250,000 setup for Airtel. This may be economical at volume but is not automatically the cheapest for a small MVP. Fave would also own code generation, expiry, attempt limits, abuse controls, and verification state. Confirm sender-ID approval and account pricing before launch.
-- **Twilio Verify:** Managed verification with built-in code-flow features; published base fee is $0.05 per successful verification plus channel fees. Twilio lists Uganda outbound SMS at $0.3289 per segment before possible carrier fees. This reduces OTP implementation work but has a higher listed message cost.
-
-**Recommendation for review:** Compare expected monthly verification volume against Africa's Talking's sender-ID charges; prefer it only if its total cost is lower and the team is willing to implement and operate secure OTP controls. Otherwise choose Twilio Verify and accept its higher listed per-verification and Uganda SMS costs in exchange for managed verification safeguards. Restrict phone verification traffic to Uganda, add spend/attempt alerts, and provide a support fallback for failed delivery.
+**V1 decision D-13 (counsel-approved 2026-10-04):** phone numbers are contact details only. One-time-code verification is not required for driver applications or approvals, client bookings, or assignment-time contact release. Do not choose or integrate an OTP provider as a V1 prerequisite. Any post-V1 OTP proposal requires a separate product, privacy, security, and cost review.
 
 ## Safety and legal review gates
 
@@ -127,17 +123,15 @@ Daily driving limits, rest breaks, overnight planning, insurance/transport oblig
 | Quote and deposit deadline | Propose 24 hours; lock quote after confirmed deposit | Pending | Pending | Give the client a clear price and payment deadline | Versioned settings, if approved |
 | Deposit and balance | 50% default; balance after trip, per owner direction | Fave owner | Pending | Confirmed product direction; completion evidence pending | Configurable deposit with audit history |
 | Client payment methods | MTN/Airtel mobile money plus local cards for deposit and final balance | Fave product owner | 2026-09-30 | Confirmed in owner response; both methods should be available at each payment stage | Provider config must match approved methods |
+| Additional accommodation nights on a client-requested extension | Use the per-night rate saved in the accepted quote; show the revised total and obtain client acceptance before changing the booking | Fave product owner | 2026-10-12 | Preserve the accepted rate basis for an extension; complete extension and reconciliation rules remain subject to #15 and #14 | Retain the accepted quote snapshot and record consent to the revised total |
 | Client cancellation/refunds | Open; option above | Pending | Pending | Requires owner and counsel approval | Versioned policy, if approved |
 | No-driver refund | Propose full refund | Pending | Pending | Client should not pay when Fave cannot provide a car/driver | Recorded refund action |
 | Checkout hold | Propose 30 minutes | Pending | Pending | Release cars when deposit is not completed | Versioned timeout, if approved |
 | Driver payout / commission | Open; counsel and provider review required | Pending | Pending | Avoid settling funds outside an approved model | Restricted, audited settlement actions |
-| Phone OTP provider | Recommend Africa's Talking if Fave owns OTP controls | Pending | Pending | Lower listed Uganda SMS cost; requires secure OTP implementation | Rate and spend limits |
+| Phone verification | No OTP prerequisite for V1 under counsel-approved D-13 | Fave product owner / counsel decision | 2026-10-04 | Phone numbers are contact details only | No V1 OTP provider configuration |
 | Daily driving/rest limits | Counsel review required | Counsel | Pending | Driver and passenger safety | Approved limits must be enforced |
 
 ## Source notes
 
-- Africa's Talking Uganda pricing: <https://africastalking.ug/pricing?lang=en>
-- Twilio Verify pricing: <https://www.twilio.com/en-us/verify/pricing>
-- Twilio Uganda SMS pricing: <https://www.twilio.com/en-us/sms/pricing/ug>
 - Flutterwave Uganda pricing: <https://www.flutterwave.com/ug/pricing>
 - Bank of Uganda 2025 National Payment Systems Oversight Framework: <https://bou.or.ug/uploads/Revised_BOU_National_Payment_Systems_Oversight_Framework_2025_698b3e9745.pdf>

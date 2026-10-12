@@ -28,7 +28,14 @@ type FarePolicy = {
 
 type QuoteSnapshot = {
   currency: string
-  components: Array<{ key: string; label: string; amount: number }>
+  components: Array<{
+    key: string
+    label: string
+    unit: FareComponent['unit']
+    unitRate: number
+    quantity: number
+    amount: number
+  }>
   totalAmount: number
   depositAmount: number
   depositBasisPoints: number
@@ -133,7 +140,7 @@ function parseFareRules(
   return { components: parsedComponents, depositBasisPoints: Number(depositBasisPoints) }
 }
 
-function buildQuoteSnapshot(
+export function buildQuoteSnapshot(
   policy: FarePolicy,
   route: { distanceMeters: number; durationSeconds: number },
   nights: number,
@@ -143,15 +150,19 @@ function buildQuoteSnapshot(
   if (!rules || !/^[A-Z]{3}$/u.test(policy.currency)) return null
 
   const distanceKilometers = Math.ceil(route.distanceMeters / 1000)
-  const components = rules.components.map((component) => ({
-    key: component.key,
-    label: component.label,
-    amount: component.amount * (
-      component.unit === 'fixed' ? 1 :
-        component.unit === 'per_kilometer' ? distanceKilometers :
-          component.unit === 'per_night' ? nights : partySize
-    ),
-  }))
+  const components = rules.components.map((component) => {
+    const quantity = component.unit === 'fixed' ? 1 :
+      component.unit === 'per_kilometer' ? distanceKilometers :
+        component.unit === 'per_night' ? nights : partySize
+    return {
+      key: component.key,
+      label: component.label,
+      unit: component.unit,
+      unitRate: component.amount,
+      quantity,
+      amount: component.amount * quantity,
+    }
+  })
   const totalAmount = components.reduce((sum, component) => sum + component.amount, 0)
   if (!Number.isSafeInteger(totalAmount) || totalAmount > 10_000_000_000) return null
 

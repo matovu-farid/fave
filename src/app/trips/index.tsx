@@ -200,14 +200,25 @@ export default function TripsScreen() {
       </Card>)}
       {vehicles.length > 0 && !quote ? <ActionButton title="Get route and price quote" onPress={() => void getQuote()} disabled={!selectedVehicle} busy={busy} /> : null}
       {quote ? <Card>
-        <ThemedText type="subtitle">Your quote · {quote.quote.currency}</ThemedText>
+        <ThemedText type="subtitle">Your trip estimate · {quote.quote.currency}</ThemedText>
         <ThemedText>Pickup · {quote.pickup.formattedAddress ?? quote.pickup.address} ({quote.pickup.latitude.toFixed(5)}, {quote.pickup.longitude.toFixed(5)})</ThemedText>
         <ThemedText>Destination · {quote.destination.formattedAddress ?? quote.destination.address} ({quote.destination.latitude.toFixed(5)}, {quote.destination.longitude.toFixed(5)})</ThemedText>
         <ThemedText>Dates · {startDate} to {endDate} · {partySize} passengers · {luggageCount} luggage pieces</ThemedText>
         <ThemedText>Route · {(quote.route.distanceMeters / 1000).toFixed(1)} km · approx. {Math.ceil(quote.route.durationSeconds / 60)} min</ThemedText>
         <GoogleMapsAttribution />
-        {quote.quote.components.map((component) => <View key={component.key} style={styles.quoteLine}><ThemedText>{component.label}</ThemedText><ThemedText>{component.amount.toLocaleString()} {quote.quote.currency}</ThemedText></View>)}
-        <View style={styles.quoteLine}><ThemedText type="smallBold">Trip total</ThemedText><ThemedText type="smallBold">{quote.quote.totalAmount.toLocaleString()} {quote.quote.currency}</ThemedText></View>
+        {quote.quote.components.map((component) => {
+          const unitLabel = component.unit === 'per_night' ? 'nights' :
+            component.unit === 'per_kilometer' ? 'km' :
+              component.unit === 'per_passenger' ? 'passengers' : 'flat'
+          return <View key={component.key} style={styles.quoteLine}>
+            <View>
+              <ThemedText>{component.label}</ThemedText>
+              <ThemedText>{component.unitRate.toLocaleString()} {quote.quote.currency}{component.unit === 'fixed' ? ' flat' : ` × ${component.quantity} ${unitLabel}`}</ThemedText>
+            </View>
+            <ThemedText>{component.amount.toLocaleString()} {quote.quote.currency}</ThemedText>
+          </View>
+        })}
+        <View style={styles.quoteLine}><ThemedText type="smallBold">Estimated trip total</ThemedText><ThemedText type="smallBold">{quote.quote.totalAmount.toLocaleString()} {quote.quote.currency}</ThemedText></View>
         <ThemedText>Deposit to place a time-limited vehicle hold: {quote.quote.depositAmount.toLocaleString()} {quote.quote.currency}. Quote expires {new Date(quote.expiresAt).toLocaleString()}.</ThemedText>
         <ThemedText>Fare policy · v{quote.quote.farePolicyVersion}</ThemedText>
         <ThemedText type="subtitle">Review booking disclosures</ThemedText>
