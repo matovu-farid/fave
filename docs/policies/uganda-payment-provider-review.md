@@ -1,17 +1,17 @@
 # Uganda MVP payment provider review
 
-**Status:** Research and provisional recommendation only. The owner confirmed MTN/Airtel mobile money plus local cards for both deposit and final balance on 30 September 2026. Pesapal has confirmed core Uganda online collection support and sent an unsigned merchant sign-up/contract pack, but Fave has not selected a provider, completed onboarding, signed a contract, built payment integration, or attempted a real payment.
+**Status:** Provider comparison and provisional recommendation; no provider is selected. The owner confirmed MTN/Airtel mobile money plus local cards for both deposit and final balance on 30 September 2026, and reports counsel approved Fave's payment terms on 12 October 2026. Pesapal has confirmed core Uganda online collection support and sent an unsigned merchant sign-up/contract pack, but Fave has not completed provider selection/onboarding, signed a contract, built payment integration, or attempted a real payment.
 
 **Prepared:** 30 September 2026
 **Issue:** [#16 — Select a Uganda-ready payment provider](https://github.com/matovu-farid/fave/issues/16)
 **Product inputs:** Confirmed payment rails and draft proposals in [#15 — fare, booking, cancellation, and settlement policy](https://github.com/matovu-farid/fave/issues/15). #15 now proposes UGX quotes, including expected payment fees in the all-in fare, a 50% default deposit, and payment to drivers after trip completion and reconciliation. These proposals are not final launch terms. Provider fee and settlement findings flow back to #15.
 **Legal gate:** [#14 — Uganda legal, regulatory, privacy, and safety review](https://github.com/matovu-farid/fave/issues/14)
 
-**Owner report (12 October 2026):** counsel has approved the payment-provider terms. The written advice and exact scope have not been added here. Provider onboarding, the actual merchant/funds-flow structure, refunds, driver payouts, and any regulatory conditions remain separate checks.
+**Owner report (12 October 2026):** counsel has approved the payment-provider terms. The written advice has not been attached to this repository. Fave's internal [Client Payment Terms](../compliance/drafts/client-payment-terms.md) records the customer-facing product rules separately; it is not a signed provider offer. Approval does not select or accept a provider's merchant agreement. Provider eligibility, merchant/funds-flow configuration, account-specific fees, refund and payout capabilities, and production onboarding remain to be confirmed.
 
 ## Recommendation
 
-Use **Flutterwave as the provisional first choice for merchant onboarding and sandbox validation** for the owner-confirmed MTN/Airtel mobile money and local-card methods, using UGX and Fave collection followed by post-trip driver payout as the current #15 working assumptions. Both remain proposals pending final owner policy approval and Ugandan counsel's review in #14. Flutterwave must also give Fave a written merchant offer confirming eligibility, current fees, payment methods, refunds, settlement, and driver payout support.
+Use **Flutterwave as the provisional first choice for merchant onboarding and sandbox validation** for the owner-confirmed MTN/Airtel mobile money and local-card methods, using UGX and Fave collection followed by post-trip driver payout as the current #15 working assumptions. Those funds-flow choices remain proposals. Flutterwave must give Fave a written merchant offer confirming eligibility, current fees, payment methods, refunds, settlement, and driver-payout support; the implemented flow must follow the counsel-approved terms and any conditions counsel recorded for #14.
 
 Flutterwave has the clearest publicly verifiable fit for the current product direction: its Uganda documentation describes UGX charges over MTN or Airtel, its current Uganda pricing page lists local cards and mobile-money pricing, and its API documentation covers Uganda bank and mobile-money payouts, sandbox mode, refunds, and marketplace subaccounts. The platform is Hono on Cloudflare Workers, so a server-to-server REST integration can keep secret credentials in Worker secrets; the Expo client should only receive a hosted payment URL or other provider-approved client-safe checkout details.
 
@@ -90,7 +90,7 @@ Before selecting a provider, obtain the contracting entity’s full legal name a
 ## Required confirmations before closing #16
 
 1. Payment methods are confirmed in #15: MTN/Airtel mobile money plus local cards for both deposit and final balance (owner response, 30 September 2026). Use UGX as the current working assumption because it is proposed in #15; final currency approval, merchant-of-record classification, whether Fave collects the full fare, when/if drivers are paid, and commission/payout rules remain open.
-2. Ugandan counsel records the #14 conclusion on platform collection, holding, refund, and driver settlement; counsel identifies any licence, agency, safeguarding, or disclosure conditions.
+2. Record the #14 legal conclusion on platform collection, holding, refund, and driver settlement, including any licence, agency, safeguarding, or disclosure conditions; confirm the selected provider configuration follows that conclusion and the counsel-approved client payment terms.
 3. Obtain comparable written merchant offers from Flutterwave and at least one local alternative (DPO or Pesapal), including the full legal name of the contracting/acquiring entity and its Uganda authorization or licensed partner; fees and VAT; who bears processing charges and any surcharge/disclosure rules; onboarding documents; live merchant eligibility; settlement schedule/reserve/minimum; refund and chargeback fees/timelines; split/payout capability; limits; webhook/retry behavior; reconciliation exports; support coverage; and termination/hold rights.
 4. Confirm a registered/eligible Fave business account and the required merchant KYC documents. Flutterwave’s Uganda onboarding guidance lists operating licence where applicable; do not assume onboarding approval before required transport licences are decided under #14.
 5. Use provider sandbox/test credentials to validate UGX deposit and balance charges, failed/pending payments, duplicate/out-of-order notifications, status re-query, full and partial refunds, and reconciliation. Use no real customer funds in this issue.
@@ -100,9 +100,9 @@ Before selecting a provider, obtain the contracting entity’s full legal name a
 
 | Decision | Status | Owner / evidence needed |
 |---|---|---|
-| Candidate provider | **Provisional: Flutterwave** | Owner confirmation after policy #15 and merchant quote; counsel review #14 |
+| Candidate provider | **Provisional: Flutterwave; no provider selected** | Owner selection after policy #15 and written merchant offer |
 | Currency and methods | Methods confirmed; **UGX proposed in #15, not final** | Use UGX for comparison and sandbox planning; owner must approve final fare currency |
-| Merchant of record and who receives funds | **Draft proposal: Fave collects; final classification pending #14 / #15** | Counsel classifies actual contracting and funds flow; provider confirms merchant-account eligibility |
+| Merchant of record and who receives funds | **Draft proposal: Fave collects; final classification pending #14 / #15** | Confirm the operating arrangement matches counsel's conclusion and provider confirms merchant-account eligibility |
 | Driver payout/split | **Draft proposal: pay driver after trip completion and reconciliation; not approved** | Written provider confirmation, account eligibility, and counsel approval; owner still needs to decide commission and payout method/frequency |
 | Current fees and settlement terms | **Pending merchant quote** | Signed/delivered Fave-specific rate and payout schedule |
 | Who bears transaction fees | **Proposed in #15; not final policy** | Current policy draft proposes including expected fees in the all-in quoted fare without a surprise checkout surcharge. Confirm merchant-account configuration and obtain written provider terms before treating this as final |
@@ -119,7 +119,7 @@ The email says the attached contract contains applicable rates and displays: onl
 
 The reply defers driver bank/mobile-money payouts, fees/timing/limits, driver KYC, refunds, refund status/timing, and chargeback allocation to later commercial/compliance review. The unsigned contract template says settlement occurs within two Business Days after Fave's instruction, permits set-off of charges/taxes, and defines chargeback reserve holds up to 180 days plus verification holds. Those are template provisions, not accepted terms or confirmed account settings. The template also makes the merchant responsible for payer dispute resolution and customer-diligence obligations. Have counsel review the complete agreement before it is signed.
 
-The client-facing [Payment Terms draft](../compliance/drafts/client-payment-terms.md) records the confirmed product requirements and does not present the incomplete rate table as customer pricing or promise an unconfirmed settlement, refund, or payout timeline.
+The internal client-facing [Payment Terms](../compliance/drafts/client-payment-terms.md) records the product requirements and does not present the incomplete rate table as customer pricing or promise an unconfirmed settlement, refund, or payout timeline.
 
 #### Indicative collection-fee comparison
 

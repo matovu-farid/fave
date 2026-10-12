@@ -1,8 +1,8 @@
-# Fave Client Payment Terms — Draft
+# Fave Client Payment Terms
 
-**Status:** Internal draft. Prepared 12 October 2026 from the current Fave product decisions and provider correspondence. Not effective for customer transactions until the launch items at the end of this document are completed and the exact version is shown to the client before payment.
+**Status:** Internal client-payment terms, prepared 12 October 2026. The owner reports that counsel has approved the payment-provider terms. This document records how Fave's current product decisions would be explained to clients; it is not an executed provider offer and is not effective for customer transactions until the launch items below are completed and the exact version is shown before payment.
 
-**Counsel review:** The owner reports that counsel has approved the payment-provider terms. This document records that report; the written advice and the scope of the approval have not been attached here. Provider onboarding, the merchant/funds-flow structure, cancellation and refund rules, and any required regulatory approvals remain separate launch checks.
+**Counsel review:** The owner confirms counsel approved the payment-provider terms on 12 October 2026. The written advice has not been attached to this repository. That approval is recorded separately from provider selection, signature and onboarding, the final merchant/funds-flow configuration, provider-specific fees and refund capabilities, and any required regulatory approvals.
 
 **Related records:** [MVP booking policy](../../policies/mvp-booking-policy-draft.md), [Uganda payment-provider review](../../policies/uganda-payment-provider-review.md), [client terms and privacy draft](client-terms-and-privacy-notice.md), GitHub issues [#14](https://github.com/matovu-farid/fave/issues/14), [#15](https://github.com/matovu-farid/fave/issues/15), and [#16](https://github.com/matovu-farid/fave/issues/16).
 
@@ -52,11 +52,11 @@ Fave will keep an auditable record of each accepted quote and revision, the calc
 
 For payment questions or errors, use **[in-app support route / support email / telephone]** and provide the payment receipt or booking reference. Fave will acknowledge the request and explain the next step. The final published terms must identify the responsible support contact and its operating hours.
 
-## 8. Required before this draft can be published or used for collection
+## 8. Required before these terms can be published or used for collection
 
 - Select the provider and obtain written approval of Fave's Uganda merchant activity, legal merchant, funds flow, enabled methods, settlement destination, fees/taxes, reserves, refund support, chargeback allocation, and driver-payout arrangement.
 - Complete the contract fee schedule. Reconcile the merchant contract, provider response, and pricing in checkout; do not use the conflicting/incomplete rate text in the 6 October Pesapal email as a customer price.
-- Settle with counsel and the business owner who supplies the transport service, who receives each payment, when the booking becomes binding, what happens when a supplier does not accept, and how funds are held and paid out.
+- Record the final merchant and contracting model with the transport-service provider: who receives each payment, when the booking becomes binding, what happens when a supplier does not accept, and how funds are held and paid out. The owner reports counsel approval of the payment-provider terms; implementation must match the approved terms and the provider's signed contract.
 - Approve and publish the cancellation, no-show, trip-failure, partial-performance, refund, and refund-timing rules. Confirm how those rules work with each payment method's refund limitations.
 - Set the active deposit and balance amounts and timing, completion evidence and dispute process, quote expiry, and checkout hold. Preserve the per-night quote rate and accepted calculation when extending a trip.
 - Name the support contact, publish the effective date and version, and ensure the app displays the complete price, merchant/provider identity, payment timing, cancellation/refund policy, and current terms before the client orders or pays.
