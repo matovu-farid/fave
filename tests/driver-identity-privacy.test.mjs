@@ -90,6 +90,31 @@ test('signed-in non-admins cannot open a driver national ID record', async () =>
   assert.equal(app.decryptCalls, 0)
 })
 
+test('signed-in non-admins cannot list pending driver applications', async () => {
+  const queries = []
+  const db = {
+    prepare(sql) {
+      queries.push(sql)
+      return { bind() { return this }, async first() { return null } }
+    },
+  }
+  const app = loadDrivers({ db })
+  const handler = app.routes.get('GET /pending')
+  const context = {
+    env: { DB: db },
+    req: { raw: new Request('https://fave.test/api/admin/drivers/pending') },
+    json: (body, status = 200) => ({ body, status }),
+  }
+
+  const response = await handler(context)
+  assert.equal(response.status, 403)
+  assert.deepEqual(JSON.parse(JSON.stringify(response.body)), {
+    error: { code: 'FORBIDDEN', message: 'You are not authorized to review driver applications.' },
+  })
+  assert.equal(queries.length, 1)
+  assert.match(queries[0], /FROM admin_memberships/u)
+})
+
 test('a driver application response omits national ID values and private file keys', async () => {
   const queries = []
   const application = {
