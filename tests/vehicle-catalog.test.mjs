@@ -38,6 +38,7 @@ function loadModule(sourcePath, imports = {}) {
     Headers,
     JSON,
     Math,
+    crypto: globalThis.crypto,
   })
 
   return exports
@@ -55,7 +56,7 @@ function loadVehicleCatalog(user = { id: 'client-1', name: 'Client', email: 'cli
   const routes = new Map()
   class CapturingHono {
     get(path, handler) { routes.set(path, handler); return this }
-    post() { return this }
+    post(path, handler) { routes.set(path, handler); return this }
     patch() { return this }
     delete() { return this }
   }
@@ -176,4 +177,66 @@ test('vehicle catalog rejects unauthenticated searches before querying vehicle d
     error: { code: 'UNAUTHORIZED', message: 'Sign in to continue.' },
   })
   assert.deepEqual(queriedSql, [])
+})
+
+test('driver unavailability rejects a range that loses the atomic overlap check', async () => {
+  const { routes } = loadVehicleCatalog()
+  const prepared = []
+  let batchStatements = []
+  const DB = {
+    prepare(sql) {
+      const statement = { sql, args: [] }
+      prepared.push(statement)
+      return Object.assign(statement, {
+        bind(...args) { statement.args = args; return statement },
+        async first() {
+          if (statement.sql.includes('FROM vehicles WHERE id')) {
+            return {
+              id: 'vehicle-1', driver_application_id: 'driver-application-1', make: 'Toyota',
+              model: 'Noah', model_year: 2022, passenger_capacity: 6,
+              luggage_capacity: 4, comfort_details: '', accessibility_details: '',
+              registration_number: 'PRIVATE-PLATE', status: 'approved', reviewer_reason: null,
+            }
+          }
+          if (statement.sql.includes('FROM driver_applications')) return { allowed: 1 }
+          throw new Error(`Unexpected query: ${statement.sql}`)
+        },
+      })
+    },
+    async batch(statements) {
+      batchStatements = statements.map((statement) => ({
+        sql: statement.sql,
+        args: statement.args,
+      }))
+      return [{ meta: { changes: 0 } }, { meta: { changes: 0 } }]
+    },
+  }
+  const request = new Request('https://fave.test/api/vehicles/vehicle-1/unavailability', { method: 'POST' })
+  const context = {
+    env: { DB },
+    req: {
+      raw: request,
+      json: async () => ({ startDate: '2099-01-01', endDate: '2099-01-04' }),
+      param: (name) => name === 'vehicleId' ? 'vehicle-1' : undefined,
+    },
+    json: (body, status = 200) => ({ body, status }),
+  }
+
+  const handler = routes.get('/:vehicleId/unavailability')
+  assert.equal(typeof handler, 'function', `Registered routes: ${[...routes.keys()].join(', ')}`)
+  const response = await handler(context)
+  assert.equal(response.status, 409)
+  assert.deepEqual(JSON.parse(JSON.stringify(response.body)), {
+    error: {
+      code: 'DATES_UNAVAILABLE',
+      message: 'These dates overlap an existing unavailable block, deposit hold, or confirmed trip.',
+    },
+  })
+  assert.equal(batchStatements.length, 2)
+  assert.match(batchStatements[0].sql, /NOT EXISTS \(\s*SELECT 1 FROM bookings/u)
+  assert.match(batchStatements[0].sql, /status = 'confirmed' OR \(status = 'deposit_pending' AND hold_expires_at > \?\)/u)
+  assert.match(batchStatements[0].sql, /NOT EXISTS \(\s*SELECT 1 FROM vehicle_unavailability/u)
+  for (const statement of [...prepared, ...batchStatements]) {
+    assert.equal(statement.args.length, (statement.sql.match(/\?/gu) ?? []).length, 'every SQL placeholder has exactly one binding')
+  }
 })
