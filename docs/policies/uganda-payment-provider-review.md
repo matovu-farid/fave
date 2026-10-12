@@ -60,6 +60,13 @@ Before selecting a provider, obtain the contracting entity’s full legal name a
 
 ## Evidence and implementation implications
 
+### Documentation recheck — 12 October 2026
+
+- Flutterwave's live [Uganda pricing page](https://www.flutterwave.com/ug/pricing) still lists 3% for local wallets/mobile-money collections and 4.8% for local Visa/Mastercard transactions, plus the published UGX bank and mobile-money transfer charges above. It advertises next-day settlement for local payments, but settlement documentation says the timing varies by payment method, requires a live-approved account, and may be delayed by minimum thresholds or a flagged settlement. Use the Fave-specific merchant schedule, not the public headline, for launch calculations.
+- Flutterwave's [direct-card-charge documentation](https://developer.flutterwave.com/docs/direct-card-charge) says merchants using direct card charges must be PCI DSS compliant. Prefer its hosted checkout flow for the initial Fave integration so Fave does not collect raw card details; do not choose direct card charge unless Flutterwave confirms the account's PCI requirements and Fave can meet them.
+- Pesapal's Uganda [payments-page description](https://www.pesapal.com/ug/business/online/payments-page) advertises settlement in two business days, while its current [business FAQ](https://www.pesapal.com/ug/business/faqs) says requested bank withdrawals take up to 72 working hours (maximum three working days). Treat the FAQ's longer period as the conservative planning assumption until Pesapal provides Fave's written settlement terms.
+- This recheck does not change the provisional Flutterwave recommendation or close the merchant-quote, refund, payout, authorization, or counsel gates below.
+
 ### Flutterwave
 
 - [Uganda Mobile Money](https://developer.flutterwave.com/docs/uganda) documents UGX collection over MTN or Airtel and a provider authorization redirect. Test mode automatically authorizes Uganda mobile-money payments after a few seconds.
