@@ -20,7 +20,7 @@ This document turns the current product direction into policy options for issue 
 - A trip may last up to seven days; interpret trip dates in Kampala time.
 - Price should be based on driving distance and the driver's accommodation estimate.
 - Ask the client for a 50% deposit by default, configurable for future policy changes. Collect the balance after the trip is complete.
-- **Client-requested trip extensions — owner-confirmed 2026-10-12:** additional accommodation nights use the per-night rate saved in the accepted quote. Show the revised total and obtain client acceptance before changing the booking; the remaining extension and reconciliation rules still require issue #15 and counsel review under #14.
+- **Client-requested trip extensions — owner-confirmed 2026-10-12:** additional accommodation nights use the per-night rate saved in the accepted quote. Show the revised total, obtain client acceptance before changing the booking, and collect payment for the added nights immediately when the client accepts the extension. The remaining extension and reconciliation rules still require issue #15 and counsel review under #14.
 
 ## Recommended starting defaults for owner approval
 
@@ -69,7 +69,7 @@ Count one accommodation night for each planned overnight stop where the driver m
 
 **Proposal, added for owner review on 2026-09-30:** A quote expires 24 hours after issue, and the deposit is due within that period. A successful deposit locks the quote snapshot. During an active checkout, hold the selected car for 30 minutes; if the hold expires, recheck availability before accepting payment. Before payment, a changed rate or itinerary creates a new quote that the client must accept. After payment, do not silently add charges. Reprice only when the client asks to change the itinerary and accepts the revised quote.
 
-**Owner-confirmed extension rate — 2026-10-12:** for a client-requested extension, additional accommodation nights use the per-night rate captured in the accepted quote. Present the revised total and obtain the client's acceptance before amending the booking. This records the rate basis only; the complete extension, route-change, cancellation, and reconciliation rules remain open for owner/counsel review and must be finalized before launch.
+**Owner-confirmed extension terms — 2026-10-12:** for a client-requested extension, additional accommodation nights use the per-night rate captured in the accepted quote. Present the revised total, obtain the client's acceptance before amending the booking, and collect payment for added nights immediately when the client accepts. This records the rate basis and payment timing only; the complete extension, route-change, cancellation, and reconciliation rules remain open for owner/counsel review and must be finalized before launch.
 
 **Owner decisions:** Confirm quote validity and whether Fave absorbs route/accommodation estimate differences that are not caused by a client-requested change.
 
@@ -123,7 +123,7 @@ Daily driving limits, rest breaks, overnight planning, insurance/transport oblig
 | Quote and deposit deadline | Propose 24 hours; lock quote after confirmed deposit | Pending | Pending | Give the client a clear price and payment deadline | Versioned settings, if approved |
 | Deposit and balance | 50% default; balance after trip, per owner direction | Fave owner | Pending | Confirmed product direction; completion evidence pending | Configurable deposit with audit history |
 | Client payment methods | MTN/Airtel mobile money plus local cards for deposit and final balance | Fave product owner | 2026-09-30 | Confirmed in owner response; both methods should be available at each payment stage | Provider config must match approved methods |
-| Additional accommodation nights on a client-requested extension | Use the per-night rate saved in the accepted quote; show the revised total and obtain client acceptance before changing the booking | Fave product owner | 2026-10-12 | Preserve the accepted rate basis for an extension; complete extension and reconciliation rules remain subject to #15 and #14 | Retain the accepted quote snapshot and record consent to the revised total |
+| Additional accommodation nights on a client-requested extension | Use the per-night rate saved in the accepted quote; show the revised total, obtain client acceptance before changing the booking, and collect payment immediately when accepted | Fave product owner | 2026-10-12 | Preserve the accepted rate basis and collect the extension payment immediately; complete extension and reconciliation rules remain subject to #15 and #14 | Retain the accepted quote snapshot and record consent and payment for the revised total |
 | Client cancellation/refunds | Open; option above | Pending | Pending | Requires owner and counsel approval | Versioned policy, if approved |
 | No-driver refund | Propose full refund | Pending | Pending | Client should not pay when Fave cannot provide a car/driver | Recorded refund action |
 | Checkout hold | Propose 30 minutes | Pending | Pending | Release cars when deposit is not completed | Versioned timeout, if approved |
