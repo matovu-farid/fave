@@ -64,6 +64,12 @@ cannot handle that custom scheme. App Store Connect's Users and Access page
 manages team access; Apple's Services ID and return URL settings live in the
 Apple Developer portal under Certificates, Identifiers & Profiles.
 
+Owner-reported physical-device validation on 12 October 2026: Apple sign-in
+completed in the installed Fave app, the signed-in session remained after
+force-quitting and reopening the app, and explicit sign-out worked. This is
+account-holder validation of the current installed build; it does not replace
+the automated auth checks or Google production-publishing setup.
+
 ## Driver marketplace and trip requests
 
 The marketplace routes are backed by the D1 migrations in `migrations/`.
