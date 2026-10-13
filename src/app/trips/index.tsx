@@ -10,6 +10,7 @@ import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme'
 import { ApiError, apiBaseUrl } from '@/lib/api'
 import { createLatestRequestGuard } from '@/lib/latest-request'
 import { ClientPrerequisites, confirmTrip, getAvailableVehicles, getClientPrerequisites, getMyBookings, PolicyDocument, requestTripQuote, TripBooking, TripQuote, updateClientProfile, Vehicle } from '@/lib/marketplace'
+import { getDriverAccommodationNotice } from '@/lib/trip-quote-display'
 
 function asAddress(value: string) { return { address: value } }
 
@@ -218,6 +219,7 @@ export default function TripsScreen() {
             <ThemedText>{component.amount.toLocaleString()} {quote.quote.currency}</ThemedText>
           </View>
         })}
+        {getDriverAccommodationNotice(quote.quote.components) ? <ThemedText type="small">{getDriverAccommodationNotice(quote.quote.components)}</ThemedText> : null}
         <View style={styles.quoteLine}><ThemedText type="smallBold">Estimated trip total</ThemedText><ThemedText type="smallBold">{quote.quote.totalAmount.toLocaleString()} {quote.quote.currency}</ThemedText></View>
         <ThemedText>Deposit to place a time-limited vehicle hold: {quote.quote.depositAmount.toLocaleString()} {quote.quote.currency}. Quote expires {new Date(quote.expiresAt).toLocaleString()}.</ThemedText>
         <ThemedText>Fare policy · v{quote.quote.farePolicyVersion}</ThemedText>
