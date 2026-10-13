@@ -41,6 +41,8 @@ jobs:
         run: npm ci
       - name: Lint Expo app
         run: npm run lint
+      - name: Install Worker dependencies for integration tests
+        run: npm ci --prefix fave-worker
       - name: Run application and Worker regression tests
         run: npm test
       - name: Typecheck Expo app
