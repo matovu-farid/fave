@@ -23,10 +23,12 @@ The only interaction is navigation to `/trips`; it uses Expo Router's existing r
 ## Verification
 
 - Confirm the Expo starter tutorial text and external tutorial links are gone from `/explore`.
-- Confirm the page presents the Fave purpose and trip steps in a narrow/mobile viewport without horizontal overflow.
+- Confirm the Explore screen content presents the Fave purpose and trip steps within a narrow/mobile viewport without clipping or horizontal overflow. Check the content area separately from the shared app tab navigation.
 - Activate **Plan a trip** and confirm it opens `/trips`.
 - Confirm the existing home, driver, and trip tabs remain reachable.
 - Run the repository lint and TypeScript checks; manually check the rendered screen in the browser at `http://localhost:8081/`.
+
+The shared web tab navigation currently makes the overall document 21px wider than a 375px viewport. That layout is outside this Explore-page change; track and fix it separately rather than treating tab-bar width as Explore content overflow.
 
 ## Scope boundary
 
