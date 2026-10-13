@@ -14,7 +14,7 @@ The transport service is supplied by **[driver / Fidexa LLC / identified provide
 
 Fave allows a signed-in client to request a multi-day private-car trip with pickup in Kampala, Wakiso or Mukono, an in-country destination, selected trip dates and party/luggage needs, and a choice among eligible vehicle listings. A map/address eligibility check and route estimate support planning; a route estimate is not a promise about actual road conditions, exact duration, or final driver route.
 
-The client selects a vehicle listing, not a driver. A specific driver is assigned only after **[approved assignment event and responsible party]**. Driver identity/contact details will be released only at **[approved event, consistent with issue #12 and privacy/security review]**. Clients must not use the listing to contact, identify or select a driver outside the approved workflow.
+The client selects a vehicle listing, not a driver. Fave assigns an eligible driver before showing the final quote so the quoted driver-lodging rate matches that driver’s registered rate. Driver identity and contact details remain hidden until **[approved release event, consistent with issue #12 and privacy/security review]**. Clients must not use the listing to contact, identify or select a driver outside the approved workflow.
 
 ### 3. Request, quote, review and order
 
@@ -34,7 +34,7 @@ You may correct the request or withdraw before placing the order. The app will p
 
 ### 4. When a booking is formed — unresolved
 
-An availability hold and a booking contract may be different events. Counsel and Fidexa LLC must define when an order is submitted, when the selected vehicle is held, when the booking is accepted by the supplier, when a deposit becomes payable, when the trip contract is binding, and what happens if the supplier does not accept. Proposed event sequence: **[complete with approved quote/deposit/driver-assignment flow]**. No production deposit may be accepted while this clause is incomplete.
+An availability hold and a booking contract may be different events. Counsel and Fidexa LLC must define when an order is submitted, when the selected vehicle is held, when the booking is accepted by the supplier, when a deposit becomes payable, when the trip contract is binding, and what happens if the supplier does not accept. Owner-confirmed sequence: Fave assigns an eligible driver before showing the final quote; the client reviews and accepts that quote; the deposit is then due. The exact hold, supplier-acceptance, and contract-formation events remain for counsel and Fidexa LLC to confirm. No production deposit may be accepted while this clause is incomplete.
 
 Fave will recheck vehicle availability and quote validity at confirmation. A hold expires **[period and exact expiry event]** if payment or supplier confirmation is incomplete. Expiration, payment failure, supplier unavailability and changed price handling are governed by the approved policy version shown before order.
 
