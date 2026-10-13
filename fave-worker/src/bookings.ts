@@ -43,6 +43,7 @@ type QuoteSnapshot = {
   distanceMeters: number
   durationSeconds: number
   nights: number
+  driverLodgingRate?: number
 }
 
 type TripLocationSnapshot = {
@@ -145,22 +146,33 @@ export function buildQuoteSnapshot(
   route: { distanceMeters: number; durationSeconds: number },
   nights: number,
   partySize: number,
+  driverLodgingRate?: number,
 ): QuoteSnapshot | null {
   const rules = parseFareRules(policy)
   if (!rules || !/^[A-Z]{3}$/u.test(policy.currency)) return null
+  if (driverLodgingRate !== undefined &&
+      (!Number.isSafeInteger(driverLodgingRate) || driverLodgingRate < 1 || driverLodgingRate > 1_000_000_000)) {
+    return null
+  }
+  if (driverLodgingRate !== undefined && !rules.components.some((component) => component.key === 'driver_lodging' && component.unit === 'per_night')) {
+    return null
+  }
 
   const distanceKilometers = Math.ceil(route.distanceMeters / 1000)
   const components = rules.components.map((component) => {
     const quantity = component.unit === 'fixed' ? 1 :
       component.unit === 'per_kilometer' ? distanceKilometers :
         component.unit === 'per_night' ? nights : partySize
+    const unitRate = component.key === 'driver_lodging' && driverLodgingRate !== undefined
+      ? driverLodgingRate
+      : component.amount
     return {
       key: component.key,
       label: component.label,
       unit: component.unit,
-      unitRate: component.amount,
+      unitRate,
       quantity,
-      amount: component.amount * quantity,
+      amount: unitRate * quantity,
     }
   })
   const totalAmount = components.reduce((sum, component) => sum + component.amount, 0)
@@ -176,6 +188,7 @@ export function buildQuoteSnapshot(
     distanceMeters: route.distanceMeters,
     durationSeconds: route.durationSeconds,
     nights,
+    ...(driverLodgingRate === undefined ? {} : { driverLodgingRate }),
   }
 }
 
@@ -277,7 +290,8 @@ tripsApp.post('/quote', async (c) => {
   }
 
   const vehicle = await c.env.DB.prepare(
-    `SELECT vehicle.id, vehicle.passenger_capacity, vehicle.luggage_capacity
+    `SELECT vehicle.id, vehicle.passenger_capacity, vehicle.luggage_capacity,
+            driver.lodging_rate_ugx AS driver_lodging_rate_ugx
       FROM vehicles AS vehicle
        JOIN driver_applications AS driver ON driver.id = vehicle.driver_application_id
       WHERE vehicle.id = ? AND vehicle.status = 'approved' AND driver.status = 'approved'
@@ -285,10 +299,13 @@ tripsApp.post('/quote', async (c) => {
       LIMIT 1`,
   )
     .bind(vehicleId, Date.now(), Date.now(), Date.now(), Date.now(), Date.now(), Date.now())
-    .first<{ id: string; passenger_capacity: number; luggage_capacity: number }>()
+    .first<{ id: string; passenger_capacity: number; luggage_capacity: number; driver_lodging_rate_ugx: number | null }>()
   if (!vehicle) return c.json(apiError('VEHICLE_UNAVAILABLE', 'This vehicle is not available for selection.'), 409)
   if (vehicle.passenger_capacity < validation.partySize || vehicle.luggage_capacity < validation.luggageCount) {
     return c.json(apiError('VEHICLE_CAPACITY', 'This vehicle does not have enough passenger or luggage capacity.'), 422)
+  }
+  if (!Number.isSafeInteger(vehicle.driver_lodging_rate_ugx) || vehicle.driver_lodging_rate_ugx === null || vehicle.driver_lodging_rate_ugx < 1) {
+    return c.json(apiError('DRIVER_LODGING_RATE_REQUIRED', 'This driver’s overnight accommodation rate is not available yet. Choose another vehicle or try again later.'), 409)
   }
 
   const now = Date.now()
@@ -324,6 +341,7 @@ tripsApp.post('/quote', async (c) => {
     route,
     daysBetween(validation.startDate, validation.endDate),
     validation.partySize,
+    vehicle.driver_lodging_rate_ugx,
   )
   if (!quoteSnapshot) {
     return c.json(apiError('FARE_POLICY_INVALID', 'The active fare policy is incomplete.'), 409)
@@ -482,6 +500,7 @@ tripsApp.post('/confirm', async (c) => {
     currentRoute,
     daysBetween(quote.start_date, quote.end_date),
     quote.party_size,
+    previousQuote.driverLodgingRate,
   )
   if (!currentSnapshot || JSON.stringify(currentSnapshot) !== JSON.stringify(previousQuote)) {
     return c.json(apiError('QUOTE_CHANGED', 'The fare changed. Review a new quote before confirming.'), 409)

@@ -15,6 +15,7 @@ type DriverApplication = {
   user_id: string
   legal_name: string
   phone_e164: string
+  lodging_rate_ugx: number | null
   national_id_number: string
   citizenship_attested_at: number | null
   submission_version: number
@@ -129,6 +130,7 @@ async function getApplication(
 ): Promise<DriverApplication | null> {
   return env.DB.prepare(
     `SELECT application.id, application.user_id, application.legal_name, application.phone_e164,
+            application.lodging_rate_ugx,
             application.national_id_number, application.citizenship_attested_at,
             application.submission_version, application.status,
             application.applicant_message, application.reviewer_reason, application.submitted_at,
@@ -251,6 +253,7 @@ driversApp.get('/application', async (c) => {
       id: application.id,
       legalName: application.legal_name,
       phoneNumber: application.phone_e164,
+      lodgingRateUgx: application.lodging_rate_ugx,
       status: application.status,
       needsCitizenshipConfirmation: application.citizenship_attested_at === null,
       needsEvidenceRefresh,
@@ -298,15 +301,18 @@ driversApp.post('/application', async (c) => {
 
   const legalName = form.get('legalName')
   const phoneNumber = form.get('phoneNumber')
+  const lodgingRateText = form.get('lodgingRateUgx')
   const nationalIdNumber = form.get('nationalIdNumber')
   const citizenshipConfirmation = form.get('citizenshipConfirmation')
   if (
     typeof legalName !== 'string' || legalName.trim().length < 2 || legalName.trim().length > 160 ||
     typeof phoneNumber !== 'string' || !/^\+[1-9]\d{7,14}$/u.test(phoneNumber) ||
+    typeof lodgingRateText !== 'string' || !/^\d{1,10}$/u.test(lodgingRateText) ||
+    !Number.isSafeInteger(Number(lodgingRateText)) || Number(lodgingRateText) < 1 || Number(lodgingRateText) > 1_000_000_000 ||
     typeof nationalIdNumber !== 'string' || !/^[\p{L}\p{N}-]{5,40}$/u.test(nationalIdNumber.trim()) ||
     citizenshipConfirmation !== 'ugandan_citizen'
   ) {
-    return c.json(apiError('INVALID_APPLICATION', 'This driver application is for Ugandan citizens. Enter a legal name, contact phone number, and valid National ID, and confirm your eligibility.'), 400)
+    return c.json(apiError('INVALID_APPLICATION', 'This driver application is for Ugandan citizens. Enter a legal name, contact phone number, overnight lodging rate in UGX, and valid National ID, and confirm your eligibility.'), 400)
   }
 
   const documents = await getCurrentPolicies(c.env, ['driver_terms', 'driver_privacy'], 'en')
@@ -423,7 +429,7 @@ driversApp.post('/application', async (c) => {
       ? [
         c.env.DB.prepare(
           `UPDATE driver_applications
-              SET legal_name = ?, phone_e164 = ?, national_id_number = ?, national_id_last4 = ?,
+              SET legal_name = ?, phone_e164 = ?, lodging_rate_ugx = ?, national_id_number = ?, national_id_last4 = ?,
                   citizenship_attested_at = ?,
                   status = 'pending_verification', applicant_message = NULL, reviewer_reason = NULL,
                   reviewed_at = NULL, reviewed_by = NULL, submitted_at = ?,
@@ -440,6 +446,7 @@ driversApp.post('/application', async (c) => {
         ).bind(
           normalizedName,
           phoneNumber,
+          Number(lodgingRateText),
           encryptedNationalId,
           nationalId.slice(-4),
           now,
@@ -458,16 +465,17 @@ driversApp.post('/application', async (c) => {
       ]
       : [c.env.DB.prepare(
           `INSERT INTO driver_applications
-            (id, user_id, legal_name, phone_e164, national_id_number, national_id_last4,
+            (id, user_id, legal_name, phone_e164, lodging_rate_ugx, national_id_number, national_id_last4,
              citizenship_attested_at,
              status, submitted_at, retention_expires_at, retention_policy_id,
              submission_version, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, 'pending_verification', ?, ?, ?, ?, ?, ?)`,
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending_verification', ?, ?, ?, ?, ?, ?)`,
         ).bind(
           applicationId,
           user.id,
           normalizedName,
           phoneNumber,
+          Number(lodgingRateText),
           encryptedNationalId,
           nationalId.slice(-4),
           now,
@@ -526,6 +534,41 @@ driversApp.post('/application', async (c) => {
   }
 
   return c.json({ applicationId, status: 'pending_verification' }, existing ? 200 : 201)
+})
+
+driversApp.post('/application/lodging-rate', async (c) => {
+  const user = await getSignedInUser(c.env, c.req.raw)
+  if (!user) return c.json(apiError('UNAUTHORIZED', 'Sign in to continue.'), 401)
+
+  const body: unknown = await c.req.json().catch(() => null)
+  const rate = typeof body === 'object' && body !== null && !Array.isArray(body)
+    ? (body as Record<string, unknown>).lodgingRateUgx
+    : null
+  if (!Number.isSafeInteger(rate) || Number(rate) < 1 || Number(rate) > 1_000_000_000) {
+    return c.json(apiError('INVALID_LODGING_RATE', 'Enter a whole-number overnight rate in UGX.'), 400)
+  }
+
+  const result = await c.env.DB.prepare(
+    `UPDATE driver_applications
+        SET lodging_rate_ugx = ?, updated_at = ?
+      WHERE user_id = ? AND status = 'approved' AND lodging_rate_ugx IS NULL`,
+  ).bind(Number(rate), Date.now(), user.id).run()
+  if ((result.meta?.changes ?? 0) !== 1) {
+    return c.json(apiError('LODGING_RATE_UNAVAILABLE', 'Only an approved driver who has not set an overnight rate can add one here.'), 409)
+  }
+
+  const application = await c.env.DB.prepare(
+    'SELECT id FROM driver_applications WHERE user_id = ? AND status = \'approved\' LIMIT 1',
+  ).bind(user.id).first<{ id: string }>()
+  if (!application) return c.json(apiError('APPLICATION_NOT_FOUND', 'The approved driver application was not found.'), 404)
+  await writeMarketplaceAudit(c.env, {
+    actorUserId: user.id,
+    action: 'driver_lodging_rate_added',
+    targetType: 'driver_application',
+    targetId: application.id,
+  })
+
+  return c.json({ lodgingRateUgx: Number(rate) })
 })
 
 adminDriversApp.get('/pending', async (c) => {

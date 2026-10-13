@@ -7,7 +7,7 @@ import { ActionButton, Card, CheckRow, Field, Message, SectionTitle, formStyles 
 import { ThemedText } from '@/components/themed-text'
 import { ThemedView } from '@/components/themed-view'
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme'
-import { acceptDriverPolicies, DriverApplication, DriverPrerequisites, getDriverApplication, getDriverPrerequisites, getMyVehicles, getVehicleAvailability, getVehicleRequirements, submitDriverApplication, submitVehicle, submitVehicleCorrections, updateVehicle, markUnavailable, removeUnavailable, Vehicle, VehicleAvailability, VehicleRequirements } from '@/lib/marketplace'
+import { acceptDriverPolicies, DriverApplication, DriverPrerequisites, getDriverApplication, getDriverPrerequisites, getMyVehicles, getVehicleAvailability, getVehicleRequirements, setDriverLodgingRate, submitDriverApplication, submitVehicle, submitVehicleCorrections, updateVehicle, markUnavailable, removeUnavailable, Vehicle, VehicleAvailability, VehicleRequirements } from '@/lib/marketplace'
 
 type Picked = { uri: string; fileName: string; mimeType: string; file?: Blob }
 const maxEvidenceBytes = 8 * 1024 * 1024
@@ -84,6 +84,7 @@ export default function DriverScreen() {
   const [accepted, setAccepted] = useState(false)
   const [legalName, setLegalName] = useState('')
   const [phoneNumber, setPhoneNumber] = useState('')
+  const [lodgingRateUgx, setLodgingRateUgx] = useState('')
   const [nationalId, setNationalId] = useState('')
   const [citizenshipConfirmed, setCitizenshipConfirmed] = useState(false)
   const [files, setFiles] = useState<Record<string, Picked>>({})
@@ -99,6 +100,7 @@ export default function DriverScreen() {
       if (result.application?.needsEvidenceRefresh || result.application?.needsPolicyAcceptance) setAccepted(false)
       setLegalName(result.application?.legalName ?? '')
       setPhoneNumber(result.application?.phoneNumber ?? '')
+      setLodgingRateUgx(result.application?.lodgingRateUgx?.toString() ?? '')
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not load driver requirements.')
     } finally { setLoading(false) }
@@ -122,6 +124,7 @@ export default function DriverScreen() {
       const form = new FormData()
       form.append('legalName', legalName)
       form.append('phoneNumber', phoneNumber)
+      form.append('lodgingRateUgx', lodgingRateUgx)
       form.append('nationalIdNumber', nationalId)
       form.append('citizenshipConfirmation', citizenshipConfirmed ? 'ugandan_citizen' : '')
       for (const [key, file] of Object.entries(files)) addFile(form, `evidence:${key}`, file)
@@ -129,6 +132,17 @@ export default function DriverScreen() {
       setNationalId(''); setFiles({}); setCitizenshipConfirmed(false)
       await refresh()
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not submit your application.') }
+    finally { setBusy(false) }
+  }
+
+  const saveMissingLodgingRate = async () => {
+    const rate = Number(lodgingRateUgx)
+    if (!Number.isSafeInteger(rate) || rate < 1 || rate > 1_000_000_000) return
+    setBusy(true); setError('')
+    try {
+      await setDriverLodgingRate(rate)
+      await refresh()
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not save your overnight lodging rate.') }
     finally { setBusy(false) }
   }
 
@@ -161,6 +175,12 @@ export default function DriverScreen() {
         {application.applicantMessage ? <Message>{application.applicantMessage}</Message> : null}
         {application.documents.map((doc) => <ThemedText key={doc.id} type="small">{doc.type.replaceAll('_', ' ')}{doc.requirementVersion ? ` · v${doc.requirementVersion}` : ''} · {doc.status}</ThemedText>)}
       </Card> : null}
+      {application?.status === 'approved' && application.lodgingRateUgx === null ? <Card>
+        <ThemedText type="subtitle">Set your overnight rate</ThemedText>
+        <Message>Your approved driver profile needs a per-night amount before your vehicle can receive trip quotes. Existing bookings keep their accepted quote amount.</Message>
+        <Field label="Overnight lodging rate (UGX per night)" value={lodgingRateUgx} onChangeText={setLodgingRateUgx} placeholder="Enter your rate" keyboardType="numeric" />
+        <ActionButton title="Save overnight rate" onPress={() => void saveMissingLodgingRate()} disabled={!/^[1-9]\d{0,9}$/u.test(lodgingRateUgx) || Number(lodgingRateUgx) > 1_000_000_000} busy={busy} />
+      </Card> : null}
       {application?.status === 'approved' && application.needsPolicyAcceptance && !application.needsEvidenceRefresh && prerequisites ? <Card>
         <ThemedText type="subtitle">Review updated driver terms</ThemedText>
         {prerequisites.documents.map((document) => <View key={document.id} style={styles.document}>
@@ -187,6 +207,8 @@ export default function DriverScreen() {
           <Field label="Legal name" value={legalName} onChangeText={setLegalName} placeholder="As shown on your identity document" />
           <Field label="Phone number" value={phoneNumber} onChangeText={setPhoneNumber} placeholder="+256…" keyboardType="phone-pad" />
           <Message>Your phone number is for contact only. Fave does not require a verification code in V1.</Message>
+          <Field label="Overnight lodging rate (UGX per night)" value={lodgingRateUgx} onChangeText={setLodgingRateUgx} placeholder="Enter your rate" keyboardType="numeric" />
+          <Message>Enter the amount you receive for your overnight stay on a trip. Your rate is used across destinations and included in each trip quote before the client accepts.</Message>
           <CheckRow title="I am a Ugandan citizen and have a National ID" detail="Fave is not accepting foreign-national or refugee driver applications in this release." checked={citizenshipConfirmed} onPress={() => setCitizenshipConfirmed(!citizenshipConfirmed)} disabled={busy} />
           <Field label="National ID number" value={nationalId} onChangeText={setNationalId} placeholder="Enter the number on your ID" autoCapitalize="characters" />
           <ThemedText type="smallBold">National ID images</ThemedText>
@@ -198,10 +220,10 @@ export default function DriverScreen() {
           {prerequisites.verificationChecklist.filter((item) => !builtInIdentityTypes.has(item.document_type)).map((item) => <PickButton key={item.document_type} label={item.document_type.replaceAll('_', ' ')} file={files[item.document_type]} onPress={() => void pick(item.document_type, true)} />)}
           <Message>Your National ID is the only identity document requested. The passport-style photo is a separate driver photo, not another identity document. Keep both private; only designated staff can review them. Accepted formats: JPEG, PNG, or WebP for identity images; checklist evidence accepts those formats or PDF. Each file can be up to 8 MB.</Message>
           {prerequisites.retentionPolicy.active ? <Message>Your application evidence will be deleted {prerequisites.retentionPolicy.retentionDays} days after submission under approved retention policy{prerequisites.retentionPolicy.version ? ` v${prerequisites.retentionPolicy.version}` : ''}. Cleanup runs hourly.</Message> : null}
-          <ActionButton title={application ? 'Resubmit application' : 'Submit application'} onPress={() => void submit()} disabled={!accepted || !prerequisites.readyToApply || !citizenshipConfirmed || !hasAllFiles || !legalName.trim() || !phoneNumber.trim() || !nationalId.trim()} busy={busy} />
+          <ActionButton title={application ? 'Resubmit application' : 'Submit application'} onPress={() => void submit()} disabled={!accepted || !prerequisites.readyToApply || !citizenshipConfirmed || !hasAllFiles || !legalName.trim() || !phoneNumber.trim() || !/^[1-9]\d{0,9}$/u.test(lodgingRateUgx) || Number(lodgingRateUgx) > 1_000_000_000 || !nationalId.trim()} busy={busy} />
         </Card>
       </> : null}
-      {application?.status === 'approved' && !application.needsEvidenceRefresh && !application.needsPolicyAcceptance ? <VehicleSection vehicles={vehicles} refresh={refresh} /> : null}
+      {application?.status === 'approved' && application.lodgingRateUgx !== null && !application.needsEvidenceRefresh && !application.needsPolicyAcceptance ? <VehicleSection vehicles={vehicles} refresh={refresh} /> : null}
       {application && application.status !== 'approved' ? <ActionButton title="Refresh status" onPress={() => void refresh()} /> : null}
     </ScrollView>
   </ThemedView>

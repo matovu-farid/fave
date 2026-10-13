@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import vm from 'node:vm'
+import { webcrypto } from 'node:crypto'
 import ts from 'typescript'
 
 const bookingsSource = fileURLToPath(new URL('../fave-worker/src/bookings.ts', import.meta.url))
@@ -60,6 +61,7 @@ function loadBookings({
     Math,
     Date,
     Promise,
+    crypto: webcrypto,
   })
 
   return { ...exports, routes }
@@ -94,6 +96,27 @@ test('quote snapshots retain unit rates and quantities for later trip extensions
   assert.equal(snapshot.depositAmount, 123_750)
 })
 
+test('quote snapshots use the selected driver lodging rate instead of a global nightly amount', () => {
+  const { buildQuoteSnapshot } = loadBookings()
+  const snapshot = buildQuoteSnapshot({
+    id: 'fare-v1',
+    version: '1',
+    currency: 'UGX',
+    rules_json: JSON.stringify({
+      components: [
+        { key: 'driver_lodging', label: 'Driver accommodation', amount: 1, unit: 'per_night' },
+        { key: 'distance', label: 'Distance', amount: 1_500, unit: 'per_kilometer' },
+      ],
+      depositBasisPoints: 5_000,
+    }),
+  }, { distanceMeters: 10_200, durationSeconds: 7_200 }, 2, 3, 42_000)
+
+  assert.equal(snapshot.components[0].unitRate, 42_000)
+  assert.equal(snapshot.components[0].amount, 84_000)
+  assert.equal(snapshot.totalAmount, 100_500)
+  assert.equal(snapshot.driverLodgingRate, 42_000)
+})
+
 test('trip quote creation fails closed when no approved fare policy is active', async () => {
   let routeCalculationCount = 0
   const { routes } = loadBookings({
@@ -109,7 +132,7 @@ test('trip quote creation fails closed when no approved fare policy is active', 
         bind(...args) { query.args = args; return this },
         async first() {
           if (sql.includes('FROM vehicles AS vehicle')) {
-            return { id: 'vehicle-1', passenger_capacity: 4, luggage_capacity: 3 }
+            return { id: 'vehicle-1', passenger_capacity: 4, luggage_capacity: 3, driver_lodging_rate_ugx: 42_000 }
           }
           if (sql.includes('FROM vehicle_unavailability')) return null
           if (sql.includes('FROM fare_policies')) return null
@@ -148,6 +171,100 @@ test('trip quote creation fails closed when no approved fare policy is active', 
   for (const query of queries) {
     assert.equal(query.args.length, (query.sql.match(/\?/gu) ?? []).length, 'every SQL placeholder has exactly one binding')
   }
+})
+
+test('trip quote uses the selected vehicle driver lodging rate', async () => {
+  const route = { kind: 'route', distanceMeters: 10_200, durationSeconds: 7_200 }
+  const farePolicy = {
+    id: 'fare-v1', version: '1', currency: 'UGX',
+    rules_json: JSON.stringify({
+      components: [
+        { key: 'driver_lodging', label: 'Driver accommodation', amount: 1, unit: 'per_night' },
+        { key: 'distance', label: 'Distance', amount: 1_500, unit: 'per_kilometer' },
+      ],
+      depositBasisPoints: 5_000,
+    }),
+    quote_ttl_seconds: 3600,
+    hold_ttl_seconds: 1800,
+  }
+  const { routes } = loadBookings({
+    signedInUser: { id: 'client-1', name: 'Client', email: 'client@example.test' },
+    routeResult: route,
+  })
+  const queries = []
+  const DB = {
+    prepare(sql) {
+      const query = { sql, args: [] }
+      queries.push(query)
+      return {
+        bind(...args) { query.args = args; return this },
+        async first() {
+          if (sql.includes('FROM vehicles AS vehicle')) {
+            return { id: 'vehicle-1', passenger_capacity: 4, luggage_capacity: 3, driver_lodging_rate_ugx: 42_000 }
+          }
+          if (sql.includes('FROM vehicle_unavailability')) return null
+          if (sql.includes('FROM fare_policies')) return farePolicy
+          throw new Error(`Unexpected query: ${sql}`)
+        },
+        async run() { return { success: true } },
+      }
+    },
+  }
+  const body = {
+    origin: { address: 'Kampala' }, destination: { address: 'Jinja' },
+    startDate: '2099-01-01', endDate: '2099-01-03',
+    partySize: 2, luggageCount: 1, vehicleId: 'vehicle-1',
+  }
+  const context = {
+    env: { DB },
+    req: { raw: new Request('https://fave.test/api/trips/quote', { method: 'POST' }), json: async () => body },
+    json: (payload, status = 200) => ({ payload, status }),
+  }
+
+  const response = await routes.get('/quote')(context)
+
+  assert.equal(response.status, 201)
+  assert.equal(response.payload.quote.components.find((component) => component.key === 'driver_lodging').unitRate, 42_000)
+  assert.equal(response.payload.quote.driverLodgingRate, 42_000)
+  assert.equal(queries.some((query) => query.sql.includes('INSERT INTO trip_quotes')), true)
+})
+
+test('trip quote fails closed when the selected driver has no registered lodging rate', async () => {
+  let routeCalls = 0
+  const { routes } = loadBookings({
+    signedInUser: { id: 'client-1', name: 'Client', email: 'client@example.test' },
+    onRouteCalculation: () => { routeCalls += 1 },
+  })
+  const DB = {
+    prepare(sql) {
+      return {
+        bind() { return this },
+        async first() {
+          if (sql.includes('FROM vehicles AS vehicle')) {
+            return { id: 'vehicle-1', passenger_capacity: 4, luggage_capacity: 3, driver_lodging_rate_ugx: null }
+          }
+          throw new Error(`The route must stop before this query: ${sql}`)
+        },
+        async run() { throw new Error('A quote must not be saved without a driver lodging rate') },
+      }
+    },
+  }
+  const body = {
+    origin: { address: 'Kampala' }, destination: { address: 'Jinja' },
+    startDate: '2099-01-01', endDate: '2099-01-03',
+    partySize: 2, luggageCount: 1, vehicleId: 'vehicle-1',
+  }
+  const context = {
+    env: { DB },
+    req: { raw: new Request('https://fave.test/api/trips/quote', { method: 'POST' }), json: async () => body },
+    json: (payload, status = 200) => ({ payload, status }),
+  }
+
+  const response = await routes.get('/quote')(context)
+
+  assert.equal(response.status, 409)
+  assert.equal(response.payload.error.code, 'DRIVER_LODGING_RATE_REQUIRED')
+  assert.equal(routeCalls, 0)
 })
 
 test('booking confirmation fails closed when required approved disclosures are unavailable', async () => {

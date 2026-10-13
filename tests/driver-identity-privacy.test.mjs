@@ -122,6 +122,7 @@ test('a driver application response omits national ID values and private file ke
     user_id: 'driver-1',
     legal_name: 'Driver Example',
     phone_e164: '+256700000001',
+    lodging_rate_ugx: 42_000,
     national_id_number: 'ENCRYPTED-NATIONAL-ID',
     national_id_last4: '4321',
     citizenship_attested_at: Date.now(),
@@ -170,6 +171,54 @@ test('a driver application response omits national ID values and private file ke
   assert.equal(serialized.includes('PRIVATE-REVIEW-NOTE'), false)
   assert.equal(serialized.includes('driver-documents/private-id'), false)
   assert.deepEqual(JSON.parse(serialized).application.documents.map((document) => document.type), ['national_id_front'])
+  assert.equal(JSON.parse(serialized).application.lodgingRateUgx, 42_000)
   assert.equal(app.decryptCalls, 0)
   assert.equal(queries.some((sql) => sql.includes('national_id_number')), true)
+})
+
+test('driver applications reject a missing or zero overnight rate', async () => {
+  const db = { prepare() { throw new Error('invalid input must be rejected before database access') } }
+  const app = loadDrivers({ db })
+  const form = new FormData()
+  form.set('legalName', 'Driver Example')
+  form.set('phoneNumber', '+256700000001')
+  form.set('nationalIdNumber', 'CM12345678')
+  form.set('citizenshipConfirmation', 'ugandan_citizen')
+  form.set('lodgingRateUgx', '0')
+  const request = new Request('https://fave.test/api/drivers/application', { method: 'POST', body: form })
+  const response = await app.routes.get('POST /application')({
+    env: { DB: db, DRIVER_FILES: {} },
+    req: { raw: request, formData: async () => form },
+    json: (body, status = 200) => ({ body, status }),
+  })
+
+  assert.equal(response.status, 400)
+  assert.equal(response.body.error.code, 'INVALID_APPLICATION')
+})
+
+test('approved drivers can add a missing lodging rate without resubmitting identity evidence', async () => {
+  const queries = []
+  const db = {
+    prepare(sql) {
+      const query = { sql, args: [] }
+      queries.push(query)
+      return {
+        bind(...args) { query.args = args; return this },
+        async first() { return { id: 'application-1' } },
+        async run() { return { success: true, meta: { changes: 1 } } },
+      }
+    },
+  }
+  const app = loadDrivers({ db, user: { id: 'driver-1', name: 'Driver', email: 'driver@example.test' } })
+  const request = new Request('https://fave.test/api/drivers/application/lodging-rate', { method: 'POST' })
+  const response = await app.routes.get('POST /application/lodging-rate')({
+    env: { DB: db },
+    req: { raw: request, json: async () => ({ lodgingRateUgx: 42_000 }) },
+    json: (body, status = 200) => ({ body, status }),
+  })
+
+  assert.equal(response.status, 200)
+  assert.equal(response.body.lodgingRateUgx, 42_000)
+  assert.match(queries[0].sql, /UPDATE driver_applications/u)
+  assert.match(queries[0].sql, /status = 'approved'/u)
 })

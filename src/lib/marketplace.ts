@@ -11,6 +11,7 @@ export type DriverApplication = {
   id: string
   legalName: string
   phoneNumber: string
+  lodgingRateUgx: number | null
   status: string
   nextAction: string
   needsEvidenceRefresh?: boolean
@@ -83,6 +84,7 @@ export type TripQuote = {
     depositAmount: number
     depositBasisPoints: number
     farePolicyVersion: string
+    driverLodgingRate?: number
   }
   expiresAt: number
 }
@@ -114,6 +116,12 @@ export function acceptDriverPolicies(documentIds: string[]) {
 }
 export function submitDriverApplication(form: FormData) {
   return authenticatedUpload<{ applicationId: string; status: string }>('/api/drivers/application', form)
+}
+export function setDriverLodgingRate(lodgingRateUgx: number) {
+  return authenticatedFetch<{ lodgingRateUgx: number }>('/api/drivers/application/lodging-rate', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ lodgingRateUgx }),
+  })
 }
 export function getMyVehicles() {
   return authenticatedFetch<{ vehicles: Vehicle[] }>('/api/vehicles/mine')
