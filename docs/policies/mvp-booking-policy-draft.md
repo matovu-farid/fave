@@ -94,9 +94,9 @@ Count one accommodation night for each planned overnight stop where the driver m
 - If Fave cancels before pickup, refund all client payments in full.
 - Do not automatically collect a disputed final balance. Route disputes and safety incidents to a recorded operations review.
 
-**Client cancellation schedule — owner-confirmed 2026-10-13:** refund the full deposit when the client cancels at least 72 hours before pickup; refund half of the deposit when they cancel 24–72 hours before pickup; and do not refund the deposit when they cancel less than 24 hours before pickup. If Fave cancels or cannot provide an eligible driver and vehicle, refund all client payments in full. This schedule still requires Ugandan counsel's review and launch approval. Rules for no-shows, late changes, driver/vehicle unavailability after booking, trip interruption, and partial trip completion also need review before payment collection goes live.
+**Client cancellation and no-show schedule — owner-confirmed 2026-10-13:** refund the full deposit when the client cancels at least 72 hours before pickup; refund half of the deposit when they cancel at least 24 but less than 72 hours before pickup; and do not refund the deposit when they cancel less than 24 hours before pickup. A client who does not appear for the agreed pickup without cancelling forfeits the deposit. If Fave cancels or cannot provide an eligible driver and vehicle, refund all client payments in full. These rules still require Ugandan counsel's review and launch approval. Define the operational no-show point (including any grace period and contact attempt) before payment collection goes live. Late changes, driver/vehicle unavailability after booking, trip interruption, and partial trip completion also need review.
 
-**Owner decisions:** Decide rules for client/driver no-shows, late changes, trip interruption, replacement car/driver, and partial trip completion.
+**Remaining owner decisions:** Decide rules for driver no-shows, late changes, trip interruption, replacement car/driver, and partial trip completion.
 
 ## Funds and driver settlement
 
