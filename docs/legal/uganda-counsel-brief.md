@@ -3,6 +3,7 @@
 **Status:** Draft for qualified Ugandan counsel. This is a product brief and issue checklist, not legal advice, a legal opinion, or launch approval. The owner reports counsel approved the payment-provider terms on 12 October 2026; the written advice is not attached, and no general legal review or approval of the operating model is recorded here.
 
 **Prepared:** 30 September 2026
+**Updated:** 13 October 2026
 **Related issue:** [#14 — Uganda legal, regulatory, privacy, and safety review](https://github.com/matovu-farid/fave/issues/14)
 **Research scope:** Public primary and regulator sources listed below; counsel must verify the current consolidated law, amendments, administrative practice, and applicability to Fave before decisions are treated as final.
 
