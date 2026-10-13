@@ -22,7 +22,9 @@ The client may pay using MTN or Airtel mobile money or a local bank card when th
 
 ## 3. Trip changes and added nights
 
-Fave will not silently increase an accepted total. If the client asks to add accommodation nights during a trip, Fave will calculate the added amount using the per-night rate saved in the accepted quote, show the number of added nights and the revised total, and ask the client to accept before amending the booking. When the client accepts, payment for the added nights is due immediately using a method then available. The booking record will retain the original accepted quote and calculation inputs, the revised quote, the client's acceptance, and the resulting payment reference.
+For a date-based trip, Fave counts nights using Kampala calendar dates from the trip start/check-in date up to, but not including, the return/check-out date. Monday to Tuesday is one night. The quote shows the dates, night count, applicable per-night rate, and amount.
+
+Fave will not silently increase an accepted total. If the client asks to add accommodation nights during a trip, Fave will calculate the added amount using the per-night rate saved in the accepted quote, show the number of added nights and the revised total, and ask the client to accept before amending the booking. When the client accepts, payment for the added nights is due immediately using a method then available. The booking record will retain the original accepted quote and calculation inputs, the revised dates and night-count calculation, the revised quote, the client's acceptance, and the resulting payment reference.
 
 Other changes that affect price or service require a revised quote and the client's acceptance before the change is charged or applied. A provider, driver, or Fave cannot add an amount that was not shown and accepted through this process.
 

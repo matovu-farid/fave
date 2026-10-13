@@ -6,6 +6,8 @@ const dateRules = await import('../fave-worker/src/trip-dates.ts').catch(() => (
 test('measures the trip span in whole calendar days', () => {
   assert.equal(typeof dateRules.daysBetween, 'function', 'trip date rules should be available')
   const { daysBetween } = dateRules
+  assert.equal(daysBetween('2026-10-12', '2026-10-13'), 1, 'Monday to Tuesday is one night')
+  assert.equal(daysBetween('2026-10-12', '2026-10-14'), 2, 'the return date is excluded')
   assert.equal(daysBetween('2026-10-11', '2026-10-18'), 7)
   assert.equal(daysBetween('2026-10-11', '2026-10-19'), 8)
 })

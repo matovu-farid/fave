@@ -18,6 +18,7 @@ This document turns the current product direction into policy options for issue 
 - Clients may enter a private pickup address or map pin. Google Maps decides whether the pickup is in Kampala, Mukono, or Wakiso.
 - Destinations can be anywhere in Uganda.
 - A trip may last up to seven days; interpret trip dates in Kampala time.
+- **Trip-night calculation — owner-confirmed 2026-10-13:** count calendar nights as the Kampala-date difference between the trip start/check-in date and return/check-out date. Include the start date and exclude the return date; Monday to Tuesday is one night. Apply this count to per-night quote components and retain the dates and calculation in the accepted quote snapshot.
 - Price should be based on driving distance and the driver's accommodation estimate.
 - Ask the client for a 50% deposit by default, configurable for future policy changes. Collect the balance after the trip is complete.
 - **Client-requested trip extensions — owner-confirmed 2026-10-12:** additional accommodation nights use the per-night rate saved in the accepted quote. Show the revised total, obtain client acceptance before changing the booking, and collect payment for the added nights immediately when the client accepts the extension. The remaining extension and reconciliation rules still require issue #15 and counsel review under #14.
@@ -52,10 +53,10 @@ These are recommendations to reduce the decision work, not approved policy. Unre
 **Proposal:**
 
 1. Distance fare = chargeable Google Maps driving-route distance × the currently effective per-kilometre rate for the selected car or vehicle class.
-2. Driver accommodation = planned overnight stops × the currently effective nightly allowance.
+2. Per-night components (including driver accommodation) = Kampala calendar nights × the applicable per-night rate saved in the quote.
 3. Display the component amounts, assumptions, and quote expiry before confirmation.
 
-Count one accommodation night for each planned overnight stop where the driver must sleep away from home. The itinerary and stop count should be visible in the quote.
+For a date-based trip, calculate nights as the number of Kampala calendar dates from the start date up to, but not including, the return date. For example, Monday-to-Tuesday is one night and Monday-to-Wednesday is two. Show the start date, return date, night count, rate, and amount in the quote. If accommodation is based on a different itinerary-specific overnight plan, show and retain that plan and its calculation explicitly rather than silently substituting it for the date-based count.
 
 **Owner decisions:** Set the UGX/km rate; set the nightly allowance; decide whether accommodation is booked by Fave, paid directly by Fave, or reimbursed to the driver; decide whether other costs can ever be passed through; decide whether empty return/repositioning distance is chargeable.
 
@@ -123,6 +124,7 @@ Daily driving limits, rest breaks, overnight planning, insurance/transport oblig
 | Quote and deposit deadline | Propose 24 hours; lock quote after confirmed deposit | Pending | Pending | Give the client a clear price and payment deadline | Versioned settings, if approved |
 | Deposit and balance | 50% default; balance after trip, per owner direction | Fave owner | Pending | Confirmed product direction; completion evidence pending | Configurable deposit with audit history |
 | Client payment methods | MTN/Airtel mobile money plus local cards for deposit and final balance | Fave product owner | 2026-09-30 | Confirmed in owner response; both methods should be available at each payment stage | Provider config must match approved methods |
+| Trip-night calculation | Count Kampala calendar dates from trip start/check-in through, but excluding, return/check-out; Monday-to-Tuesday is one night | Fave product owner | 2026-10-13 | Matches lodging-style date ranges and makes per-night pricing reproducible | Retain trip dates, night count, per-night rates, and calculated amounts in the accepted quote snapshot |
 | Additional accommodation nights on a client-requested extension | Use the per-night rate saved in the accepted quote; show the revised total, obtain client acceptance before changing the booking, and collect payment immediately when accepted | Fave product owner | 2026-10-12 | Preserve the accepted rate basis and collect the extension payment immediately; complete extension and reconciliation rules remain subject to #15 and #14 | Retain the accepted quote snapshot and record consent and payment for the revised total |
 | Client cancellation/refunds and no-show | Full deposit refund at least 72 hours before pickup; half refund at least 24 but less than 72 hours before; no cancellation refund inside 24 hours; client no-show forfeits deposit | Fave product owner | 2026-10-13 | Owner-confirmed schedule; Ugandan counsel review and an operational no-show point (including grace period/contact attempt) remain required before launch | Versioned policy and recorded cancellation/refund decision |
 | No-driver refund | Propose full refund | Pending | Pending | Client should not pay when Fave cannot provide a car/driver | Recorded refund action |
