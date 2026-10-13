@@ -342,3 +342,85 @@ test('booking confirmation fails closed when required approved disclosures are u
   assert.equal(queries.some((query) => query.sql.includes('INSERT INTO bookings')), false)
   assert.equal(queries.some((query) => query.sql.includes('INSERT INTO policy_acceptances')), false)
 })
+
+test('booking confirmation preserves the driver lodging rate captured in the quote', async () => {
+  const farePolicy = {
+    id: 'policy-1', version: '1', currency: 'UGX',
+    rules_json: JSON.stringify({
+      components: [
+        { key: 'driver_lodging', label: 'Driver accommodation', amount: 1, unit: 'per_night' },
+        { key: 'distance', label: 'Distance', amount: 1_500, unit: 'per_kilometer' },
+      ],
+      depositBasisPoints: 5_000,
+    }),
+    quote_ttl_seconds: 3600,
+    hold_ttl_seconds: 1800,
+  }
+  const route = { kind: 'route', distanceMeters: 10_200, durationSeconds: 7_200 }
+  const quoteSnapshot = loadBookings().buildQuoteSnapshot(farePolicy, route, 2, 2, 42_000)
+  const location = {
+    input: { address: 'Kampala' },
+    address: 'Kampala',
+    formattedAddress: 'Kampala, Uganda',
+    latitude: 0.3,
+    longitude: 32.5,
+  }
+  const quote = {
+    id: 'quote-1', vehicle_id: 'vehicle-1', policy_id: 'policy-1',
+    origin_json: JSON.stringify(location), destination_json: JSON.stringify(location),
+    start_date: '2099-01-01', end_date: '2099-01-03',
+    party_size: 2, luggage_count: 1,
+    route_distance_meters: route.distanceMeters,
+    route_duration_seconds: route.durationSeconds,
+    quote_json: JSON.stringify(quoteSnapshot),
+    expires_at: Date.now() + 60_000,
+  }
+  const currentDocuments = [
+    'client_terms', 'client_privacy', 'booking_policy', 'payment_policy', 'cancellation_policy', 'safety_policy',
+  ].map((document_type, index) => ({
+    id: `doc-${index + 1}`, document_type, version: '1', language: 'en',
+  }))
+  const { routes } = loadBookings({
+    signedInUser: { id: 'client-1', name: 'Client', email: 'client@example.test' },
+    routeResult: route,
+    currentDocuments,
+  })
+  const queries = []
+  const DB = {
+    prepare(sql) {
+      const query = { sql, args: [] }
+      queries.push(query)
+      return {
+        bind(...args) { query.args = args; return this },
+        async first() {
+          if (sql.includes('FROM trip_quotes')) return quote
+          if (sql.includes('FROM fare_policies')) return farePolicy
+          if (sql.includes('FROM client_profiles')) return { legal_name: 'Client', phone_e164: '+256700000001' }
+          throw new Error(`Confirmation must not need mutable driver data: ${sql}`)
+        },
+      }
+    },
+    async batch(statements) {
+      return statements.map((_, index) => ({ meta: { changes: index === 0 ? 1 : 0 } }))
+    },
+  }
+  const body = {
+    quoteId: 'quote-1',
+    accepted: true,
+    contactSharingConsent: true,
+    acceptedDisclosureIds: currentDocuments.map((document) => document.id),
+  }
+  const context = {
+    env: { DB },
+    req: { raw: new Request('https://fave.test/api/trips/confirm', { method: 'POST' }), json: async () => body },
+    json: (payload, status = 200) => ({ payload, status }),
+  }
+
+  const response = await routes.get('/confirm')(context)
+
+  assert.equal(response.status, 201)
+  assert.equal(response.payload.quote.driverLodgingRate, 42_000)
+  assert.equal(response.payload.quote.components.find((component) => component.key === 'driver_lodging').unitRate, 42_000)
+  assert.equal(response.payload.quote.components.find((component) => component.key === 'driver_lodging').amount, 84_000)
+  assert.equal(queries.some((query) => /lodging_rate_ugx/u.test(query.sql)), false, 'confirmation must use the accepted snapshot, not the driver profile rate')
+})
