@@ -1,6 +1,6 @@
 # Fave Client Payment Terms
 
-**Status:** Internal client-payment terms, prepared 12 October 2026. The owner reports that counsel has approved the payment-provider terms. This document records how Fave's current product decisions would be explained to clients; it is not an executed provider offer and is not effective for customer transactions until the launch items below are completed and the exact version is shown before payment.
+**Status:** Internal client-payment terms, prepared 12 October 2026 and updated 13 October 2026. The owner reports that counsel has approved the payment-provider terms. This document records how Fave's current product decisions would be explained to clients; it is not an executed provider offer and is not effective for customer transactions until the launch items below are completed and the exact version is shown before payment.
 
 **Counsel review:** The owner confirms counsel approved the payment-provider terms on 12 October 2026. The written advice has not been attached to this repository. That approval is recorded separately from provider selection, signature and onboarding, the final merchant/funds-flow configuration, provider-specific fees and refund capabilities, and any required regulatory approvals.
 
