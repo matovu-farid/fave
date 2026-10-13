@@ -20,6 +20,7 @@ This document turns the current product direction into policy options for issue 
 - A trip may last up to seven days; interpret trip dates in Kampala time.
 - **Trip-night calculation — owner-confirmed 2026-10-13:** count calendar nights as the Kampala-date difference between the trip start/check-in date and return/check-out date. Include the start date and exclude the return date; Monday to Tuesday is one night. Apply this count to per-night quote components and retain the dates and calculation in the accepted quote snapshot.
 - Price should be based on driving distance and the driver's accommodation estimate.
+- **Driver accommodation advance — owner-confirmed 2026-10-13:** Fave advances approved accommodation money to the driver before the trip. The allowance amount, exact advance timing, booking responsibility, evidence/receipt requirements, and cancellation or unused-funds reconciliation remain undecided and must be agreed before launch.
 - Ask the client for a 50% deposit by default, configurable for future policy changes. Collect the balance after the trip is complete.
 - **Client-requested trip extensions — owner-confirmed 2026-10-12:** additional accommodation nights use the per-night rate saved in the accepted quote. Show the revised total, obtain client acceptance before changing the booking, and collect payment for the added nights immediately when the client accepts the extension. The remaining extension and reconciliation rules still require issue #15 and counsel review under #14.
 
@@ -29,13 +30,13 @@ This document turns the current product direction into policy options for issue 
 |---|---|---|
 | Currency and fees | UGX; show whole shillings and one quoted total that includes expected payment-provider fees; do not add an undisclosed fee at checkout | Keeps the first quote easy to understand; #16 must confirm merchant-specific fees, and legal/tax review still applies |
 | Distance | Price by selected vehicle class; quote the passenger route only, with average repositioning costs included in the published per-kilometre rate | Keeps the client price tied to the route they requested and avoids a surprise return fee; itemize any return charge only if the owner explicitly chooses it |
-| Accommodation | Use a location-sensitive nightly allowance, shown as its own line; Fave advances the approved allowance to the driver | Avoids asking a driver to fund a work trip personally and keeps customer estimate predictable |
+| Accommodation | Use a location-sensitive nightly allowance, shown as its own line; Fave advances the approved allowance to the driver before the trip | Owner confirmed the advance direction on 2026-10-13; amount, exact timing, booking responsibility, receipts, and reconciliation remain open |
 | Quote and deposit deadline | Quote expires 24 hours after issue; the deposit is due within that window; lock the accepted quote when the deposit is confirmed | Gives a clear payment deadline while preserving an auditable price snapshot |
 | Pending deposit | Hold the selected car for 30 minutes; release it after timeout or confirmed payment failure | Prevents a stalled checkout from blocking availability indefinitely |
 | Client cancellation | Full deposit refund at least 72 hours before pickup; half the deposit 24–72 hours before pickup; no deposit refund inside 24 hours | Owner confirmed the graduated schedule on 2026-10-13; counsel review and launch approval are still required |
 | Fave cannot provide a car/driver | Refund all client payments in full | The client should not bear the cost of Fave's inability to fulfill |
 | Phone verification | **V1 does not require OTP.** Phone numbers are contact details only, under counsel-approved decision D-13 | Avoids making SMS verification a prerequisite for applications, bookings, or assignment-time contact sharing |
-| Driver settlement | Use the selected payment provider and settle only after trip completion/reconciliation | Keeps payment proof and settlement traceable; exact legal structure needs counsel review |
+| Driver settlement | Advance approved accommodation money before the trip; settle the remaining driver amount after trip completion and reconciliation | Owner confirmed the accommodation advance and post-trip final settlement; payment route, source of advance funds, accounting, and legal structure need provider/counsel review |
 | Client payment methods | **Confirmed:** MTN/Airtel mobile money plus local cards for both deposit and final balance | Defines which provider methods #16 must support and the fees included in quotes |
 
 These are recommendations to reduce the decision work, not approved policy. Unresolved values such as the per-kilometre rate and nightly allowance remain deliberately blank until operating-cost inputs are available. The client payment methods above are confirmed product direction; legal, provider, and merchant terms remain subject to review.
@@ -58,7 +59,7 @@ These are recommendations to reduce the decision work, not approved policy. Unre
 
 For a date-based trip, calculate nights as the number of Kampala calendar dates from the start date up to, but not including, the return date. For example, Monday-to-Tuesday is one night and Monday-to-Wednesday is two. Show the start date, return date, night count, rate, and amount in the quote. If accommodation is based on a different itinerary-specific overnight plan, show and retain that plan and its calculation explicitly rather than silently substituting it for the date-based count.
 
-**Owner decisions:** Set the UGX/km rate; set the nightly allowance; decide whether accommodation is booked by Fave, paid directly by Fave, or reimbursed to the driver; decide whether other costs can ever be passed through; decide whether empty return/repositioning distance is chargeable.
+**Owner decisions:** Set the UGX/km rate and nightly allowance; decide whether the driver books accommodation or Fave arranges it; set the exact advance timing and receipt/evidence rules; decide how unused or excess advance funds and cancellations are reconciled; decide whether other costs can ever be passed through; decide whether empty return/repositioning distance is chargeable.
 
 **Rate-setting worksheet (no rates invented):** Set a per-car or per-class rate from fuel use and price, maintenance/tyre reserve, driver compensation, vehicle wear, taxes/provider costs, and Fave's margin. Validate it against real operating costs on pilot trips before publishing it. Check accommodation rates by destination area rather than assuming one hotel cost fits every Ugandan town.
 
@@ -77,7 +78,7 @@ For a date-based trip, calculate nights as the number of Kampala calendar dates 
 ## Draft payment and booking rules for owner review
 
 - Default deposit: 50% of the accepted quote, configurable by an authorized admin with a versioned change history.
-- Remaining balance: due after trip completion, according to the completion confirmation process below.
+- Remaining driver settlement: after trip completion and reconciliation, in addition to the owner-confirmed pre-trip accommodation advance. The advance amount, payment route/source, exact timing, receipts, and recovery/reconciliation rules are not set.
 - Payment provider: choose in issue #16. A server-confirmed provider event, not a client redirect or screenshot, is the source of truth for a successful payment.
 - **Client payment methods — owner-confirmed 2026-09-30:** accept MTN/Airtel mobile money and local cards for both the deposit and final balance. Issue #16 should select a provider or provider combination that supports both. Flutterwave's current Uganda list price is 3% for local wallets/mobile money and 4.8% for local cards, before VAT and other applicable taxes; these are published rates, not a Fave merchant offer. Include the applicable fees in the fare model before launch.
 - Pending checkout hold: **proposal** — reserve the selected car for 30 minutes while the deposit is actively pending; release it on timeout or confirmed failure. The 24-hour quote/deposit deadline does not reserve a car for 24 hours. Recheck availability if the 30-minute checkout hold expires.
@@ -101,7 +102,7 @@ For a date-based trip, calculate nights as the number of Kampala calendar dates 
 
 ## Funds and driver settlement
 
-**Proposal pending legal review:** Use a selected, appropriately licensed payment provider for collection and settlement. Do not create or describe an internal Fave wallet or escrow service. Do not release driver funds until the trip is complete and payment/dispute state is reconciled. The exact legal model, who holds funds, platform commission, payout timing, and refund responsibility must be approved with counsel under issue #14 and provider selection under issue #16.
+**Owner-confirmed product direction (2026-10-13), subject to legal/provider review:** Fave advances approved accommodation money to the driver before the trip and settles the remaining driver amount after trip completion and reconciliation. Do not create or describe an internal Fave wallet or escrow service. Before launch, confirm the lawful source and handling of advance funds, provider payout route and limits, approval and audit controls, allowance amount and timing, receipt evidence, and how cancellations, unused funds, overspend, refunds, and disputes are reconciled. Counsel must approve the actual funds flow under issue #14 and the selected provider must confirm its supported payout arrangement under issue #16.
 
 The Bank of Uganda's 2025 National Payment Systems Oversight Framework says payment service providers require BoU licensing. Counsel must determine which obligations apply to Fave's proposed collection and driver-settlement arrangement.
 
@@ -120,7 +121,7 @@ Daily driving limits, rest breaks, overnight planning, insurance/transport oblig
 | Currency, fees, and rounding | Propose UGX, whole shillings, provider fees included in the quoted total; pending #16 merchant terms and owner approval | Pending | Pending | Avoid foreign-currency surprise and checkout fee surprises; wording pending | Pending |
 | Distance rate | Not set | Pending | Pending | Needs operating-cost and margin inputs | Versioned rate, if approved |
 | Chargeable distance | Pickup-to-destination only vs. include empty return/repositioning | Pending | Pending | Must be visible before the client accepts | Versioned rule, if approved |
-| Nightly allowance and settlement | Not set; options above | Pending | Pending | Show accommodation separately | Versioned allowance, if approved |
+| Nightly allowance and settlement | Fave advances approved accommodation money to the driver before the trip; allowance amount and operational details remain open | Fave product owner | 2026-10-13 | Owner-confirmed advance direction; final trip settlement remains after completion/reconciliation; amount, timing, receipts, cancellation and unused-funds reconciliation need decisions | Versioned allowance and audited advance/settlement records |
 | Quote and deposit deadline | Propose 24 hours; lock quote after confirmed deposit | Pending | Pending | Give the client a clear price and payment deadline | Versioned settings, if approved |
 | Deposit and balance | 50% default; balance after trip, per owner direction | Fave owner | Pending | Confirmed product direction; completion evidence pending | Configurable deposit with audit history |
 | Client payment methods | MTN/Airtel mobile money plus local cards for deposit and final balance | Fave product owner | 2026-09-30 | Confirmed in owner response; both methods should be available at each payment stage | Provider config must match approved methods |
@@ -130,7 +131,7 @@ Daily driving limits, rest breaks, overnight planning, insurance/transport oblig
 | Client no-show | Consequence and operational no-show point, grace period, and contact attempts are undecided | Pending | Pending | Decide before launch and review with counsel | Versioned rule and recorded contact attempts |
 | No-driver refund | Propose full refund; not owner-approved | Pending | Pending | Agree remedy if Fave cannot provide a car/driver | Recorded refund action |
 | Checkout hold | Propose 30 minutes | Pending | Pending | Release cars when deposit is not completed | Versioned timeout, if approved |
-| Driver payout / commission | Open; counsel and provider review required | Pending | Pending | Avoid settling funds outside an approved model | Restricted, audited settlement actions |
+| Driver payout / commission | Advance approved accommodation money before the trip; settle remaining driver amount after trip completion/reconciliation. Commission, funding source, payment route, amount/timing, receipts, and recovery rules remain open | Fave product owner | 2026-10-13 | Owner-confirmed accommodation advance; counsel and provider must approve actual funds flow and payout controls | Restricted, audited advance and settlement actions |
 | Phone verification | No OTP prerequisite for V1 under counsel-approved D-13 | Fave product owner / counsel decision | 2026-10-04 | Phone numbers are contact details only | No V1 OTP provider configuration |
 | Daily driving/rest limits | Counsel review required | Counsel | Pending | Driver and passenger safety | Approved limits must be enforced |
 
