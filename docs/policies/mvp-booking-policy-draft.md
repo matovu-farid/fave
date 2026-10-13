@@ -31,7 +31,7 @@ This document turns the current product direction into policy options for issue 
 | Accommodation | Use a location-sensitive nightly allowance, shown as its own line; Fave advances the approved allowance to the driver | Avoids asking a driver to fund a work trip personally and keeps customer estimate predictable |
 | Quote and deposit deadline | Quote expires 24 hours after issue; the deposit is due within that window; lock the accepted quote when the deposit is confirmed | Gives a clear payment deadline while preserving an auditable price snapshot |
 | Pending deposit | Hold the selected car for 30 minutes; release it after timeout or confirmed payment failure | Prevents a stalled checkout from blocking availability indefinitely |
-| Client cancellation | Refund all deposit at 72+ hours; refund half of the deposit at 24–72 hours; retain the deposit inside 24 hours | A simple time-based proposal; requires owner and counsel approval before launch |
+| Client cancellation | Full deposit refund at least 72 hours before pickup; half the deposit 24–72 hours before pickup; no deposit refund inside 24 hours | Owner confirmed the graduated schedule on 2026-10-13; counsel review and launch approval are still required |
 | Fave cannot provide a car/driver | Refund all client payments in full | The client should not bear the cost of Fave's inability to fulfill |
 | Phone verification | **V1 does not require OTP.** Phone numbers are contact details only, under counsel-approved decision D-13 | Avoids making SMS verification a prerequisite for applications, bookings, or assignment-time contact sharing |
 | Driver settlement | Use the selected payment provider and settle only after trip completion/reconciliation | Keeps payment proof and settlement traceable; exact legal structure needs counsel review |
@@ -94,9 +94,9 @@ Count one accommodation night for each planned overnight stop where the driver m
 - If Fave cancels before pickup, refund all client payments in full.
 - Do not automatically collect a disputed final balance. Route disputes and safety incidents to a recorded operations review.
 
-**Client cancellation schedule — option only, not approved:** refund the full deposit at least 72 hours before pickup; refund half of the deposit 24–72 hours before pickup; retain the deposit inside 24 hours. A different schedule, including a full deposit refund at any time before pickup, may be chosen. Refunds, no-shows, late changes, driver/vehicle unavailability, and trip failure must be approved by the owner and reviewed by Ugandan counsel before payment collection goes live.
+**Client cancellation schedule — owner-confirmed 2026-10-13:** refund the full deposit when the client cancels at least 72 hours before pickup; refund half of the deposit when they cancel 24–72 hours before pickup; and do not refund the deposit when they cancel less than 24 hours before pickup. If Fave cancels or cannot provide an eligible driver and vehicle, refund all client payments in full. This schedule still requires Ugandan counsel's review and launch approval. Rules for no-shows, late changes, driver/vehicle unavailability after booking, trip interruption, and partial trip completion also need review before payment collection goes live.
 
-**Owner decisions:** Choose the client cancellation schedule and rules for client/driver no-shows, late changes, trip interruption, replacement car/driver, and partial trip completion.
+**Owner decisions:** Decide rules for client/driver no-shows, late changes, trip interruption, replacement car/driver, and partial trip completion.
 
 ## Funds and driver settlement
 
