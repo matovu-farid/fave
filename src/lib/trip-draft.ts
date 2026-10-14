@@ -9,7 +9,7 @@ export type TripDraft = {
   selectedVehicle: string
 }
 
-export type BookingProgressStage = 'trip' | 'driver' | 'quote' | 'deposit'
+export type BookingProgressStage = 'trip' | 'vehicle' | 'driver' | 'quote' | 'deposit'
 
 export type BookingProgressStep = {
   id: BookingProgressStage
@@ -28,6 +28,7 @@ export interface AsyncKeyValueStorage {
 const tripDraftVersion = 1
 const bookingStages: { id: BookingProgressStage; label: string }[] = [
   { id: 'trip', label: 'Trip details' },
+  { id: 'vehicle', label: 'Choose a car' },
   { id: 'driver', label: 'Driver response' },
   { id: 'quote', label: 'Quote and terms' },
   { id: 'deposit', label: 'Deposit' },
@@ -79,6 +80,19 @@ export function getBookingProgress(currentStage: BookingProgressStage): BookingP
     ...stage,
     state: index < currentIndex ? 'complete' : index === currentIndex ? 'current' : 'upcoming',
   }))
+}
+
+export function getCurrentBookingStage(state: {
+  hasVehicles: boolean
+  hasOffer: boolean
+  hasQuote: boolean
+  hasDepositHold: boolean
+}): BookingProgressStage {
+  if (state.hasDepositHold) return 'deposit'
+  if (state.hasQuote) return 'quote'
+  if (state.hasOffer) return 'driver'
+  if (state.hasVehicles) return 'vehicle'
+  return 'trip'
 }
 
 export function hasActiveDepositHold(bookings: BookingHold[], now: number) {

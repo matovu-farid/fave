@@ -11,7 +11,7 @@ import { ApiError, apiBaseUrl } from '@/lib/api'
 import { authClient } from '@/lib/auth-client'
 import { createLatestRequestGuard } from '@/lib/latest-request'
 import { ClientPrerequisites, ClientTripOffer, confirmTrip, getAvailableVehicles, getClientPrerequisites, getCurrentTripOffer, getMyBookings, getTripOfferStatus, PolicyDocument, requestTripQuote, TripBooking, TripQuote, updateClientProfile, Vehicle, withdrawTripOffer } from '@/lib/marketplace'
-import { BookingProgressStage, getBookingProgress, hasActiveDepositHold, hasTripDraftContent, restoreSelectedVehicleId, TripDraft } from '@/lib/trip-draft'
+import { BookingProgressStage, getBookingProgress, getCurrentBookingStage, hasActiveDepositHold, hasTripDraftContent, restoreSelectedVehicleId, TripDraft } from '@/lib/trip-draft'
 import { tripDraftStore } from '@/lib/trip-draft-storage'
 import { getDriverAccommodationNotice } from '@/lib/trip-quote-display'
 
@@ -22,6 +22,7 @@ export default function TripsScreen() {
   const userId = session?.user.id
   const [prerequisites, setPrerequisites] = useState<ClientPrerequisites | null>(null)
   const [bookings, setBookings] = useState<TripBooking[]>([])
+  const [depositBooking, setDepositBooking] = useState<TripBooking | null>(null)
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
   const [selectedVehicle, setSelectedVehicle] = useState('')
   const [quote, setQuote] = useState<TripQuote | null>(null)
@@ -81,7 +82,7 @@ export default function TripsScreen() {
       setDestination(''); setStartDate(''); setEndDate('')
       setPartySize('1'); setLuggageCount('0'); setSelectedVehicle('')
       setVehicles([]); setOffer(null); setQuote(null); setBookingSubmitted(false)
-      setPrerequisites(null); setBookings([])
+      setPrerequisites(null); setBookings([]); setDepositBooking(null)
       setLegalName(''); setPhone(''); setAcceptedClientTerms(false)
       setCheckedPolicies([]); setSharePhone(false)
     }
@@ -96,12 +97,14 @@ export default function TripsScreen() {
       ])
       setPrerequisites(result)
       setBookings(bookingResult.bookings)
+      setDepositBooking(bookingResult.bookings.find((booking) => booking.status === 'deposit_pending' && booking.holdExpiresAt > Date.now()) ?? null)
       restoreTripRequest(offerResult.offer)
       setBookingSubmitted(offerResult.offer?.status === 'booked' || hasActiveDepositHold(bookingResult.bookings, Date.now()))
       setOffer(offerResult.offer && ['pending', 'quoting'].includes(offerResult.offer.status) ? offerResult.offer : null)
       if (offerResult.offer?.status === 'quoted' && offerResult.offer.quote) setQuote(offerResult.offer.quote)
       if (offerResult.offer?.status === 'booked') setSuccess('This trip is already booked. See your trip requests below.')
       if (offerResult.offer && ['declined', 'expired', 'withdrawn', 'quote_failed'].includes(offerResult.offer.status)) {
+        setSelectedVehicle('')
         setError(offerResult.offer.status === 'quote_failed'
           ? 'The quote could not be prepared. No payment was taken. Choose another car and try again.'
           : 'That driver could not accept the trip. No payment was taken. Choose another car to try again.')
@@ -184,6 +187,7 @@ export default function TripsScreen() {
           setSuccess('This trip is already booked. See your trip requests below.')
         } else if (['declined', 'expired', 'withdrawn', 'quote_failed'].includes(status.status)) {
           setOffer(null)
+          setSelectedVehicle('')
           setError(status.status === 'quote_failed'
             ? 'The quote could not be prepared. No payment was taken. Choose another car and try again.'
             : 'That driver could not accept the trip. No payment was taken. Choose another car to try again.')
@@ -260,7 +264,12 @@ export default function TripsScreen() {
   const disclosureIds = useMemo(() => new Set(checkedPolicies), [checkedPolicies])
   const allDisclosureIds = disclosures.length === 6 && disclosures.every((document) => disclosureIds.has(document.id))
   const togglePolicy = (document: PolicyDocument) => setCheckedPolicies((current) => current.includes(document.id) ? current.filter((id) => id !== document.id) : [...current, document.id])
-  const currentBookingStage: BookingProgressStage = offer ? 'driver' : quote ? 'quote' : bookingSubmitted ? 'deposit' : 'trip'
+  const currentBookingStage: BookingProgressStage = getCurrentBookingStage({
+    hasVehicles: vehicles.length > 0,
+    hasOffer: Boolean(offer),
+    hasQuote: Boolean(quote),
+    hasDepositHold: bookingSubmitted,
+  })
   const bookingProgress = getBookingProgress(currentBookingStage)
   const currentProgressStep = bookingProgress.findIndex((step) => step.state === 'current')
 
@@ -279,6 +288,7 @@ export default function TripsScreen() {
       try {
         const bookingResult = await getMyBookings()
         setBookings(bookingResult.bookings)
+        setDepositBooking(bookingResult.bookings.find((item) => item.bookingId === booking.bookingId) ?? null)
       } catch {
         setError('Your trip request was placed, but its status could not be refreshed. Refresh this screen to check it.')
       }
@@ -327,7 +337,7 @@ export default function TripsScreen() {
           : <ThemedText type="small">Your trip details are saved as you go. Profile details, consent, and payment information are not saved in this draft.</ThemedText>}
       </Card>
       {error ? <Message error>{error}</Message> : null}{success ? <Message>{success}</Message> : null}
-      <Card>
+      {currentBookingStage === 'trip' ? <Card>
         <ThemedText type="subtitle">Client details and terms</ThemedText>
         {prerequisites?.documents.length ? prerequisites.documents.map((document) => <View key={document.id} style={styles.document}>
           <ThemedText type="smallBold">{document.type.replaceAll('_', ' ')} · v{document.version}</ThemedText><ThemedText>{document.body}</ThemedText>
@@ -337,7 +347,7 @@ export default function TripsScreen() {
         <Field label="Phone number" value={phone} onChangeText={(value) => { setPhone(value); setSharePhone(false) }} placeholder="+256…" keyboardType="phone-pad" editable={!busy} />
         <ActionButton title="Save client details" onPress={() => void configureProfile()} disabled={!canProfile} busy={busy} />
         <Message>Phone verification is not required in V1. Your number is shared with a driver only if you give separate consent for that trip.</Message>
-      </Card>
+      </Card> : null}
       {bookings.length > 0 ? <Card>
         <ThemedText type="subtitle">Your trip requests</ThemedText>
         {bookings.map((booking) => <View key={booking.bookingId} style={styles.booking}>
@@ -348,7 +358,7 @@ export default function TripsScreen() {
           <ThemedText>{booking.quote.totalAmount.toLocaleString()} {booking.quote.currency}{booking.status === 'deposit_pending' ? ` · hold expires ${new Date(booking.holdExpiresAt).toLocaleString()}` : ''}</ThemedText>
         </View>)}
       </Card> : null}
-      <Card>
+      {currentBookingStage === 'trip' ? <Card>
         <ThemedText type="subtitle">Trip details</ThemedText>
         <Message>When you request a route quote, Fave sends your pickup and destination addresses or map pins to Google Maps to verify pickup coverage and estimate the route. Exact locations are stored with your trip request and are not shown in public vehicle listings.</Message>
         <Field label="Pickup address" value={pickup} onChangeText={(value) => { setPickup(value); setPickupPin(null); setPinPickerOpen(false); invalidateTripSearch() }} placeholder="Street, landmark, Kampala / Wakiso / Mukono" editable={!busy && !offer} />
@@ -362,8 +372,15 @@ export default function TripsScreen() {
         <View style={formStyles.row}><Field label="Passengers" value={partySize} onChangeText={(value) => { setPartySize(value); invalidateTripSearch() }} keyboardType="numeric" editable={!busy && !offer} /><Field label="Luggage pieces" value={luggageCount} onChangeText={(value) => { setLuggageCount(value); invalidateTripSearch() }} keyboardType="numeric" editable={!busy && !offer} /></View>
         <ActionButton title="Find available vehicles" onPress={() => void findVehicles()} disabled={Boolean(offer) || (!pickupPin && !pickup.trim()) || (pinPickerOpen && !pickupPin) || !destination.trim() || !startDate || !endDate} busy={busy} />
         {!prerequisites?.bookingReady ? <Message>Booking requires saved client details, current client terms, and all current booking disclosures.</Message> : null}
-      </Card>
-      {!offer ? vehicles.map((vehicle) => <Card key={vehicle.id}>
+      </Card> : null}
+      {currentBookingStage === 'vehicle' ? <>
+        <Card>
+          <ThemedText type="subtitle">Choose your car</ThemedText>
+          <ThemedText>{pickupPin ? 'Pinned pickup' : pickup} → {destination}</ThemedText>
+          <ThemedText>{startDate} to {endDate} · {partySize} passengers · {luggageCount} luggage pieces</ThemedText>
+          <ActionButton title="Change trip details" onPress={() => { setVehicles([]); setSelectedVehicle(''); invalidateQuote() }} disabled={busy} />
+        </Card>
+      {vehicles.map((vehicle) => <Card key={vehicle.id}>
         {vehicle.photos?.length ? <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -382,8 +399,10 @@ export default function TripsScreen() {
         <ThemedText>{vehicle.comfortDetails}</ThemedText>
         {vehicle.accessibilityDetails ? <ThemedText>{vehicle.accessibilityDetails}</ThemedText> : null}
         <CheckRow title="Select this vehicle" checked={selectedVehicle === vehicle.id} onPress={() => { if (selectedVehicle !== vehicle.id) invalidateQuote(); setSelectedVehicle(vehicle.id) }} disabled={busy} />
-      </Card>) : null}
-      {offer ? <Card>
+      </Card>)}
+        <ActionButton title="Ask this driver to confirm availability" onPress={() => void getQuote()} disabled={!selectedVehicle} busy={busy} />
+      </> : null}
+      {currentBookingStage === 'driver' && offer ? <Card>
         {(() => {
           const vehicle = offer.tripRequest?.vehicle ?? vehicles.find((item) => item.id === offer.vehicleId)
           return vehicle ? <ThemedText type="smallBold">Selected car · {vehicle.year} {vehicle.make} {vehicle.model}</ThemedText> : null
@@ -398,8 +417,7 @@ export default function TripsScreen() {
           <ThemedText>We’re preparing your trip estimate. You won’t be charged while we calculate the quote.</ThemedText>
         </>}
       </Card> : null}
-      {vehicles.length > 0 && !quote && !offer ? <ActionButton title="Ask driver to confirm availability" onPress={() => void getQuote()} disabled={!selectedVehicle} busy={busy} /> : null}
-      {quote ? <Card>
+      {currentBookingStage === 'quote' && quote ? <Card>
         <ThemedText type="subtitle">Your trip estimate · {quote.quote.currency}</ThemedText>
         <ThemedText>Pickup · {quote.pickup.formattedAddress ?? quote.pickup.address} ({quote.pickup.latitude.toFixed(5)}, {quote.pickup.longitude.toFixed(5)})</ThemedText>
         <ThemedText>Destination · {quote.destination.formattedAddress ?? quote.destination.address} ({quote.destination.latitude.toFixed(5)}, {quote.destination.longitude.toFixed(5)})</ThemedText>
@@ -428,7 +446,19 @@ export default function TripsScreen() {
           <CheckRow title="I have read and accept this disclosure" checked={disclosureIds.has(document.id)} onPress={() => togglePolicy(document)} disabled={busy} />
         </View>)}
         <CheckRow title="I agree that my phone number may be shared with the driver assigned to this trip" detail="Your contact details are not shared with drivers before assignment." checked={sharePhone} onPress={() => setSharePhone(!sharePhone)} disabled={busy} />
-        <ActionButton title="Request this trip" onPress={() => void confirm()} disabled={!allDisclosureIds || !sharePhone || !prerequisites?.bookingReady} busy={busy} />
+        <ActionButton title="Continue to deposit" onPress={() => void confirm()} disabled={!allDisclosureIds || !sharePhone || !prerequisites?.bookingReady} busy={busy} />
+      </Card> : null}
+      {currentBookingStage === 'deposit' ? <Card>
+        <ThemedText type="subtitle">Deposit needed to confirm your trip</ThemedText>
+        {depositBooking ? (() => {
+          const booking = depositBooking
+          return <>
+            <ThemedText>{booking.vehicle.year} {booking.vehicle.make} {booking.vehicle.model} · {booking.startDate} to {booking.endDate}</ThemedText>
+            <ThemedText>Deposit · {booking.quote.depositAmount.toLocaleString()} {booking.quote.currency}</ThemedText>
+            <ThemedText>Car held until {new Date(booking.holdExpiresAt).toLocaleString()}</ThemedText>
+          </>
+        })() : null}
+        <Message>Your trip is not confirmed until the deposit is paid. The payment option will appear here when it is ready.</Message>
       </Card> : null}
     </ScrollView>
   </ThemedView>

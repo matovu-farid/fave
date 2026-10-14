@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { createTripDraftStore, getBookingProgress, hasActiveDepositHold, hasTripDraftContent, restoreSelectedVehicleId } from '../src/lib/trip-draft.ts'
+import { createTripDraftStore, getBookingProgress, getCurrentBookingStage, hasActiveDepositHold, hasTripDraftContent, restoreSelectedVehicleId } from '../src/lib/trip-draft.ts'
 
 function createMemoryStorage(initial = null) {
   let value = initial
@@ -69,6 +69,7 @@ test('trip draft is meaningful only after the client enters trip information', (
 test('booking progress marks earlier stages complete and the current stage clearly', () => {
   assert.deepEqual(getBookingProgress('driver'), [
     { id: 'trip', label: 'Trip details', state: 'complete' },
+    { id: 'vehicle', label: 'Choose a car', state: 'complete' },
     { id: 'driver', label: 'Driver response', state: 'current' },
     { id: 'quote', label: 'Quote and terms', state: 'upcoming' },
     { id: 'deposit', label: 'Deposit', state: 'upcoming' },
@@ -91,4 +92,16 @@ test('booking progress ignores expired and already settled deposit holds', () =>
     { status: 'deposit_pending', holdExpiresAt: 999 },
     { status: 'confirmed', holdExpiresAt: 2_000 },
   ], 1_000), false)
+})
+
+test('booking flow advances through vehicle selection, driver response, quote, and deposit', () => {
+  assert.deepEqual(
+    ['trip', 'vehicle', 'driver', 'quote', 'deposit'].map((stage) => getCurrentBookingStage({
+      hasVehicles: stage === 'vehicle',
+      hasOffer: stage === 'driver',
+      hasQuote: stage === 'quote',
+      hasDepositHold: stage === 'deposit',
+    })),
+    ['trip', 'vehicle', 'driver', 'quote', 'deposit'],
+  )
 })
