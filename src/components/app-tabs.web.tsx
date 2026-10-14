@@ -7,14 +7,30 @@ import {
   TabListProps,
 } from 'expo-router/ui';
 import type { Href } from 'expo-router';
+import { useEffect, useState } from 'react';
 import { Pressable, View, StyleSheet } from 'react-native';
 
 import { ThemedText } from './themed-text';
 import { ThemedView } from './themed-view';
 
 import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { authClient } from '@/lib/auth-client';
+import { getAdminAccess } from '@/lib/marketplace';
 
 export default function AppTabs() {
+  const { data: session } = authClient.useSession();
+  const [adminAccessUserId, setAdminAccessUserId] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    if (session?.user.id) {
+      getAdminAccess().then(() => {
+        if (active) setAdminAccessUserId(session.user.id);
+      }).catch(() => undefined);
+    }
+    return () => { active = false; };
+  }, [session?.user.id]);
+
   return (
     <Tabs>
       <TabSlot style={{ height: '100%' }} />
@@ -32,6 +48,11 @@ export default function AppTabs() {
           <TabTrigger name="trips" href={'/trips' as Href} asChild>
             <TabButton>Trips</TabButton>
           </TabTrigger>
+          {session?.user.id && adminAccessUserId === session.user.id ? (
+            <TabTrigger name="admin" href={'/admin' as Href} asChild>
+              <TabButton>Operations</TabButton>
+            </TabTrigger>
+          ) : null}
         </CustomTabList>
       </TabList>
     </Tabs>
