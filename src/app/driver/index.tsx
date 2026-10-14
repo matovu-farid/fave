@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Image, ScrollView, StyleSheet, View } from 'react-native'
+import { useLocalSearchParams } from 'expo-router'
 import * as ImagePicker from 'expo-image-picker'
 import * as DocumentPicker from 'expo-document-picker'
 
@@ -75,6 +76,9 @@ function addFile(form: FormData, key: string, file: Picked) {
 }
 
 export default function DriverScreen() {
+  const params = useLocalSearchParams<{ focusTargetId?: string; focusTargetType?: string }>()
+  const focusTargetId = typeof params.focusTargetId === 'string' ? params.focusTargetId : ''
+  const scrollRef = useRef<ScrollView>(null)
   const [prerequisites, setPrerequisites] = useState<DriverPrerequisites | null>(null)
   const [application, setApplication] = useState<DriverApplication | null>(null)
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
@@ -194,7 +198,7 @@ export default function DriverScreen() {
   if (loading) return <ThemedView style={styles.loading}><ThemedText>Loading driver requirements…</ThemedText></ThemedView>
 
   return <ThemedView style={styles.page}>
-    <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+    <ScrollView ref={scrollRef} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <SectionTitle title="Drive with Fave" detail="This release accepts applications from Ugandan citizen drivers with a National ID. Foreign nationals and refugees cannot apply as drivers. Your identity documents are private, reviewed by designated staff, and access is audited." />
       {error ? <Message error>{error}</Message> : null}
       {application ? <Card>
@@ -207,7 +211,10 @@ export default function DriverScreen() {
       {application?.status === 'approved' ? <Card>
         <ThemedText type="subtitle">Trip offers</ThemedText>
         {offerMessage ? <Message>{offerMessage}</Message> : null}
-        {tripOffers.length === 0 ? <ThemedText>No new trip offers. This section refreshes automatically.</ThemedText> : tripOffers.map((offer) => <View key={offer.offerId} style={styles.offer}>
+        {tripOffers.length === 0 ? <ThemedText>No new trip offers. This section refreshes automatically.</ThemedText> : tripOffers.map((offer) => <View key={offer.offerId} style={styles.offer} onLayout={(event) => {
+          if (focusTargetId === offer.offerId) scrollRef.current?.scrollTo({ y: event.nativeEvent.layout.y, animated: true })
+        }}>
+          {focusTargetId === offer.offerId ? <ThemedText type="smallBold">This is the request from your alert</ThemedText> : null}
           <ThemedText type="smallBold">{offer.vehicle.year} {offer.vehicle.make} {offer.vehicle.model} · {offer.startDate} to {offer.endDate}</ThemedText>
           <ThemedText>Pickup · {offer.pickup.formattedAddress ?? offer.pickup.address}</ThemedText>
           <ThemedText>Destination · {offer.destination.formattedAddress ?? offer.destination.address}</ThemedText>

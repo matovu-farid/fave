@@ -25,6 +25,7 @@ notificationsApp.get('/inbox', async (c) => {
       id: item.id,
       ...safeNotificationCopy(item.templateKey),
       routeKey: item.routeKey,
+      targetId: item.domainId,
       priority: item.priority,
       createdAt: item.createdAt,
       readAt: item.readAt,

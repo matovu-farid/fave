@@ -84,3 +84,17 @@ export function subscribeToPushTokenChanges(): { remove: () => void } {
     void syncPushTokenForSignedInUser().catch(() => undefined)
   })
 }
+
+export function subscribeToNotificationResponses(onOpenInbox: (notificationId: string) => void): { remove: () => void } {
+  if (Platform.OS !== 'ios' && Platform.OS !== 'android') return { remove: () => undefined }
+  const handleResponse = (response: Notifications.NotificationResponse) => {
+    const notificationId = response.notification.request.content.data?.notificationId
+    if (typeof notificationId !== 'string' || notificationId.length < 1 || notificationId.length > 128) return
+    Notifications.clearLastNotificationResponse()
+    onOpenInbox(notificationId)
+  }
+
+  const lastResponse = Notifications.getLastNotificationResponse()
+  if (lastResponse) handleResponse(lastResponse)
+  return Notifications.addNotificationResponseReceivedListener(handleResponse)
+}

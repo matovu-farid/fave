@@ -5,6 +5,10 @@ import { fileURLToPath } from 'node:url'
 
 const screen = readFileSync(fileURLToPath(new URL('../src/app/notifications.tsx', import.meta.url)), 'utf8')
 const marketplace = readFileSync(fileURLToPath(new URL('../src/lib/marketplace.ts', import.meta.url)), 'utf8')
+const api = readFileSync(fileURLToPath(new URL('../fave-worker/src/notifications.ts', import.meta.url)), 'utf8')
+const push = readFileSync(fileURLToPath(new URL('../src/lib/push-notifications.ts', import.meta.url)), 'utf8')
+const pushWeb = readFileSync(fileURLToPath(new URL('../src/lib/push-notifications.web.ts', import.meta.url)), 'utf8')
+const layout = readFileSync(fileURLToPath(new URL('../src/app/_layout.tsx', import.meta.url)), 'utf8')
 
 test('Notifications screen loads, paginates, and renders a private inbox with empty and retry states', () => {
   assert.match(screen, /getNotificationInbox\(\)/u)
@@ -38,4 +42,25 @@ test('client inbox helpers expose only safe notification fields and recipient-sc
   assert.match(marketplace, /markNotificationRead/u)
   assert.match(marketplace, /markAllNotificationsRead/u)
   assert.doesNotMatch(marketplace, /expoTicket|pushToken|recipientUserId/u)
+})
+
+test('inbox items retain an authenticated opaque target id for the related request', () => {
+  assert.match(api, /targetId: item\.domainId/u)
+  assert.match(marketplace, /targetId: string/u)
+  assert.match(screen, /item\.targetId/u)
+})
+
+test('inbox refreshes on focus and app resume without hiding loaded notifications on action errors', () => {
+  assert.match(screen, /useFocusEffect/u)
+  assert.match(screen, /AppState\.addEventListener/u)
+  assert.match(screen, /inbox\.map\(item/u)
+  assert.match(screen, /title="Refresh inbox"/u)
+})
+
+test('push notification taps open the signed-in inbox for warm and cold app starts', () => {
+  assert.match(push, /addNotificationResponseReceivedListener/u)
+  assert.match(push, /getLastNotificationResponse/u)
+  assert.match(pushWeb, /subscribeToNotificationResponses/u)
+  assert.match(layout, /subscribeToNotificationResponses/u)
+  assert.match(layout, /router\.push/u)
 })

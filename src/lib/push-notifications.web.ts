@@ -19,3 +19,7 @@ export async function disablePushNotifications(): Promise<void> {}
 export function subscribeToPushTokenChanges(): { remove: () => void } {
   return { remove: () => undefined }
 }
+
+export function subscribeToNotificationResponses(_onOpenInbox: (notificationId: string) => void): { remove: () => void } {
+  return { remove: () => undefined }
+}

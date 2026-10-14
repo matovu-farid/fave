@@ -92,7 +92,7 @@ test('outbox dispatcher enqueues only delivery IDs and returns enqueue failures 
 test('queue consumer sends privacy-safe preview data and saves the Expo ticket', async () => {
   const delivery = {
     deliveryId: 'delivery-1', notificationId: 'notification-1', recipientUserId: 'user-1',
-    templateKey: 'driver_offer_received', routeKey: 'driver_offers', priority: 'time_sensitive', expiresAt: 5000,
+    templateKey: 'driver_offer_received', routeKey: 'driver_offers', targetId: 'offer-1', priority: 'time_sensitive', expiresAt: 5000,
   }
   const device = { id: 'token-row-1', token: 'ExpoPushToken[private]', platform: 'ios' }
   let requestBody
@@ -109,7 +109,7 @@ test('queue consumer sends privacy-safe preview data and saves the Expo ticket',
   }, 1000)
 
   assert.equal(message.calls.ack, 1)
-  assert.deepEqual(requestBody.data, { notificationId: 'notification-1', routeKey: 'driver_offers' })
+  assert.deepEqual(requestBody.data, { notificationId: 'notification-1', routeKey: 'driver_offers', targetId: 'offer-1' })
   assert.equal(requestBody.body, 'A trip offer is waiting for your response.')
   assert.equal(JSON.stringify({ body: requestBody.body, data: requestBody.data }).includes('private'), false)
   assert.equal(db.queries.some(query => /notification_deliveries/u.test(query.sql)), true)

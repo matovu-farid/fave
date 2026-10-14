@@ -84,7 +84,8 @@ test('inbox returns safe rendered fields and scopes listing to the signed-in use
   assert.equal(payload.notifications[0].title, 'New trip offer')
   assert.equal(payload.notifications[0].isRead, false)
   assert.equal(payload.unreadCount, 1)
-  assert.equal(JSON.stringify(payload).includes('secret-domain'), false)
+  assert.equal(payload.notifications[0].targetId, 'secret-domain')
+  assert.equal('domainId' in payload.notifications[0], false)
   assert.equal(JSON.stringify(payload).includes('event-1'), false)
 })
 

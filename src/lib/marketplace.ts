@@ -142,6 +142,7 @@ export type NotificationInboxItem = {
   title: string
   body: string
   routeKey: 'trips' | 'driver_offers' | 'booking' | 'trip' | 'payments' | 'safety' | 'support'
+  targetId: string
   priority: 'ordinary' | 'urgent' | 'time_sensitive'
   createdAt: number
   readAt: number | null

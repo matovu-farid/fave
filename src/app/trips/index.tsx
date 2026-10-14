@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Image, ScrollView, StyleSheet, View } from 'react-native'
+import { useLocalSearchParams } from 'expo-router'
 
 import { ActionButton, Card, CheckRow, Field, Message, SectionTitle, formStyles } from '@/components/marketplace-ui'
 import { GoogleMapsAttribution } from '@/components/google-maps-attribution'
@@ -18,6 +19,10 @@ import { getDriverAccommodationNotice } from '@/lib/trip-quote-display'
 function asAddress(value: string) { return { address: value } }
 
 export default function TripsScreen() {
+  const params = useLocalSearchParams<{ focusTargetId?: string; focusTargetType?: string }>()
+  const focusTargetId = typeof params.focusTargetId === 'string' ? params.focusTargetId : ''
+  const focusTargetType = typeof params.focusTargetType === 'string' ? params.focusTargetType : ''
+  const scrollRef = useRef<ScrollView>(null)
   const { data: session } = authClient.useSession()
   const userId = session?.user.id
   const [prerequisites, setPrerequisites] = useState<ClientPrerequisites | null>(null)
@@ -87,7 +92,9 @@ export default function TripsScreen() {
       setCheckedPolicies([]); setSharePhone(false)
     }
     let currentServerOffer: ClientTripOffer | null = null
-    const offerPromise = getCurrentTripOffer().then((result) => {
+    const offerPromise = (focusTargetType === 'offer' && focusTargetId
+      ? getTripOfferStatus(focusTargetId).then((offer) => ({ offer }))
+      : getCurrentTripOffer()).then((result) => {
       currentServerOffer = result.offer
       return result
     }).catch(() => ({ offer: null }))
@@ -101,6 +108,9 @@ export default function TripsScreen() {
       restoreTripRequest(offerResult.offer)
       setBookingSubmitted(offerResult.offer?.status === 'booked' || hasActiveDepositHold(bookingResult.bookings, Date.now()))
       setOffer(offerResult.offer && ['pending', 'quoting'].includes(offerResult.offer.status) ? offerResult.offer : null)
+      if (focusTargetId && offerResult.offer?.offerId === focusTargetId) {
+        setSuccess('This is the trip request from your notification. Its current status is shown below.')
+      }
       if (offerResult.offer?.status === 'quoted' && offerResult.offer.quote) setQuote(offerResult.offer.quote)
       if (offerResult.offer?.status === 'booked') setSuccess('This trip is already booked. See your trip requests below.')
       if (offerResult.offer && ['declined', 'expired', 'withdrawn', 'quote_failed'].includes(offerResult.offer.status)) {
@@ -160,7 +170,7 @@ export default function TripsScreen() {
       setTripDraftReady(true)
       setLoading(false)
     }
-  }, [restoreTripRequest, userId])
+  }, [focusTargetId, focusTargetType, restoreTripRequest, userId])
   useEffect(() => { void Promise.resolve().then(refresh) }, [refresh])
   useEffect(() => {
     if (!tripDraftReady || !userId || tripDraftOwnerId !== userId) return
@@ -314,7 +324,7 @@ export default function TripsScreen() {
 
   if (loading) return <ThemedView style={styles.loading}><ThemedText>Loading trip requirements…</ThemedText></ThemedView>
   return <ThemedView style={styles.page}>
-    <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+    <ScrollView ref={scrollRef} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <SectionTitle title="Plan a trip" detail="Choose your dates and vehicle. Pickups must be in Kampala, Mukono, or Wakiso; destinations must be in Uganda." />
       <Card>
         <View style={styles.progressRow} accessibilityLabel={`Booking progress, step ${currentProgressStep + 1} of ${bookingProgress.length}: ${bookingProgress[currentProgressStep]?.label}`}>
@@ -350,7 +360,12 @@ export default function TripsScreen() {
       </Card> : null}
       {bookings.length > 0 ? <Card>
         <ThemedText type="subtitle">Your trip requests</ThemedText>
-        {bookings.map((booking) => <View key={booking.bookingId} style={styles.booking}>
+        {bookings.map((booking) => <View key={booking.bookingId} style={styles.booking} onLayout={(event) => {
+          if (focusTargetType === 'booking' && focusTargetId === booking.bookingId) {
+            scrollRef.current?.scrollTo({ y: event.nativeEvent.layout.y, animated: true })
+          }
+        }}>
+          {focusTargetType === 'booking' && focusTargetId === booking.bookingId ? <ThemedText type="smallBold">Opened from your alert</ThemedText> : null}
           <ThemedText type="smallBold">{booking.status.replaceAll('_', ' ')}</ThemedText>
           <ThemedText>{booking.startDate} to {booking.endDate} · {booking.vehicle.year} {booking.vehicle.make} {booking.vehicle.model}</ThemedText>
           <ThemedText>Pickup · {booking.pickup.formattedAddress ?? booking.pickup.address}</ThemedText>

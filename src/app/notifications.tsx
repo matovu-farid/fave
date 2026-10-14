@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from 'react'
-import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet } from 'react-native'
-import { router } from 'expo-router'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { ActivityIndicator, AppState, Linking, Pressable, ScrollView, StyleSheet } from 'react-native'
+import { router, useFocusEffect, useLocalSearchParams, type Href } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 
 import { ActionButton, Card, Message, SectionTitle } from '@/components/marketplace-ui'
@@ -16,6 +16,7 @@ import {
 } from '../lib/push-notifications'
 
 export default function NotificationsScreen() {
+  const { notificationId: requestedNotificationId } = useLocalSearchParams<{ notificationId?: string }>()
   const [enabled, setEnabled] = useState(false)
   const [permissionDenied, setPermissionDenied] = useState(false)
   const [unsupported, setUnsupported] = useState(false)
@@ -30,6 +31,7 @@ export default function NotificationsScreen() {
   const [inboxError, setInboxError] = useState('')
   const [inboxNextCursor, setInboxNextCursor] = useState<{ createdAt: number; id: string } | null>(null)
   const [loadingMore, setLoadingMore] = useState(false)
+  const openedFromPush = useRef<string | null>(null)
 
   const refresh = useCallback(async () => {
     setError('')
@@ -86,9 +88,16 @@ export default function NotificationsScreen() {
     }
   }
 
+  useFocusEffect(useCallback(() => {
+    void loadInbox()
+    return undefined
+  }, [loadInbox]))
+
   useEffect(() => {
-    const timer = setTimeout(() => { void loadInbox() }, 0)
-    return () => clearTimeout(timer)
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void loadInbox()
+    })
+    return () => subscription.remove()
   }, [loadInbox])
 
   const enable = async () => {
@@ -124,7 +133,7 @@ export default function NotificationsScreen() {
     }
   }
 
-  const openNotification = async (item: NotificationInboxItem) => {
+  const openNotification = useCallback(async (item: NotificationInboxItem) => {
     if (!item.isRead) {
       try {
         const result = await markNotificationRead(item.id)
@@ -132,15 +141,26 @@ export default function NotificationsScreen() {
         setInboxUnreadCount(count => Math.max(0, count - 1))
       } catch (cause) {
         setInboxError(cause instanceof Error ? cause.message : 'Could not update this notification.')
-        return
       }
     }
-    const destination = {
-      trips: '/trips', driver_offers: '/driver', booking: '/trips', trip: '/trips',
-      payments: '/trips', safety: '/trips', support: '/trips',
-    }[item.routeKey]
-    router.push(destination as '/trips' | '/driver')
-  }
+    const destination: Href = item.routeKey === 'driver_offers'
+      ? { pathname: '/driver', params: { focusTargetId: item.targetId, focusTargetType: 'offer' } }
+      : { pathname: '/trips', params: {
+          focusTargetId: item.targetId,
+          focusTargetType: item.routeKey === 'booking' ? 'booking' : 'offer',
+        } }
+    router.push(destination)
+  }, [])
+
+  useEffect(() => {
+    const notificationId = Array.isArray(requestedNotificationId) ? requestedNotificationId[0] : requestedNotificationId
+    if (!notificationId || inboxLoading || openedFromPush.current === notificationId) return
+    const item = inbox.find((notification) => notification.id === notificationId)
+    if (!item) return
+    openedFromPush.current = notificationId
+    const timer = setTimeout(() => { void openNotification(item) }, 0)
+    return () => clearTimeout(timer)
+  }, [inbox, inboxLoading, openNotification, requestedNotificationId])
 
   const readAll = async () => {
     setInboxBusy(true)
@@ -192,14 +212,15 @@ export default function NotificationsScreen() {
               : null}
           </ThemedView>
           {inboxError ? <Message error>{inboxError}</Message> : null}
+          {!inboxLoading ? <ActionButton title="Refresh inbox" onPress={() => void loadInbox()} /> : null}
           {inboxLoading ? <ActivityIndicator accessibilityLabel="Loading notification inbox" /> : null}
-          {!inboxLoading && inboxError
+          {!inboxLoading && inboxError && inbox.length === 0
             ? <ActionButton title="Try again" onPress={() => void loadInbox()} />
             : null}
           {!inboxLoading && !inboxError && inbox.length === 0
             ? <Card><Message>You’re all caught up. New booking and trip updates will appear here.</Message></Card>
             : null}
-          {!inboxLoading && !inboxError
+          {!inboxLoading && inbox.length > 0
             ? inbox.map(item => (
                 <Pressable key={item.id} accessibilityRole="button" accessibilityLabel={`${item.title}. ${item.body}`} onPress={() => void openNotification(item)}>
                   <Card>

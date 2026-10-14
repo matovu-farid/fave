@@ -9,6 +9,7 @@ type DeliveryRecord = {
   recipientUserId: string
   templateKey: string
   routeKey: string
+  targetId: string
   priority: string
   expiresAt: number | null
 }
@@ -69,7 +70,8 @@ async function loadDelivery(env: AuthBindings, deliveryId: string): Promise<Deli
   return env.DB.prepare(
     `SELECT outbox.delivery_id AS deliveryId, outbox.notification_id AS notificationId,
             outbox.recipient_user_id AS recipientUserId, notification.template_key AS templateKey,
-            notification.route_key AS routeKey, notification.priority, outbox.expires_at AS expiresAt
+            notification.route_key AS routeKey, event.domain_id AS targetId,
+            notification.priority, outbox.expires_at AS expiresAt
        FROM notification_outbox AS outbox
        JOIN notifications AS notification ON notification.id = outbox.notification_id
        JOIN notification_events AS event ON event.id = outbox.event_id
@@ -107,11 +109,12 @@ async function sendToExpo(
   body: string,
   notificationId: string,
   routeKey: string,
+  targetId: string,
 ) {
   const response = await fetcher('https://exp.host/--/api/v2/push/send', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify({ to: token, title, body, data: { notificationId, routeKey }, sound: 'default' }),
+    body: JSON.stringify({ to: token, title, body, data: { notificationId, routeKey, targetId }, sound: 'default' }),
   })
   const result = await response.json() as {
     data?: { status?: string; id?: string; details?: { error?: string } } | Array<{ status?: string; id?: string; details?: { error?: string } }>
@@ -162,7 +165,7 @@ async function consumeDelivery(
     ).bind(deliveryId, device.id).first<{ status: string }>()
     if (previous?.status === 'expo_accepted' || previous?.status === 'receipt_ok' || previous?.status === 'device_unregistered') continue
     try {
-      const result = await sendToExpo(fetcher, device.token, copy.title, copy.body, delivery.notificationId, delivery.routeKey)
+      const result = await sendToExpo(fetcher, device.token, copy.title, copy.body, delivery.notificationId, delivery.routeKey, delivery.targetId)
       if ('deviceUnregistered' in result) {
         await recordDeviceDelivery(env, deliveryId, device, 'device_unregistered', now, null, 'device_not_registered')
         await env.DB.prepare('DELETE FROM notification_push_tokens WHERE id = ?').bind(device.id).run()
