@@ -139,22 +139,14 @@ Before selecting a provider, obtain the contracting entity’s full legal name a
 
 ### Pesapal response and draft contract (6 October 2026)
 
-Pesapal Uganda's Head of Payment Services confirmed by email that its online Uganda service supports MTN Mobile Money, Airtel Money, and bank-card collection in UGX, subject to standard merchant onboarding, KYC, and compliance review. Pesapal asked Fave to clarify whether it acts as principal or marketplace/intermediary and requested information about Fave's transport operations and applicable licences before confirming the suitable settlement and KYC model.
+Pesapal's 6 October email gave preliminary confirmation that its Uganda online service can collect UGX using MTN Mobile Money, Airtel Money, and bank cards, subject to merchant onboarding, KYC, and compliance review. It asked Fave to clarify whether it operates as principal or marketplace/intermediary and requested details about its transport operations and applicable licences before confirming an appropriate settlement and KYC model.
 
-The email says the attached contract contains applicable rates and displays: online card 3.5%, online mobile 3% (rendered in the email as `3.%`), onsite card 2.9%, and onsite mobile 2.0%. However, the attached sign-up form's fee schedule is blank and the online mobile figure is malformed. Treat these as indicative only; obtain a corrected, dated, Fave-specific schedule before comparing providers or updating fares.
+The email and unsigned onboarding pack do not provide a usable Fave-specific offer: the fee schedule is blank, one email rate is malformed, and account-specific payout, refund, dispute, and settlement terms remain unconfirmed. Exact email-rate figures and draft-contract provisions are omitted from this public comparison. Obtain a corrected, dated merchant schedule and complete operating terms in writing, then have counsel review the applicable agreement before acceptance. No agreement has been signed and no provider is selected.
 
-The reply defers driver bank/mobile-money payouts, fees/timing/limits, driver KYC, refunds, refund status/timing, and chargeback allocation to later commercial/compliance review. The unsigned contract template says settlement occurs within two Business Days after Fave's instruction, permits set-off of charges/taxes, and defines chargeback reserve holds up to 180 days plus verification holds. Those are template provisions, not accepted terms or confirmed account settings. The template also makes the merchant responsible for payer dispute resolution and customer-diligence obligations. Have counsel review the complete agreement before it is signed.
+Pesapal has not confirmed support for Fave's repeated morning daily driver payments, including payout rails, eligibility, timing, limits, cost, or funding requirements. Its response also leaves driver KYC, refund handling, and chargeback allocation for further commercial/compliance review. These are open selection gates, not verified product capabilities.
 
 The internal client-facing [Payment Terms](../compliance/drafts/client-payment-terms.md) records the product requirements and does not present the incomplete rate table as customer pricing or promise an unconfirmed settlement, refund, or payout timeline.
 
-#### Indicative collection-fee comparison
+#### Collection-fee comparison
 
-For a scale illustration, assume a UGX 100,000 trip with a 50% deposit and 50% balance, both in local UGX. Flutterwave's current public Uganda page lists 3% for local mobile money and 4.8% for local cards. Pesapal's 6 October email reports 3.5% for online card and prints `3.%` for online mobile money; the table below treats that malformed mobile rate as 3.0% solely to make a provisional comparison. Pesapal's attached fee schedule is blank, so its figures are not a confirmed or accepted offer.
-
-| Deposit and balance methods | Pesapal email-rate illustration | Flutterwave public-rate illustration | Difference |
-|---|---:|---:|---:|
-| Mobile money + mobile money | UGX 3,000 | UGX 3,000 | UGX 0 |
-| Local card + local card | UGX 3,500 | UGX 4,800 | Pesapal UGX 1,300 lower |
-| One mobile-money payment + one local-card payment | UGX 3,250 | UGX 3,900 | Pesapal UGX 650 lower |
-
-The calculation applies each rate to the respective half of the trip amount. It excludes VAT and other taxes, payout/settlement costs, refund and chargeback costs, reserves, and any account-specific limits. It is not a client surcharge or fare recommendation. If Pesapal corrects and confirms its rates, the lower reported local-card fee would improve its collection-cost case; the unresolved marketplace model, payout capability, settlement mechanics, refund restrictions, KYC, and agreement terms still prevent provider selection. Source for Flutterwave list rates: [Uganda pricing](https://www.flutterwave.com/ug/pricing). Source for the Pesapal figures: the 6 October 2026 sales email recorded above.
+No Pesapal collection-fee comparison is valid until Pesapal supplies a corrected, dated Fave-specific rate schedule; the fee schedule in the onboarding pack is blank. For the Flutterwave public-list-rate comparison, see the [Uganda pricing page](https://www.flutterwave.com/ug/pricing). Its published figures are not a Fave offer and remain subject to account terms. Do not use either provider's rates to set customer fares until Fave has a comparable written merchant quote and the #15 fare policy is approved.
