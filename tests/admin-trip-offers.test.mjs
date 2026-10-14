@@ -95,6 +95,19 @@ function context(db, { method = 'GET', path = '/api/admin/trip-offers', body = n
   }
 }
 
+test('admin route summaries use only validated broad-area metadata', () => {
+  const app = loadAdminTripOffers({ db: {} })
+  assert.equal(app.exports.safeRouteArea(JSON.stringify({
+    formattedAddress: '12 Private Street, Kololo, Kampala, Uganda',
+    broadArea: 'Kampala',
+  }), 'Service area'), 'Kampala')
+  assert.equal(app.exports.safeRouteArea(JSON.stringify({
+    formattedAddress: '9 Secret Lane, Entebbe, Uganda',
+  }), 'Uganda'), 'Uganda')
+  assert.equal(app.exports.safeRouteArea(JSON.stringify({ broadArea: '12 Secret Lane' }), 'Uganda'), 'Uganda')
+  assert.equal(app.exports.safeRouteArea('{broken', 'Uganda'), 'Uganda')
+})
+
 test('non-admins cannot load the driver offer queue', async () => {
   const queries = []
   const db = { prepare(sql) { queries.push(sql); return { bind() { return this }, async run() {}, async all() { return { results: [] } } } } }
@@ -109,8 +122,8 @@ test('admin queue contains pending and recent status but no client contact or ex
   const row = {
     id: 'offer-1', status: 'pending', expires_at: Date.now() + 60_000, created_at: Date.now(),
     start_date: '2099-01-01', end_date: '2099-01-02', make: 'Toyota', model: 'RAV4',
-    origin_json: JSON.stringify({ formattedAddress: '12 Private Street, Kololo, Kampala, Uganda' }),
-    destination_json: JSON.stringify({ formattedAddress: '9 Secret Lane, Entebbe, Uganda' }),
+    origin_json: JSON.stringify({ formattedAddress: '12 Private Street, Kololo, Kampala, Uganda', broadArea: 'Kampala' }),
+    destination_json: JSON.stringify({ formattedAddress: '9 Secret Lane, Entebbe, Uganda', broadArea: 'Entebbe' }),
     follow_up_count: 1,
   }
   const processingRow = { ...row, id: 'offer-2', status: 'quoting' }
@@ -129,8 +142,9 @@ test('admin queue contains pending and recent status but no client contact or ex
   assert.equal(response.body.processingOffers[0].status, 'quoting')
   assert.equal(response.body.recentOffers.length, 0)
   const serialized = JSON.stringify(response.body)
-  assert.match(serialized, /Kampala, Uganda/u)
-  assert.doesNotMatch(serialized, /Private Street|Secret Lane|client_user_id|phone_e164/u)
+  assert.match(serialized, /Kampala/u)
+  assert.match(serialized, /Entebbe/u)
+  assert.doesNotMatch(serialized, /Private Street|Secret Lane|formattedAddress|client_user_id|phone_e164/u)
   assert.match(queries[1], /ORDER BY offer\.expires_at ASC/u)
 })
 

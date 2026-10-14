@@ -50,6 +50,7 @@ test('accepts private addresses when Google resolves each supported Uganda picku
       assert.equal(result.kind, 'resolved')
       assert.equal(result.countryCode, 'UG')
       assert.equal(result.pickupArea, area)
+      assert.equal(result.broadArea, area)
       assert.equal(result.formattedAddress, 'Private address, Uganda')
     })
   }
@@ -99,6 +100,7 @@ test('classifies unapproved Uganda districts and foreign countries distinctly', 
     assert.equal(result.kind, 'resolved')
     assert.equal(result.countryCode, 'UG')
     assert.equal(result.pickupArea, null)
+    assert.equal(result.broadArea, 'Gulu')
   })
 
   await withFetch(async () => new Response(JSON.stringify(geocodeResponse(addressComponents('Kampala', 'Kenya', 'KE'))), {
@@ -131,6 +133,31 @@ test('treats conflicting or incomplete Google candidates as unresolved', async (
   }), async () => {
     const result = await classifyLocation({ GOOGLE_MAPS_API_KEY: apiKey }, { address: 'Ambiguous address' })
     assert.deepEqual(result, { kind: 'unresolved' })
+  })
+})
+
+test('keeps a resolved location but withholds broad-area display when Google districts disagree', async () => {
+  const candidates = [
+    {
+      addressComponents: [component('Jinja', 'Jinja', 'administrative_area_level_2'), component('Uganda', 'UG', 'country')],
+      formattedAddress: 'Kampala, Uganda',
+      location: { latitude: 0.35, longitude: 32.58 },
+    },
+    {
+      addressComponents: [component('Iganga', 'Iganga', 'administrative_area_level_2'), component('Uganda', 'UG', 'country')],
+      formattedAddress: 'Kampala, Uganda',
+      location: { latitude: 0.35, longitude: 32.58 },
+    },
+  ]
+
+  await withFetch(async () => new Response(JSON.stringify({ results: candidates }), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  }), async () => {
+    const result = await classifyLocation({ GOOGLE_MAPS_API_KEY: apiKey }, { address: 'Ambiguous Kampala address' })
+    assert.equal(result.kind, 'resolved')
+    assert.equal(result.pickupArea, null)
+    assert.equal(result.broadArea, null)
   })
 })
 

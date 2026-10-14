@@ -18,6 +18,7 @@ export type LocationClassification =
       kind: 'resolved'
       countryCode: string | null
       pickupArea: SupportedPickupArea | null
+      broadArea: string | null
       formattedAddress: string | null
       latitude: number
       longitude: number
@@ -72,6 +73,12 @@ const ADMINISTRATIVE_COMPONENT_TYPES = new Set([
   'sublocality_level_5',
 ])
 
+const BROAD_AREA_COMPONENT_PRIORITY = [
+  'administrative_area_level_2',
+  'administrative_area_level_1',
+  'locality',
+]
+
 function normalizeAreaName(value: string): string {
   return value
     .normalize('NFKC')
@@ -122,6 +129,19 @@ function extractPickupArea(
     }
   }
 
+  return null
+}
+
+function extractBroadArea(components: AddressComponent[]): string | null {
+  for (const type of BROAD_AREA_COMPONENT_PRIORITY) {
+    const component = components.find(
+      (candidate) => Array.isArray(candidate.types) && candidate.types.includes(type),
+    )
+    const value = typeof component?.longText === 'string'
+      ? component.longText.trim()
+      : typeof component?.shortText === 'string' ? component.shortText.trim() : ''
+    if (value && value.length <= 80 && !/\d/u.test(value)) return value
+  }
   return null
 }
 
@@ -231,6 +251,9 @@ export async function classifyLocation(
     const candidateAreas = new Set(
       candidateComponents.map((candidate) => extractPickupArea(candidate)),
     )
+    const candidateBroadAreas = new Set(
+      candidateComponents.map((candidate) => extractBroadArea(candidate)),
+    )
 
     // Geocoding can return multiple candidates. Missing country or area data
     // counts as ambiguity when another candidate resolves it; do not trust one
@@ -255,6 +278,7 @@ export async function classifyLocation(
       kind: 'resolved',
       countryCode: extractCountryCode(components),
       pickupArea: extractPickupArea(components),
+      broadArea: candidateBroadAreas.size === 1 ? [...candidateBroadAreas][0] ?? null : null,
       formattedAddress,
       latitude,
       longitude,

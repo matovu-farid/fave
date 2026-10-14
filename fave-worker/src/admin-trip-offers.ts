@@ -26,18 +26,17 @@ const adminTripOffersApp = new Hono<{ Bindings: AuthBindings }>()
 const recentStatusList = "'quoted', 'declined', 'expired', 'withdrawn', 'quote_failed'"
 const callOutcomes = new Set(['reached', 'no_answer', 'busy', 'voicemail', 'other'])
 
-function routeArea(json: string): string {
+export function safeRouteArea(json: string, fallback: string): string {
   try {
     const value: unknown = JSON.parse(json)
-    if (typeof value !== 'object' || value === null || Array.isArray(value)) return 'Area unavailable'
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) return fallback
     const location = value as Record<string, unknown>
-    const label = typeof location.formattedAddress === 'string'
-      ? location.formattedAddress
-      : typeof location.address === 'string' ? location.address : ''
-    const broadArea = label.split(',').map((part) => part.trim()).filter(Boolean).slice(-2).join(', ')
-    return broadArea || 'Area unavailable'
+    const broadArea = typeof location.broadArea === 'string' ? location.broadArea.trim() : ''
+    return broadArea.length <= 80 && /^[\p{L}\p{M}\s.'’()-]+$/u.test(broadArea)
+      ? broadArea
+      : fallback
   } catch {
-    return 'Area unavailable'
+    return fallback
   }
 }
 
@@ -52,8 +51,8 @@ function presentOffer(offer: OfferRow) {
     endDate: offer.end_date,
     vehicle: { make: offer.make, model: offer.model },
     route: {
-      pickupArea: routeArea(offer.origin_json),
-      destinationArea: routeArea(offer.destination_json),
+      pickupArea: safeRouteArea(offer.origin_json, 'Service area'),
+      destinationArea: safeRouteArea(offer.destination_json, 'Uganda'),
     },
     followUpCount: offer.follow_up_count,
   }

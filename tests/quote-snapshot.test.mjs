@@ -37,7 +37,7 @@ function loadBookings({
       if (name === './google-maps') return {
         computeDrivingRoute: async (...args) => { onRouteCalculation(...args); return routeResult },
         classifyLocation: async (_env, input) => ({
-          kind: 'resolved', countryCode: 'UG', pickupArea: 'Kampala',
+          kind: 'resolved', countryCode: 'UG', pickupArea: 'Kampala', broadArea: 'Kampala',
           formattedAddress: 'Kampala, Uganda', latitude: 0.3, longitude: 32.5,
           input,
         }),

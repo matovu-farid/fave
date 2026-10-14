@@ -50,6 +50,7 @@ type TripLocationSnapshot = {
   input: { address: string } | { latitude: number; longitude: number }
   address: string
   formattedAddress: string | null
+  broadArea?: string | null
   latitude: number
   longitude: number
 }
@@ -112,6 +113,7 @@ function toTripLocationSnapshot(
       ? input.address
       : resolved.formattedAddress ?? `${input.latitude}, ${input.longitude}`,
     formattedAddress: resolved.formattedAddress,
+    broadArea: resolved.pickupArea ?? resolved.broadArea,
     latitude: resolved.latitude,
     longitude: resolved.longitude,
   }
