@@ -437,16 +437,19 @@ export default function TripsScreen() {
         <ThemedText>Pickup · {quote.pickup.formattedAddress ?? quote.pickup.address} ({quote.pickup.latitude.toFixed(5)}, {quote.pickup.longitude.toFixed(5)})</ThemedText>
         <ThemedText>Destination · {quote.destination.formattedAddress ?? quote.destination.address} ({quote.destination.latitude.toFixed(5)}, {quote.destination.longitude.toFixed(5)})</ThemedText>
         <ThemedText>Dates · {startDate} to {endDate} · {partySize} passengers · {luggageCount} luggage pieces</ThemedText>
-        <ThemedText>Route · {(quote.route.distanceMeters / 1000).toFixed(1)} km · approx. {Math.ceil(quote.route.durationSeconds / 60)} min</ThemedText>
+        {!quote.quote.outboundRoute || !quote.quote.returnRoute ? <Message error>The separate outbound and return price details are not available. Request a new quote before continuing.</Message> : null}
         <GoogleMapsAttribution />
         {quote.quote.components.map((component) => {
+          const routeLeg = component.key === 'outbound_transport' ? quote.quote.outboundRoute :
+            component.key === 'return_transport' ? quote.quote.returnRoute : null
           const unitLabel = component.unit === 'per_night' ? 'nights' :
             component.unit === 'per_kilometer' ? 'km' :
               component.unit === 'per_passenger' ? 'passengers' : 'flat'
           return <View key={component.key} style={styles.quoteLine}>
             <View>
               <ThemedText>{component.label}</ThemedText>
-              <ThemedText>{component.unitRate.toLocaleString()} {quote.quote.currency}{component.unit === 'fixed' ? ' flat' : ` × ${component.quantity} ${unitLabel}`}</ThemedText>
+              {routeLeg ? <ThemedText>{(routeLeg.distanceMeters / 1000).toFixed(1)} km · approx. {Math.ceil(routeLeg.durationSeconds / 60)} min · {component.unitRate.toLocaleString()} {quote.quote.currency}/km</ThemedText> : null}
+              {!routeLeg ? <ThemedText>{component.unitRate.toLocaleString()} {quote.quote.currency}{component.unit === 'fixed' ? ' flat' : ` × ${component.quantity} ${unitLabel}`}</ThemedText> : null}
             </View>
             <ThemedText>{component.amount.toLocaleString()} {quote.quote.currency}</ThemedText>
           </View>
@@ -461,7 +464,7 @@ export default function TripsScreen() {
           <CheckRow title="I have read and accept this disclosure" checked={disclosureIds.has(document.id)} onPress={() => togglePolicy(document)} disabled={busy} />
         </View>)}
         <CheckRow title="I agree that my phone number may be shared with the driver assigned to this trip" detail="Your contact details are not shared with drivers before assignment." checked={sharePhone} onPress={() => setSharePhone(!sharePhone)} disabled={busy} />
-        <ActionButton title="Continue to deposit" onPress={() => void confirm()} disabled={!allDisclosureIds || !sharePhone || !prerequisites?.bookingReady} busy={busy} />
+        <ActionButton title="Continue to deposit" onPress={() => void confirm()} disabled={!quote.quote.outboundRoute || !quote.quote.returnRoute || !allDisclosureIds || !sharePhone || !prerequisites?.bookingReady} busy={busy} />
       </Card> : null}
       {currentBookingStage === 'deposit' ? <Card>
         <ThemedText type="subtitle">Deposit needed to confirm your trip</ThemedText>

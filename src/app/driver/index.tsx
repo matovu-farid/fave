@@ -295,6 +295,7 @@ function VehicleSection({ vehicles, refresh }: { vehicles: Vehicle[]; refresh: (
   const [year, setYear] = useState(''); const [passengers, setPassengers] = useState('')
   const [luggage, setLuggage] = useState(''); const [registration, setRegistration] = useState('')
   const [comfort, setComfort] = useState(''); const [access, setAccess] = useState('')
+  const [benchmarkAmount, setBenchmarkAmount] = useState('')
   const [photos, setPhotos] = useState<Picked[]>([]); const [busy, setBusy] = useState(false); const [error, setError] = useState('')
   const [requirements, setRequirements] = useState<VehicleRequirements | null>(null)
   const [evidence, setEvidence] = useState<Record<string, Picked>>({})
@@ -308,7 +309,7 @@ function VehicleSection({ vehicles, refresh }: { vehicles: Vehicle[]; refresh: (
     setBusy(true); setError('')
     try {
       const form = new FormData()
-      Object.entries({ make, model, year, passengerCapacity: passengers, luggageCapacity: luggage, registrationNumber: registration, comfortDetails: comfort, accessibilityDetails: access }).forEach(([key, value]) => form.append(key, value))
+      Object.entries({ make, model, year, passengerCapacity: passengers, luggageCapacity: luggage, registrationNumber: registration, comfortDetails: comfort, accessibilityDetails: access, benchmarkAmountUgx: benchmarkAmount }).forEach(([key, value]) => form.append(key, value))
       photos.forEach((photo) => addFile(form, 'photo', photo))
       Object.entries(evidence).forEach(([key, file]) => addFile(form, `evidence:${key}`, file))
       await submitVehicle(form); setPhotos([]); await refresh()
@@ -327,6 +328,7 @@ function VehicleSection({ vehicles, refresh }: { vehicles: Vehicle[]; refresh: (
       return <Card key={vehicle.id}>
       <ThemedText type="subtitle">{vehicle.year} {vehicle.make} {vehicle.model}</ThemedText>
       <ThemedText>Status · {vehicle.status?.replaceAll('_', ' ')}</ThemedText>
+      {vehicle.benchmark ? <ThemedText type="small">Saved vehicle price · {vehicle.benchmark.basis.origin.label} ↔ {vehicle.benchmark.basis.destination.label} · {vehicle.benchmark.basis.roundTripDistanceMeters.toLocaleString()} round-trip road metres · {vehicle.benchmark.amountUgx.toLocaleString()} UGX ÷ {(vehicle.benchmark.basis.roundTripDistanceMeters / 1000).toFixed(1)} km = {(vehicle.benchmark.amountUgx * 1000 / vehicle.benchmark.basis.roundTripDistanceMeters).toLocaleString(undefined, { maximumFractionDigits: 2 })} UGX/km</ThemedText> : <Message>This vehicle has no saved fare benchmark, so it cannot receive client trip requests.</Message>}
       {vehicle.applicantMessage ? <Message>{vehicle.applicantMessage}</Message> : null}
       {vehicle.media?.map((media) => <ThemedText key={media.id} type="small">{media.type.replaceAll('_', ' ')}{media.requirementVersion ? ` · v${media.requirementVersion}` : ''} · {media.status}{media.applicantMessage ? ` · ${media.applicantMessage}` : ''}</ThemedText>)}
       {reviewCorrectionOpen && vehicle.media?.filter((media) => media.status === 'rejected').map((media) => <VehicleCorrection key={media.id} vehicleId={vehicle.id} media={media} refresh={refresh} />)}
@@ -346,12 +348,17 @@ function VehicleSection({ vehicles, refresh }: { vehicles: Vehicle[]; refresh: (
       <Field label="Registration number" value={registration} onChangeText={setRegistration} autoCapitalize="characters" />
       <Field label="Comfort details" value={comfort} onChangeText={setComfort} multiline placeholder="Air conditioning, charging ports…" />
       <Field label="Accessibility details" value={access} onChangeText={setAccess} multiline placeholder="Step height, accessible features…" />
+      {requirements?.benchmarkBasis ? <>
+        <ThemedText type="smallBold">Your round-trip vehicle quote · {requirements.benchmarkBasis.origin.label} to {requirements.benchmarkBasis.destination.label} and back · {(requirements.benchmarkBasis.roundTripDistanceMeters / 1000).toFixed(1)} road km</ThemedText>
+        <ThemedText type="small">Give one amount for this car, including its operating costs and vehicle type. This is separate from your nightly accommodation rate.</ThemedText>
+        <Field label="Round-trip amount (UGX)" value={benchmarkAmount} onChangeText={setBenchmarkAmount} keyboardType="numeric" />
+      </> : <Message>Vehicle pricing is not ready yet. Fave must approve the Kampala–Jinja road route and distance before a car price can be submitted.</Message>}
       <ActionButton title={`Add current vehicle photos (${photos.length}/2 minimum)`} onPress={() => void pickPhotos()} />
       {photos.map((photo, index) => <ThemedText key={`${photo.uri}-${index}`} type="small">Selected: {photo.fileName}</ThemedText>)}
       {requirements?.requirements.map((item) => <PickButton key={item.evidence_type} label={`${item.evidence_type.replaceAll('_', ' ')} · v${item.version}`} file={evidence[item.evidence_type]} onPress={() => void chooseEvidenceFile().then((file) => file && setEvidence((current) => ({ ...current, [item.evidence_type]: file }))).catch((cause) => setError(cause instanceof Error ? cause.message : 'Could not open your files.'))} />)}
       {!requirements?.readyToList ? <Message>Fave must publish an approved vehicle checklist and evidence retention policy before listings can be submitted.</Message> : <Message>Private evidence is reviewed by authorized staff. Only individual photos approved for clients can appear in vehicle search.</Message>}
       {error ? <Message error>{error}</Message> : null}
-      <ActionButton title="Submit vehicle for review" onPress={() => void submit()} disabled={!requirements?.readyToList || !make || !model || !year || !passengers || !registration || !comfort || photos.length < 2 || requirements.requirements.some((item) => !evidence[item.evidence_type])} busy={busy} />
+      <ActionButton title="Submit vehicle for review" onPress={() => void submit()} disabled={!requirements?.readyToList || !requirements.benchmarkBasis || !/^\d{1,10}$/u.test(benchmarkAmount) || Number(benchmarkAmount) < 1 || !make || !model || !year || !passengers || !registration || !comfort || photos.length < 2 || requirements.requirements.some((item) => !evidence[item.evidence_type])} busy={busy} />
     </Card>
     {vehicles.filter((vehicle) => vehicle.status === 'approved').map((vehicle) => <AvailabilityCard key={vehicle.id} vehicle={vehicle} start={blockStart} end={blockEnd} setStart={setBlockStart} setEnd={setBlockEnd} />)}
   </>
@@ -419,11 +426,12 @@ function VehicleEditForm({ vehicle, refresh }: { vehicle: Vehicle; refresh: () =
   const [year, setYear] = useState(String(vehicle.year)); const [passengers, setPassengers] = useState(String(vehicle.passengerCapacity))
   const [luggage, setLuggage] = useState(String(vehicle.luggageCapacity)); const [registration, setRegistration] = useState(vehicle.registrationNumber ?? '')
   const [comfort, setComfort] = useState(vehicle.comfortDetails); const [access, setAccess] = useState(vehicle.accessibilityDetails)
+  const [benchmarkAmount, setBenchmarkAmount] = useState(vehicle.benchmarkAmountUgx == null ? '' : String(vehicle.benchmarkAmountUgx))
   const [busy, setBusy] = useState(false); const [error, setError] = useState('')
   const save = async () => {
     setBusy(true); setError('')
     try {
-      await updateVehicle(vehicle.id, { make, model, year: Number(year), passengerCapacity: Number(passengers), luggageCapacity: Number(luggage), registrationNumber: registration, comfortDetails: comfort, accessibilityDetails: access })
+      await updateVehicle(vehicle.id, { make, model, year: Number(year), passengerCapacity: Number(passengers), luggageCapacity: Number(luggage), registrationNumber: registration, comfortDetails: comfort, accessibilityDetails: access, ...(benchmarkAmount === '' ? {} : { benchmarkAmountUgx: Number(benchmarkAmount) }) })
       setEditing(false); await refresh()
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not update the vehicle.') }
     finally { setBusy(false) }
@@ -437,6 +445,7 @@ function VehicleEditForm({ vehicle, refresh }: { vehicle: Vehicle; refresh: () =
       <Field label="Registration number" value={registration} onChangeText={setRegistration} autoCapitalize="characters" />
       <Field label="Comfort details" value={comfort} onChangeText={setComfort} multiline />
       <Field label="Accessibility details" value={access} onChangeText={setAccess} multiline />
+      <Field label="Kampala–Jinja round-trip amount (UGX)" value={benchmarkAmount} onChangeText={setBenchmarkAmount} keyboardType="numeric" />
       {error ? <Message error>{error}</Message> : null}
       <ActionButton title="Save listing details" onPress={() => void save()} busy={busy} />
     </> : null}

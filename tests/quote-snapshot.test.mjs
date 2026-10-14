@@ -6,8 +6,20 @@ import vm from 'node:vm'
 import { webcrypto } from 'node:crypto'
 import { DatabaseSync } from 'node:sqlite'
 import ts from 'typescript'
+import * as vehicleFares from '../fave-worker/src/vehicle-fares.ts'
 
 const bookingsSource = fileURLToPath(new URL('../fave-worker/src/bookings.ts', import.meta.url))
+const testVehicleBenchmark = {
+  amountUgx: 400_000,
+  currency: 'UGX',
+  derivationVersion: 1,
+  basis: {
+    routeId: 'kampala-jinja', routeVersion: 'approved-1',
+    origin: { label: 'Kampala', latitude: 0.3476, longitude: 32.5825 },
+    destination: { label: 'Jinja', latitude: 0.4479, longitude: 33.2026 },
+    roundTripDistanceMeters: 160_000, rounding: 'ceiling_per_leg',
+  },
+}
 
 function loadBookings({
   signedInUser = null,
@@ -36,7 +48,10 @@ function loadBookings({
         writeMarketplaceAudit: async () => undefined,
       }
       if (name === './google-maps') return {
-        computeDrivingRoute: async (...args) => { onRouteCalculation(...args); return routeResult },
+        computeDrivingRoute: async (...args) => {
+          onRouteCalculation(...args)
+          return typeof routeResult === 'function' ? routeResult(...args) : routeResult
+        },
         classifyLocation: async (_env, input) => ({
           kind: 'resolved', countryCode: 'UG', pickupArea: 'Kampala', broadArea: 'Kampala',
           formattedAddress: 'Kampala, Uganda', latitude: 0.3, longitude: 32.5,
@@ -62,6 +77,7 @@ function loadBookings({
           return [{ sql: 'SELECT 1 /* notification event */', args: [] }]
         },
       }
+      if (name === './vehicle-fares') return vehicleFares
       throw new Error(`Unexpected module: ${name}`)
     },
     JSON,
@@ -74,6 +90,42 @@ function loadBookings({
 
   return { ...exports, routes }
 }
+
+test('vehicle quotes itemize both route directions using the selected car benchmark, not global distance price', () => {
+  const { buildVehicleQuoteSnapshot } = loadBookings()
+  const benchmark = {
+    amountUgx: 400_000,
+    currency: 'UGX',
+    derivationVersion: 1,
+    basis: {
+      routeId: 'kampala-jinja', routeVersion: 'approved-1',
+      origin: { label: 'Kampala', latitude: 0.3476, longitude: 32.5825 },
+      destination: { label: 'Jinja', latitude: 0.4479, longitude: 33.2026 },
+      roundTripDistanceMeters: 160_000, rounding: 'ceiling_per_leg',
+    },
+  }
+  const snapshot = buildVehicleQuoteSnapshot({
+    id: 'fare-v1', version: '1', currency: 'UGX', quote_ttl_seconds: 60, hold_ttl_seconds: 60,
+    rules_json: JSON.stringify({ components: [
+      { key: 'driver_lodging', label: 'Driver lodging', amount: 1, unit: 'per_night' },
+      { key: 'distance', label: 'Old shared distance price', amount: 2_000, unit: 'per_kilometer' },
+      { key: 'base', label: 'Base fee', amount: 10_000, unit: 'fixed' },
+    ], depositBasisPoints: 5000 }),
+  }, { distanceMeters: 80_000, durationSeconds: 7200 }, { distanceMeters: 84_000, durationSeconds: 7500 }, 2, 2, 42_000, benchmark, { vehicleId: 'vehicle-1', driverApplicationId: 'driver-app-1' })
+
+  assert.deepEqual(JSON.parse(JSON.stringify(snapshot.components)), [
+    { key: 'driver_lodging', label: 'Driver lodging', unit: 'per_night', unitRate: 42_000, quantity: 2, amount: 84_000 },
+    { key: 'base', label: 'Base fee', unit: 'fixed', unitRate: 10_000, quantity: 1, amount: 10_000 },
+    { key: 'outbound_transport', label: 'Outbound transport', unit: 'per_kilometer', unitRate: 2500, quantity: 80, amount: 200_000 },
+    { key: 'return_transport', label: 'Return transport', unit: 'per_kilometer', unitRate: 2500, quantity: 84, amount: 210_000 },
+  ])
+  assert.equal(snapshot.totalAmount, 504_000)
+  assert.equal(snapshot.depositAmount, 252_000)
+  assert.equal(snapshot.outboundRoute.distanceMeters, 80_000)
+  assert.equal(snapshot.returnRoute.distanceMeters, 84_000)
+  assert.equal(snapshot.vehicleFareBenchmark.amountUgx, 400_000)
+  assert.equal(snapshot.components.some((component) => component.key === 'distance'), false)
+})
 
 test('quote snapshots retain unit rates and quantities for later trip extensions', () => {
   const { buildQuoteSnapshot } = loadBookings()
@@ -141,7 +193,12 @@ test('trip quote creation fails closed when no approved fare policy is active', 
         async first() {
           if (sql.includes('FROM driver_trip_offers')) return null
           if (sql.includes('FROM vehicles AS vehicle')) {
-            return { id: 'vehicle-1', passenger_capacity: 4, luggage_capacity: 3, driver_lodging_rate_ugx: 42_000 }
+            return {
+              id: 'vehicle-1', passenger_capacity: 4, luggage_capacity: 3, driver_lodging_rate_ugx: 42_000,
+              benchmark_amount_ugx: testVehicleBenchmark.amountUgx,
+              benchmark_basis_json: JSON.stringify(testVehicleBenchmark.basis),
+              benchmark_derivation_version: 1,
+            }
           }
           if (sql.includes('FROM vehicle_unavailability')) return null
           if (sql.includes('FROM fare_policies')) return null
@@ -212,7 +269,12 @@ test('trip quote request waits for the selected driver before calculating a pric
         async first() {
           if (sql.includes('FROM driver_trip_offers')) return null
           if (sql.includes('FROM vehicles AS vehicle')) {
-            return { id: 'vehicle-1', passenger_capacity: 4, luggage_capacity: 3, driver_lodging_rate_ugx: 42_000 }
+            return {
+              id: 'vehicle-1', passenger_capacity: 4, luggage_capacity: 3, driver_lodging_rate_ugx: 42_000,
+              benchmark_amount_ugx: testVehicleBenchmark.amountUgx,
+              benchmark_basis_json: JSON.stringify(testVehicleBenchmark.basis),
+              benchmark_derivation_version: 1,
+            }
           }
           if (sql.includes('FROM vehicle_unavailability')) return null
           if (sql.includes('FROM fare_policies')) return farePolicy
@@ -346,6 +408,9 @@ test('requesting a trip saves a private driver offer and does not return a quote
             return {
               id: 'vehicle-1', driver_application_id: 'driver-app-1', driver_user_id: 'driver-1',
               passenger_capacity: 4, luggage_capacity: 3, driver_lodging_rate_ugx: 42_000,
+              benchmark_amount_ugx: testVehicleBenchmark.amountUgx,
+              benchmark_basis_json: JSON.stringify(testVehicleBenchmark.basis),
+              benchmark_derivation_version: 1,
             }
           }
           if (sql.includes('FROM vehicle_unavailability')) return null
@@ -415,15 +480,21 @@ test('driver acceptance creates the quote using that driver’s registered lodgi
   }
   const offer = {
     id: 'offer-1', client_user_id: 'client-1', vehicle_id: 'vehicle-1',
-    origin_json: JSON.stringify(location), destination_json: JSON.stringify({ ...location, address: 'Jinja' }),
+    origin_json: JSON.stringify(location), destination_json: JSON.stringify({ ...location, input: { address: 'Jinja' }, address: 'Jinja' }),
     start_date: '2099-01-01', end_date: '2099-01-03', party_size: 2, luggage_count: 1,
     status: 'pending', expires_at: Date.now() + 60_000, driver_application_id: 'driver-app-1',
     driver_lodging_rate_ugx: 42_000, passenger_capacity: 4, luggage_capacity: 3,
+    benchmark_amount_ugx: testVehicleBenchmark.amountUgx,
+    benchmark_basis_json: JSON.stringify(testVehicleBenchmark.basis),
+    benchmark_derivation_version: testVehicleBenchmark.derivationVersion,
   }
   let routeCalls = 0
   const { routes } = loadBookings({
     signedInUser: { id: 'driver-1', name: 'Driver' },
-    routeResult: { kind: 'ok', distanceMeters: 10_200, durationSeconds: 7_200 },
+    routeResult: (_env, origin, destination) => ({
+      kind: 'ok', distanceMeters: origin.address === 'Jinja' ? 11_000 : 10_200,
+      durationSeconds: destination.address === 'Jinja' ? 7_200 : 7_500,
+    }),
     onRouteCalculation: () => { routeCalls += 1 },
   })
   const queries = []
@@ -484,7 +555,11 @@ test('driver acceptance creates the quote using that driver’s registered lodgi
   assert.equal(response.payload.quote.components.find((component) => component.key === 'driver_lodging').amount, 84_000)
   assert.equal(sqlite.prepare('SELECT quote_id FROM driver_trip_offers WHERE id = ?').get(offer.id).quote_id, response.payload.quoteId)
   assert.equal(sqlite.prepare('SELECT COUNT(*) AS count FROM trip_quotes').get().count, 1)
-  assert.equal(routeCalls, 1)
+  assert.equal(routeCalls, 2)
+  assert.equal(response.payload.returnRoute.distanceMeters, 11_000)
+  assert.equal(response.payload.quote.returnRoute.distanceMeters, 11_000)
+  assert.equal(response.payload.quote.components.find((component) => component.key === 'return_transport').amount, 27_500)
+  assert.equal(response.payload.quote.components.some((component) => component.key === 'distance'), false)
   assert.equal(queries.some((query) => query.sql.includes('INSERT INTO trip_quotes')), true)
   const claim = queries.find((query) => query.sql.includes("SET status = 'quoting'"))
   assert.ok(claim.args[1] > offer.expires_at, 'the quote-preparation deadline should start when the driver accepts')
@@ -812,14 +887,17 @@ test('booking confirmation fails closed when required approved disclosures are u
   const farePolicy = {
     id: 'policy-1', version: '1', currency: 'UGX',
     rules_json: JSON.stringify({
-      components: [{ key: 'base', label: 'Base fare', amount: 10_000, unit: 'fixed' }],
+      components: [
+        { key: 'base', label: 'Base fare', amount: 10_000, unit: 'fixed' },
+        { key: 'driver_lodging', label: 'Driver lodging', amount: 1, unit: 'per_night' },
+      ],
       depositBasisPoints: 5_000,
     }),
     quote_ttl_seconds: 3600,
     hold_ttl_seconds: 1800,
   }
   const route = { kind: 'route', distanceMeters: 10_000, durationSeconds: 3_000 }
-  const quoteSnapshot = loadBookings().buildQuoteSnapshot(farePolicy, route, 2, 2)
+  const quoteSnapshot = loadBookings().buildVehicleQuoteSnapshot(farePolicy, route, route, 2, 2, 10_000, testVehicleBenchmark, { vehicleId: 'vehicle-1', driverApplicationId: 'driver-app-1' })
   const location = {
     input: { address: 'Kampala' },
     address: 'Kampala',
@@ -898,7 +976,7 @@ test('booking confirmation preserves the driver lodging rate captured in the quo
     hold_ttl_seconds: 1800,
   }
   const route = { kind: 'route', distanceMeters: 10_200, durationSeconds: 7_200 }
-  const quoteSnapshot = loadBookings().buildQuoteSnapshot(farePolicy, route, 2, 2, 42_000)
+  const quoteSnapshot = loadBookings().buildVehicleQuoteSnapshot(farePolicy, route, route, 2, 2, 42_000, testVehicleBenchmark, { vehicleId: 'vehicle-1', driverApplicationId: 'driver-app-1' })
   const location = {
     input: { address: 'Kampala' },
     address: 'Kampala',

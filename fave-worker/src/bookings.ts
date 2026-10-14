@@ -11,6 +11,8 @@ import { daysBetween, parseTripDateRange } from './trip-dates'
 import { approvedVehicleEvidencePredicate } from './vehicles'
 import { buildNotificationEventStatements } from './notification-store'
 import type { NotificationEventInput } from './notification-contracts'
+import { calculateVehicleFareLeg, validateVehicleFareBenchmark } from './vehicle-fares'
+import type { VehicleFareBenchmark } from './vehicle-fares'
 
 type FareComponent = {
   key: string
@@ -46,6 +48,11 @@ type QuoteSnapshot = {
   durationSeconds: number
   nights: number
   driverLodgingRate?: number
+  outboundRoute?: { distanceMeters: number; durationSeconds: number }
+  returnRoute?: { distanceMeters: number; durationSeconds: number }
+  vehicleFareBenchmark?: VehicleFareBenchmark
+  vehicleId?: string
+  driverApplicationId?: string
 }
 
 type TripLocationSnapshot = {
@@ -246,6 +253,59 @@ export function buildQuoteSnapshot(
   }
 }
 
+export function buildVehicleQuoteSnapshot(
+  policy: FarePolicy,
+  outboundRoute: { distanceMeters: number; durationSeconds: number },
+  returnRoute: { distanceMeters: number; durationSeconds: number },
+  nights: number,
+  partySize: number,
+  driverLodgingRate: number,
+  vehicleFareBenchmark: VehicleFareBenchmark,
+  selectedVehicle?: { vehicleId: string; driverApplicationId: string },
+): QuoteSnapshot | null {
+  if (!validateVehicleFareBenchmark(vehicleFareBenchmark)) return null
+  const parsedRules = parseFareRules(policy)
+  if (!parsedRules) return null
+  const nonDistancePolicy = {
+    ...policy,
+    rules_json: JSON.stringify({
+      components: parsedRules.components.filter((component) => component.unit !== 'per_kilometer'),
+      depositBasisPoints: parsedRules.depositBasisPoints,
+    }),
+  }
+  const base = buildQuoteSnapshot(nonDistancePolicy, outboundRoute, nights, partySize, driverLodgingRate)
+  const outbound = calculateVehicleFareLeg(vehicleFareBenchmark, outboundRoute.distanceMeters)
+  const returning = calculateVehicleFareLeg(vehicleFareBenchmark, returnRoute.distanceMeters)
+  if (!base || !outbound || !returning ||
+      !Number.isSafeInteger(outboundRoute.durationSeconds) || outboundRoute.durationSeconds < 0 ||
+      !Number.isSafeInteger(returnRoute.distanceMeters) || returnRoute.distanceMeters < 1 ||
+      !Number.isSafeInteger(returnRoute.durationSeconds) || returnRoute.durationSeconds < 0) return null
+
+  const components = [
+    ...base.components,
+    {
+      key: 'outbound_transport', label: 'Outbound transport', unit: 'per_kilometer' as const,
+      unitRate: outbound.rateUgxPerKm, quantity: outboundRoute.distanceMeters / 1000, amount: outbound.amountUgx,
+    },
+    {
+      key: 'return_transport', label: 'Return transport', unit: 'per_kilometer' as const,
+      unitRate: returning.rateUgxPerKm, quantity: returnRoute.distanceMeters / 1000, amount: returning.amountUgx,
+    },
+  ]
+  const totalAmount = components.reduce((sum, component) => sum + component.amount, 0)
+  if (!Number.isSafeInteger(totalAmount) || totalAmount > 10_000_000_000) return null
+  return {
+    ...base,
+    components,
+    totalAmount,
+    depositAmount: Math.ceil(totalAmount * base.depositBasisPoints / 10_000),
+    outboundRoute,
+    returnRoute,
+    vehicleFareBenchmark,
+    ...(selectedVehicle ? selectedVehicle : {}),
+  }
+}
+
 async function getActiveFarePolicy(env: AuthBindings): Promise<FarePolicy | null> {
   return env.DB.prepare(
     `SELECT id, version, currency, rules_json, quote_ttl_seconds, hold_ttl_seconds
@@ -346,7 +406,9 @@ tripsApp.post('/quote', async (c) => {
   const vehicle = await c.env.DB.prepare(
     `SELECT vehicle.id, vehicle.driver_application_id, driver.user_id AS driver_user_id,
             vehicle.passenger_capacity, vehicle.luggage_capacity,
-            driver.lodging_rate_ugx AS driver_lodging_rate_ugx
+            driver.lodging_rate_ugx AS driver_lodging_rate_ugx,
+            vehicle.benchmark_amount_ugx, vehicle.benchmark_basis_json,
+            vehicle.benchmark_derivation_version
       FROM vehicles AS vehicle
        JOIN driver_applications AS driver ON driver.id = vehicle.driver_application_id
       WHERE vehicle.id = ? AND vehicle.status = 'approved' AND driver.status = 'approved'
@@ -354,13 +416,29 @@ tripsApp.post('/quote', async (c) => {
       LIMIT 1`,
   )
     .bind(vehicleId, Date.now(), Date.now(), Date.now(), Date.now(), Date.now(), Date.now())
-    .first<{ id: string; driver_application_id: string; driver_user_id: string; passenger_capacity: number; luggage_capacity: number; driver_lodging_rate_ugx: number | null }>()
+    .first<{ id: string; driver_application_id: string; driver_user_id: string; passenger_capacity: number; luggage_capacity: number; driver_lodging_rate_ugx: number | null; benchmark_amount_ugx: number | null; benchmark_basis_json: string | null; benchmark_derivation_version: number | null }>()
   if (!vehicle) return c.json(apiError('VEHICLE_UNAVAILABLE', 'This vehicle is not available for selection.'), 409)
   if (vehicle.passenger_capacity < validation.partySize || vehicle.luggage_capacity < validation.luggageCount) {
     return c.json(apiError('VEHICLE_CAPACITY', 'This vehicle does not have enough passenger or luggage capacity.'), 422)
   }
   if (!Number.isSafeInteger(vehicle.driver_lodging_rate_ugx) || vehicle.driver_lodging_rate_ugx === null || vehicle.driver_lodging_rate_ugx < 1) {
     return c.json(apiError('DRIVER_LODGING_RATE_REQUIRED', 'This driver’s overnight accommodation rate is not available yet. Choose another vehicle or try again later.'), 409)
+  }
+  let selectedVehicleBenchmark: VehicleFareBenchmark | null = null
+  try {
+    if (vehicle.benchmark_amount_ugx !== null && vehicle.benchmark_basis_json && vehicle.benchmark_derivation_version === 1) {
+      selectedVehicleBenchmark = {
+        amountUgx: vehicle.benchmark_amount_ugx,
+        currency: 'UGX',
+        basis: JSON.parse(vehicle.benchmark_basis_json) as VehicleFareBenchmark['basis'],
+        derivationVersion: 1,
+      }
+    }
+  } catch {
+    selectedVehicleBenchmark = null
+  }
+  if (!selectedVehicleBenchmark || !validateVehicleFareBenchmark(selectedVehicleBenchmark)) {
+    return c.json(apiError('VEHICLE_FARE_UNAVAILABLE', 'This vehicle does not have an approved fare benchmark yet. Choose another car or try again later.'), 409)
   }
 
   const now = Date.now()
@@ -721,7 +799,9 @@ tripsApp.post('/driver-offers/:offerId/respond', async (c) => {
             offer.start_date, offer.end_date, offer.party_size, offer.luggage_count,
             offer.status, offer.expires_at, driver.id AS driver_application_id,
             driver.lodging_rate_ugx AS driver_lodging_rate_ugx,
-            vehicle.passenger_capacity, vehicle.luggage_capacity
+            vehicle.passenger_capacity, vehicle.luggage_capacity,
+            vehicle.benchmark_amount_ugx, vehicle.benchmark_basis_json,
+            vehicle.benchmark_derivation_version
        FROM driver_trip_offers AS offer
        JOIN driver_applications AS driver ON driver.id = offer.driver_application_id
        JOIN vehicles AS vehicle ON vehicle.id = offer.vehicle_id
@@ -732,6 +812,8 @@ tripsApp.post('/driver-offers/:offerId/respond', async (c) => {
     start_date: string; end_date: string; party_size: number; luggage_count: number
     status: string; expires_at: number; driver_application_id: string; driver_lodging_rate_ugx: number | null
     passenger_capacity: number; luggage_capacity: number
+    benchmark_amount_ugx: number | null; benchmark_basis_json: string | null
+    benchmark_derivation_version: number | null
   }>()
   if (!offer) return c.json(apiError('TRIP_OFFER_NOT_FOUND', 'This trip offer was not found.'), 404)
   if (offer.status !== 'pending') return c.json({ offerId: offer.id, status: offer.status }, 409)
@@ -763,7 +845,9 @@ tripsApp.post('/driver-offers/:offerId/respond', async (c) => {
   }
   if (!Number.isSafeInteger(offer.driver_lodging_rate_ugx) || offer.driver_lodging_rate_ugx === null ||
       offer.driver_lodging_rate_ugx < 1 || offer.passenger_capacity < offer.party_size ||
-      offer.luggage_capacity < offer.luggage_count) {
+      offer.luggage_capacity < offer.luggage_count ||
+      !Number.isSafeInteger(offer.benchmark_amount_ugx) || offer.benchmark_amount_ugx === null ||
+      !offer.benchmark_basis_json || offer.benchmark_derivation_version !== 1) {
     await c.env.DB.prepare(
       `UPDATE driver_trip_offers SET status = 'quote_failed', responded_at = ?
         WHERE id = ? AND driver_application_id = ? AND status = 'pending' AND expires_at > ?`,
@@ -834,15 +918,36 @@ tripsApp.post('/driver-offers/:offerId/respond', async (c) => {
     await c.env.DB.prepare(`UPDATE driver_trip_offers SET status = 'quote_failed' WHERE id = ? AND status = 'quoting'`).bind(offer.id).run()
     return c.json({ offerId: offer.id, status: 'quote_failed' }, 409)
   }
-  const route = await computeDrivingRoute(c.env, originInput, destinationInput)
-  if (route.kind !== 'ok') {
-    await c.env.DB.prepare(`UPDATE driver_trip_offers SET status = 'quote_failed' WHERE id = ? AND status = 'quoting'`).bind(offer.id).run()
-    return c.json({ offerId: offer.id, status: 'quote_failed' }, route.kind === 'provider_error' ? 503 : 422)
+  let vehicleBenchmark: VehicleFareBenchmark
+  try {
+    vehicleBenchmark = {
+      amountUgx: offer.benchmark_amount_ugx,
+      currency: 'UGX',
+      basis: JSON.parse(offer.benchmark_basis_json) as VehicleFareBenchmark['basis'],
+      derivationVersion: offer.benchmark_derivation_version,
+    }
+  } catch {
+    vehicleBenchmark = null as unknown as VehicleFareBenchmark
   }
-  const quoteSnapshot = buildQuoteSnapshot(
-    farePolicy, route, daysBetween(offer.start_date, offer.end_date), offer.party_size, offer.driver_lodging_rate_ugx,
+  if (!validateVehicleFareBenchmark(vehicleBenchmark)) {
+    await c.env.DB.prepare(`UPDATE driver_trip_offers SET status = 'quote_failed' WHERE id = ? AND status = 'quoting'`).bind(offer.id).run()
+    return c.json({ offerId: offer.id, status: 'quote_failed' }, 409)
+  }
+  const [outboundRoute, returnRoute] = await Promise.all([
+    computeDrivingRoute(c.env, originInput, destinationInput),
+    computeDrivingRoute(c.env, destinationInput, originInput),
+  ])
+  if (outboundRoute.kind !== 'ok' || returnRoute.kind !== 'ok') {
+    await c.env.DB.prepare(`UPDATE driver_trip_offers SET status = 'quote_failed' WHERE id = ? AND status = 'quoting'`).bind(offer.id).run()
+    const routeFailure = outboundRoute.kind !== 'ok' ? outboundRoute : returnRoute
+    return c.json({ offerId: offer.id, status: 'quote_failed' }, routeFailure.kind === 'provider_error' ? 503 : 422)
+  }
+  const vehicleQuoteSnapshot = buildVehicleQuoteSnapshot(
+    farePolicy, outboundRoute, returnRoute, daysBetween(offer.start_date, offer.end_date),
+    offer.party_size, offer.driver_lodging_rate_ugx, vehicleBenchmark,
+    { vehicleId: offer.vehicle_id, driverApplicationId: offer.driver_application_id },
   )
-  if (!quoteSnapshot) {
+  if (!vehicleQuoteSnapshot) {
     await c.env.DB.prepare(`UPDATE driver_trip_offers SET status = 'quote_failed' WHERE id = ? AND status = 'quoting'`).bind(offer.id).run()
     return c.json({ offerId: offer.id, status: 'quote_failed' }, 409)
   }
@@ -864,8 +969,8 @@ tripsApp.post('/driver-offers/:offerId/respond', async (c) => {
        )`,
     ).bind(
       quoteId, offer.client_user_id, offer.vehicle_id, farePolicy.id, offer.origin_json, offer.destination_json,
-      offer.start_date, offer.end_date, offer.party_size, offer.luggage_count, route.distanceMeters,
-      route.durationSeconds, JSON.stringify(quoteSnapshot), expiresAt, createdAt, offer.id, committedAt,
+      offer.start_date, offer.end_date, offer.party_size, offer.luggage_count, outboundRoute.distanceMeters,
+      outboundRoute.durationSeconds, JSON.stringify(vehicleQuoteSnapshot), expiresAt, createdAt, offer.id, committedAt,
     ),
     c.env.DB.prepare(
       `UPDATE driver_trip_offers SET status = 'quoted', quote_id = ?
@@ -893,8 +998,9 @@ tripsApp.post('/driver-offers/:offerId/respond', async (c) => {
   return c.json({
     offerId: offer.id, status: 'quoted', quoteId, vehicleId: offer.vehicle_id,
     pickup: originSnapshot, destination: destinationSnapshot,
-    route: { distanceMeters: route.distanceMeters, durationSeconds: route.durationSeconds, provider: 'google_maps' },
-    quote: quoteSnapshot, expiresAt,
+    route: { distanceMeters: outboundRoute.distanceMeters, durationSeconds: outboundRoute.durationSeconds, provider: 'google_maps' },
+    returnRoute: { distanceMeters: returnRoute.distanceMeters, durationSeconds: returnRoute.durationSeconds, provider: 'google_maps' },
+    quote: vehicleQuoteSnapshot, expiresAt,
   })
 })
 
@@ -988,26 +1094,45 @@ tripsApp.post('/confirm', async (c) => {
     return c.json(apiError('QUOTE_CHANGED', 'A trip location resolved differently. Request and review a fresh quote before confirming.'), 409)
   }
 
-  const currentRoute = await computeDrivingRoute(c.env, origin, destination)
-  if (currentRoute.kind === 'provider_error') {
+  const [currentRoute, currentReturnRoute] = await Promise.all([
+    computeDrivingRoute(c.env, origin, destination),
+    computeDrivingRoute(c.env, destination, origin),
+  ])
+  if (currentRoute.kind === 'provider_error' || currentReturnRoute.kind === 'provider_error') {
     return c.json(apiError('GOOGLE_MAPS_UNAVAILABLE', 'We could not recheck this trip route right now.'), 503)
   }
-  if (currentRoute.kind === 'no_route') {
+  if (currentRoute.kind === 'no_route' || currentReturnRoute.kind === 'no_route') {
     return c.json(apiError('QUOTE_CHANGED', 'The route is no longer available. Request a new quote.'), 409)
   }
   if (
     currentRoute.distanceMeters !== quote.route_distance_meters ||
-    currentRoute.durationSeconds !== quote.route_duration_seconds
+    currentRoute.durationSeconds !== quote.route_duration_seconds ||
+    !previousQuote.returnRoute ||
+    currentReturnRoute.distanceMeters !== previousQuote.returnRoute.distanceMeters ||
+    currentReturnRoute.durationSeconds !== previousQuote.returnRoute.durationSeconds
   ) {
-    return c.json(apiError('QUOTE_CHANGED', 'The route estimate changed. Request and review a new quote before confirming.'), 409)
+    return c.json(apiError('QUOTE_CHANGED', 'One of the route estimates changed. Request and review a new quote before confirming.'), 409)
   }
 
-  const currentSnapshot = buildQuoteSnapshot(
+  if (!previousQuote.vehicleFareBenchmark || !validateVehicleFareBenchmark(previousQuote.vehicleFareBenchmark)) {
+    return c.json(apiError('QUOTE_INVALID', 'This quote is missing its vehicle fare calculation. Request a new one.'), 409)
+  }
+  if (previousQuote.vehicleId !== quote.vehicle_id || typeof previousQuote.driverApplicationId !== 'string' ||
+      previousQuote.driverApplicationId.trim().length === 0) {
+    return c.json(apiError('QUOTE_INVALID', 'This quote is missing its accepted driver or vehicle. Request a new one.'), 409)
+  }
+  if (typeof previousQuote.driverLodgingRate !== 'number' || !Number.isSafeInteger(previousQuote.driverLodgingRate)) {
+    return c.json(apiError('QUOTE_INVALID', 'This quote is missing its driver lodging rate. Request a new one.'), 409)
+  }
+  const currentSnapshot = buildVehicleQuoteSnapshot(
     currentPolicy,
     currentRoute,
+    currentReturnRoute,
     daysBetween(quote.start_date, quote.end_date),
     quote.party_size,
     previousQuote.driverLodgingRate,
+    previousQuote.vehicleFareBenchmark,
+    { vehicleId: previousQuote.vehicleId, driverApplicationId: previousQuote.driverApplicationId },
   )
   if (!currentSnapshot || JSON.stringify(currentSnapshot) !== JSON.stringify(previousQuote)) {
     return c.json(apiError('QUOTE_CHANGED', 'The fare changed. Review a new quote before confirming.'), 409)

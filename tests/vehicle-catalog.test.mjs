@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import vm from 'node:vm'
 import ts from 'typescript'
+import * as vehicleFares from '../fave-worker/src/vehicle-fares.ts'
 
 const driversSource = fileURLToPath(new URL('../fave-worker/src/drivers.ts', import.meta.url))
 const vehiclesSource = fileURLToPath(new URL('../fave-worker/src/vehicles.ts', import.meta.url))
@@ -62,6 +63,7 @@ function loadVehicleCatalog(user = { id: 'client-1', name: 'Client', email: 'cli
   }
 
   const vehicleExports = loadModule(vehiclesSource, {
+    './vehicle-fares': vehicleFares,
     hono: { Hono: CapturingHono },
     './drivers': {
       approvedDriverEvidencePredicate: drivers.approvedDriverEvidencePredicate,
@@ -117,6 +119,14 @@ test('vehicle catalog only returns public vehicle facts and approved client phot
     luggage_capacity: 4,
     comfort_details: 'Air conditioning',
     accessibility_details: '',
+    benchmark_amount_ugx: 400_000,
+    benchmark_basis_json: JSON.stringify({
+      routeId: 'kampala-jinja', routeVersion: 'approved-1',
+      origin: { label: 'Kampala', latitude: 0.3476, longitude: 32.5825 },
+      destination: { label: 'Jinja', latitude: 0.4479, longitude: 33.2026 },
+      roundTripDistanceMeters: 160_000, rounding: 'ceiling_per_leg',
+    }),
+    benchmark_derivation_version: 1,
     registration_number: 'PRIVATE-PLATE',
     driver_application_id: 'PRIVATE-DRIVER-ID',
     applicant_message: 'PRIVATE-REVIEW-NOTE',

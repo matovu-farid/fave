@@ -1,6 +1,6 @@
 # Per-vehicle transport pricing design
 
-**Status:** Design approved by product owner; awaiting written-spec review before implementation  
+**Status:** Design and written spec approved by product owner; implementation in progress on `main`
 **Date:** 2026-10-14  
 **Issues:** [#8 vehicle listings](https://github.com/matovu-farid/fave/issues/8), [#9 trip estimates](https://github.com/matovu-farid/fave/issues/9), [#10 client trip request](https://github.com/matovu-farid/fave/issues/10), [#15 fare and settlement policy](https://github.com/matovu-farid/fave/issues/15)
 

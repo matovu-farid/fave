@@ -37,6 +37,8 @@ export type Vehicle = {
   comfortDetails: string
   accessibilityDetails: string
   registrationNumber?: string
+  benchmarkAmountUgx?: number | null
+  benchmark?: VehicleFareBenchmark | null
   status?: string
   applicantMessage?: string | null
   media?: {
@@ -49,10 +51,25 @@ export type Vehicle = {
   }[]
   photos?: { id: string; url: string }[]
 }
+export type VehicleBenchmarkBasis = {
+  routeId: string
+  routeVersion: string
+  origin: { label: string; latitude: number; longitude: number }
+  destination: { label: string; latitude: number; longitude: number }
+  roundTripDistanceMeters: number
+  rounding: 'ceiling_per_leg'
+}
+export type VehicleFareBenchmark = {
+  amountUgx: number
+  currency: 'UGX'
+  basis: VehicleBenchmarkBasis
+  derivationVersion: 1
+}
 export type VehicleRequirements = {
   requirements: { evidence_type: string; version: string }[]
   retentionPolicy: { active: boolean; version?: string; retention_days?: number }
   readyToList: boolean
+  benchmarkBasis: VehicleBenchmarkBasis | null
 }
 export type VehicleAvailability = {
   unavailable: { id: string; start_date: string; end_date: string }[]
@@ -92,6 +109,11 @@ export type TripQuote = {
     depositBasisPoints: number
     farePolicyVersion: string
     driverLodgingRate?: number
+    outboundRoute?: { distanceMeters: number; durationSeconds: number }
+    returnRoute?: { distanceMeters: number; durationSeconds: number }
+    vehicleFareBenchmark?: VehicleFareBenchmark
+    vehicleId?: string
+    driverApplicationId?: string
   }
   expiresAt: number
 }
@@ -211,6 +233,7 @@ export function submitVehicleCorrections(vehicleId: string, form: FormData) {
 export function updateVehicle(vehicleId: string, vehicle: {
   make: string; model: string; year: number; passengerCapacity: number; luggageCapacity: number;
   comfortDetails: string; accessibilityDetails: string; registrationNumber: string;
+  benchmarkAmountUgx?: number;
 }) {
   return authenticatedFetch<{ vehicleId: string; status: string; reviewRequired: boolean }>(`/api/vehicles/${vehicleId}`, {
     method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(vehicle),

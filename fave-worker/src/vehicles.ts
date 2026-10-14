@@ -8,6 +8,8 @@ import {
   writeMarketplaceAudit,
 } from './marketplace-auth'
 import { readPrivateEvidence, readPublicVehiclePhoto, storePrivateEvidence, storePublicVehiclePhoto } from './private-files'
+import { parseVehicleFareBenchmarkBasis, validateVehicleFareBenchmark } from './vehicle-fares'
+import type { VehicleBenchmarkBasis, VehicleFareBenchmark } from './vehicle-fares'
 
 type VehicleStatus = 'draft' | 'pending_review' | 'needs_correction' | 'approved' | 'rejected' | 'suspended'
 type VehicleRecord = {
@@ -24,6 +26,9 @@ type VehicleRecord = {
   status: VehicleStatus
   reviewer_reason: string | null
   applicant_message?: string | null
+  benchmark_amount_ugx?: number | null
+  benchmark_basis_json?: string | null
+  benchmark_derivation_version?: number | null
 }
 type FormEntryValue = string | File
 const allowedVehicleEvidenceTypes = new Set([
@@ -77,7 +82,7 @@ export function approvedVehicleEvidencePredicate(vehicleAlias: string): string {
 vehiclesApp.get('/requirements', async (c) => {
   const user = await getSignedInUser(c.env, c.req.raw)
   if (!user) return c.json(apiError('UNAUTHORIZED', 'Sign in to continue.'), 401)
-  const [requirements, retention] = await Promise.all([
+  const [requirements, retention, farePolicy] = await Promise.all([
     c.env.DB.prepare(
       `SELECT evidence_type, version FROM vehicle_verification_requirements
         WHERE active = 1 AND required = 1 AND approved_at IS NOT NULL ORDER BY evidence_type`,
@@ -87,6 +92,11 @@ vehiclesApp.get('/requirements', async (c) => {
         WHERE record_type = 'vehicle_evidence' AND active = 1 AND approved_at IS NOT NULL
         ORDER BY approved_at DESC LIMIT 1`,
     ).first<{ version: string; retention_days: number }>(),
+    c.env.DB.prepare(
+      `SELECT rules_json FROM fare_policies
+        WHERE active = 1 AND approved_at IS NOT NULL AND effective_at IS NOT NULL AND effective_at <= ?
+        ORDER BY effective_at DESC LIMIT 1`,
+    ).bind(Date.now()).first<{ rules_json: string }>(),
   ])
   const checklistValid = requirements.results.length > 0 &&
     requirements.results.length <= allowedVehicleEvidenceTypes.size &&
@@ -95,6 +105,7 @@ vehiclesApp.get('/requirements', async (c) => {
     requirements: requirements.results,
     retentionPolicy: retention ? { active: true, ...retention } : { active: false },
     readyToList: checklistValid && retention !== null,
+    benchmarkBasis: farePolicy ? parseVehicleFareBenchmarkBasis(farePolicy.rules_json) : null,
   })
 })
 
@@ -138,7 +149,8 @@ async function getVehicle(
   return env.DB.prepare(
     `SELECT id, driver_application_id, make, model, model_year, passenger_capacity,
             luggage_capacity, comfort_details, accessibility_details, registration_number,
-            status, reviewer_reason, applicant_message
+            status, reviewer_reason, applicant_message, benchmark_amount_ugx,
+            benchmark_basis_json, benchmark_derivation_version
        FROM vehicles WHERE id = ? LIMIT 1`,
   )
     .bind(vehicleId)
@@ -220,6 +232,24 @@ function safeVehicle(vehicle: VehicleRecord) {
   }
 }
 
+function privateVehicleFareBenchmark(
+  vehicle: Pick<VehicleRecord, 'benchmark_amount_ugx' | 'benchmark_basis_json' | 'benchmark_derivation_version'>,
+): VehicleFareBenchmark | null {
+  if (typeof vehicle.benchmark_amount_ugx !== 'number' || !Number.isSafeInteger(vehicle.benchmark_amount_ugx) ||
+      !vehicle.benchmark_basis_json || vehicle.benchmark_derivation_version !== 1) return null
+  try {
+    const benchmark: VehicleFareBenchmark = {
+      amountUgx: vehicle.benchmark_amount_ugx,
+      currency: 'UGX',
+      basis: JSON.parse(vehicle.benchmark_basis_json) as VehicleBenchmarkBasis,
+      derivationVersion: 1,
+    }
+    return validateVehicleFareBenchmark(benchmark) ? benchmark : null
+  } catch {
+    return null
+  }
+}
+
 vehiclesApp.get('/mine', async (c) => {
   const user = await getSignedInUser(c.env, c.req.raw)
   if (!user) return c.json(apiError('UNAUTHORIZED', 'Sign in to continue.'), 401)
@@ -234,7 +264,8 @@ vehiclesApp.get('/mine', async (c) => {
   const vehicles = await c.env.DB.prepare(
     `SELECT id, driver_application_id, make, model, model_year, passenger_capacity,
             luggage_capacity, comfort_details, accessibility_details, registration_number,
-            status, reviewer_reason, applicant_message
+            status, reviewer_reason, applicant_message, benchmark_amount_ugx,
+            benchmark_basis_json, benchmark_derivation_version
        FROM vehicles WHERE driver_application_id = ? ORDER BY created_at DESC`,
   )
     .bind(application.id)
@@ -263,6 +294,8 @@ vehiclesApp.get('/mine', async (c) => {
         registrationNumber: vehicle.registration_number,
         status: vehicle.status,
         applicantMessage: vehicle.applicant_message,
+        benchmarkAmountUgx: vehicle.benchmark_amount_ugx,
+        benchmark: privateVehicleFareBenchmark(vehicle),
         media: media.results.map((item) => ({
           id: item.id,
           type: item.media_kind,
@@ -301,6 +334,10 @@ vehiclesApp.post('/', async (c) => {
   const comfort = textField('comfortDetails')
   const accessibility = textField('accessibilityDetails')
   const registration = textField('registrationNumber')
+  const benchmarkAmount = textField('benchmarkAmountUgx')
+  const benchmarkAmountUgx = typeof benchmarkAmount === 'string' && /^\d{1,10}$/u.test(benchmarkAmount)
+    ? Number(benchmarkAmount)
+    : Number.NaN
   const modelYear = typeof yearText === 'string' ? Number(yearText) : Number.NaN
   const passengerCapacity = typeof passengersText === 'string' ? Number(passengersText) : Number.NaN
   const luggageCapacity = typeof luggageText === 'string' ? Number(luggageText) : Number.NaN
@@ -313,9 +350,29 @@ vehiclesApp.post('/', async (c) => {
     !Number.isInteger(luggageCapacity) || luggageCapacity < 0 || luggageCapacity > 20 ||
     typeof comfort !== 'string' || comfort.trim().length < 3 || comfort.trim().length > 500 ||
     typeof accessibility !== 'string' || accessibility.trim().length > 500 ||
-    typeof registration !== 'string' || registration.trim().length < 3 || registration.trim().length > 40
+    typeof registration !== 'string' || registration.trim().length < 3 || registration.trim().length > 40 ||
+    !Number.isSafeInteger(benchmarkAmountUgx) || benchmarkAmountUgx < 1 || benchmarkAmountUgx > 1_000_000_000
   ) {
     return c.json(apiError('INVALID_VEHICLE', 'Check the make, model, year, capacity, comfort, accessibility, and registration details.'), 400)
+  }
+
+  const farePolicy = await c.env.DB.prepare(
+    `SELECT rules_json FROM fare_policies
+      WHERE active = 1 AND approved_at IS NOT NULL AND effective_at IS NOT NULL AND effective_at <= ?
+      ORDER BY effective_at DESC LIMIT 1`,
+  ).bind(Date.now()).first<{ rules_json: string }>()
+  const benchmarkBasis = farePolicy ? parseVehicleFareBenchmarkBasis(farePolicy.rules_json) : null
+  if (!benchmarkBasis) {
+    return c.json(apiError('VEHICLE_FARE_BASIS_UNAVAILABLE', 'Vehicle pricing is not ready yet. Fave must approve the Kampala–Jinja road-distance benchmark before a car price can be submitted.'), 409)
+  }
+  const benchmark: VehicleFareBenchmark = {
+    amountUgx: benchmarkAmountUgx,
+    currency: 'UGX',
+    basis: benchmarkBasis,
+    derivationVersion: 1,
+  }
+  if (!validateVehicleFareBenchmark(benchmark)) {
+    return c.json(apiError('INVALID_VEHICLE_FARE', 'Enter a whole-number Kampala–Jinja round-trip amount in UGX.'), 400)
   }
 
   const activeRequirements = await c.env.DB.prepare(
@@ -412,8 +469,9 @@ vehiclesApp.post('/', async (c) => {
         `INSERT INTO vehicles
           (id, driver_application_id, make, model, model_year, passenger_capacity,
            luggage_capacity, comfort_details, accessibility_details, registration_number,
-           status, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending_review', ?, ?)`,
+           status, benchmark_amount_ugx, benchmark_basis_json, benchmark_derivation_version,
+           created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending_review', ?, ?, 1, ?, ?)`,
       ).bind(
         vehicleId,
         application.id,
@@ -425,6 +483,8 @@ vehiclesApp.post('/', async (c) => {
         comfort.trim(),
         accessibility.trim(),
         registration.trim().toUpperCase(),
+        benchmark.amountUgx,
+        JSON.stringify(benchmark.basis),
         now,
         now,
       ),
@@ -630,6 +690,7 @@ vehiclesApp.patch('/:vehicleId', async (c) => {
   const comfort = input.comfortDetails
   const accessibility = input.accessibilityDetails
   const registration = input.registrationNumber
+  const benchmarkInput = input.benchmarkAmountUgx
   if (
     typeof make !== 'string' || make.trim().length < 2 || make.trim().length > 80 ||
     typeof model !== 'string' || model.trim().length < 1 || model.trim().length > 80 ||
@@ -638,7 +699,8 @@ vehiclesApp.patch('/:vehicleId', async (c) => {
     !Number.isInteger(luggageCapacity) || Number(luggageCapacity) < 0 || Number(luggageCapacity) > 20 ||
     typeof comfort !== 'string' || comfort.trim().length < 3 || comfort.trim().length > 500 ||
     typeof accessibility !== 'string' || accessibility.trim().length > 500 ||
-    typeof registration !== 'string' || registration.trim().length < 3 || registration.trim().length > 40
+    typeof registration !== 'string' || registration.trim().length < 3 || registration.trim().length > 40 ||
+    (benchmarkInput !== undefined && (!Number.isSafeInteger(benchmarkInput) || Number(benchmarkInput) < 1 || Number(benchmarkInput) > 1_000_000_000))
   ) {
     return c.json(apiError('INVALID_VEHICLE', 'Check the make, model, year, capacity, comfort, accessibility, and registration details.'), 400)
   }
@@ -646,11 +708,28 @@ vehiclesApp.patch('/:vehicleId', async (c) => {
   const updatedMake = make.trim()
   const updatedModel = model.trim()
   const updatedRegistration = registration.trim().toUpperCase()
+  const benchmarkAmountUgx = benchmarkInput === undefined
+    ? vehicle.benchmark_amount_ugx
+    : Number(benchmarkInput)
+  let benchmarkBasisJson = vehicle.benchmark_basis_json ?? null
+  if (benchmarkInput !== undefined && benchmarkInput !== vehicle.benchmark_amount_ugx) {
+    const farePolicy = await c.env.DB.prepare(
+      `SELECT rules_json FROM fare_policies
+        WHERE active = 1 AND approved_at IS NOT NULL AND effective_at IS NOT NULL AND effective_at <= ?
+        ORDER BY effective_at DESC LIMIT 1`,
+    ).bind(Date.now()).first<{ rules_json: string }>()
+    const basis = farePolicy ? parseVehicleFareBenchmarkBasis(farePolicy.rules_json) : null
+    if (!basis) {
+      return c.json(apiError('VEHICLE_FARE_BASIS_UNAVAILABLE', 'Fave must approve the Kampala–Jinja road-distance benchmark before a car price can be changed.'), 409)
+    }
+    benchmarkBasisJson = JSON.stringify(basis)
+  }
   const identityChanged = vehicle.make !== updatedMake || vehicle.model !== updatedModel ||
     vehicle.model_year !== Number(modelYear) || vehicle.registration_number !== updatedRegistration
+  const benchmarkChanged = vehicle.benchmark_amount_ugx !== benchmarkAmountUgx
   const listingChanged = identityChanged || vehicle.passenger_capacity !== Number(passengerCapacity) ||
     vehicle.luggage_capacity !== Number(luggageCapacity) || vehicle.comfort_details !== comfort.trim() ||
-    vehicle.accessibility_details !== accessibility.trim()
+    vehicle.accessibility_details !== accessibility.trim() || benchmarkChanged
   if (!listingChanged) {
     return c.json({ vehicleId: vehicle.id, status: vehicle.status, reviewRequired: false })
   }
@@ -665,16 +744,21 @@ vehiclesApp.patch('/:vehicleId', async (c) => {
     c.env.DB.prepare(
       `UPDATE vehicles SET make = ?, model = ?, model_year = ?, passenger_capacity = ?,
           luggage_capacity = ?, comfort_details = ?, accessibility_details = ?,
-          registration_number = ?, status = ?, reviewer_reason = NULL, applicant_message = NULL, updated_at = ?
+          registration_number = ?, benchmark_amount_ugx = ?, benchmark_basis_json = ?,
+          benchmark_derivation_version = CASE WHEN ? IS NULL THEN NULL ELSE 1 END,
+          status = ?, reviewer_reason = NULL, applicant_message = NULL, updated_at = ?
         WHERE id = ? AND status = ?`,
     ).bind(updatedMake, updatedModel, Number(modelYear), Number(passengerCapacity), Number(luggageCapacity),
-      comfort.trim(), accessibility.trim(), updatedRegistration, nextStatus, now, vehicle.id, vehicle.status),
+      comfort.trim(), accessibility.trim(), updatedRegistration, benchmarkAmountUgx, benchmarkBasisJson,
+      benchmarkAmountUgx, nextStatus, now, vehicle.id, vehicle.status),
     c.env.DB.prepare(
       `INSERT INTO marketplace_audit_events
         (id, actor_user_id, action, target_type, target_id, reason, prior_state, new_state, created_at)
-       SELECT ?, ?, 'vehicle_listing_updated', 'vehicle', ?, 'Driver updated vehicle facts.', ?, ?, ?
+       SELECT ?, ?, 'vehicle_listing_updated', 'vehicle', ?, ?, ?, ?, ?
         WHERE changes() = 1`,
-    ).bind(crypto.randomUUID(), user.id, vehicle.id, vehicle.status, nextStatus, now),
+    ).bind(crypto.randomUUID(), user.id, vehicle.id,
+      benchmarkChanged ? 'Driver updated vehicle facts and its Kampala–Jinja fare benchmark.' : 'Driver updated vehicle facts.',
+      vehicle.status, nextStatus, now),
     c.env.DB.prepare(
       `UPDATE vehicle_media
           SET review_status = CASE WHEN ? = 1 THEN 'rejected' ELSE 'pending' END,
@@ -713,7 +797,9 @@ vehiclesApp.get('/catalog', async (c) => {
   const result = await c.env.DB.prepare(
     `SELECT vehicle.id, vehicle.make, vehicle.model, vehicle.model_year,
             vehicle.passenger_capacity, vehicle.luggage_capacity,
-            vehicle.comfort_details, vehicle.accessibility_details
+            vehicle.comfort_details, vehicle.accessibility_details,
+            vehicle.benchmark_amount_ugx, vehicle.benchmark_basis_json,
+            vehicle.benchmark_derivation_version
        FROM vehicles AS vehicle
        JOIN driver_applications AS driver ON driver.id = vehicle.driver_application_id
       WHERE vehicle.status = 'approved' AND driver.status = 'approved'
@@ -757,10 +843,13 @@ vehiclesApp.get('/catalog', async (c) => {
       luggage_capacity: number
       comfort_details: string
       accessibility_details: string
+      benchmark_amount_ugx: number | null
+      benchmark_basis_json: string | null
+      benchmark_derivation_version: number | null
     }>()
 
   const catalog = await Promise.all(
-    result.results.map(async (vehicle) => {
+    result.results.filter((vehicle) => privateVehicleFareBenchmark(vehicle) !== null).map(async (vehicle) => {
       const photos = await c.env.DB.prepare(
         `SELECT id FROM vehicle_media
           WHERE vehicle_id = ? AND media_kind = 'client_photo' AND review_status = 'approved'
@@ -935,7 +1024,8 @@ adminVehiclesApp.get('/pending', async (c) => {
     `SELECT vehicle.id, vehicle.make, vehicle.model, vehicle.model_year,
             vehicle.passenger_capacity, vehicle.luggage_capacity,
             vehicle.comfort_details, vehicle.accessibility_details,
-            vehicle.status, vehicle.reviewer_reason
+            vehicle.status, vehicle.reviewer_reason, vehicle.benchmark_amount_ugx,
+            vehicle.benchmark_basis_json, vehicle.benchmark_derivation_version
        FROM vehicles AS vehicle WHERE vehicle.status IN ('pending_review', 'needs_correction')
       ORDER BY vehicle.created_at ASC`,
   ).all<VehicleRecord>()
@@ -954,6 +1044,7 @@ adminVehiclesApp.get('/pending', async (c) => {
       .all<{ id: string; media_kind: string; review_status: string; reviewer_reason: string | null }>()
     return {
       ...safeVehicle(vehicle),
+      benchmark: privateVehicleFareBenchmark(vehicle),
       status: vehicle.status,
       reason: vehicle.reviewer_reason,
       media: media.results.map((item) => ({
