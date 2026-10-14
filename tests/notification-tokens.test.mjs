@@ -13,6 +13,7 @@ function loadNotifications({ user = { id: 'user-1', name: 'User' } } = {}) {
   const exports = {}
   const routes = new Map()
   class CapturingHono {
+    get(path, handler) { routes.set(`GET ${path}`, handler); return this }
     post(path, handler) { routes.set(`POST ${path}`, handler); return this }
     delete(path, handler) { routes.set(`DELETE ${path}`, handler); return this }
   }
@@ -26,6 +27,14 @@ function loadNotifications({ user = { id: 'user-1', name: 'User' } } = {}) {
       if (name === './marketplace-auth') return {
         apiError: (code, message) => ({ error: { code, message } }),
         getSignedInUser: async () => user,
+      }
+      if (name === './notification-store') return {
+        listNotifications: async () => ({ items: [], unreadCount: 0, nextCursor: null }),
+        markAllNotificationsRead: async () => 0,
+        markNotificationRead: async () => false,
+      }
+      if (name === './notification-delivery') return {
+        safeNotificationCopy: () => ({ title: '', body: '' }),
       }
       throw new Error(`Unexpected module: ${name}`)
     },

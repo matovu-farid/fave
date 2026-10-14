@@ -137,6 +137,21 @@ export type AdminDriverTripOffer = {
   route: { pickupArea: string; destinationArea: string }
   followUpCount: number
 }
+export type NotificationInboxItem = {
+  id: string
+  title: string
+  body: string
+  routeKey: 'trips' | 'driver_offers' | 'booking' | 'trip' | 'payments' | 'safety' | 'support'
+  priority: 'ordinary' | 'urgent' | 'time_sensitive'
+  createdAt: number
+  readAt: number | null
+  isRead: boolean
+}
+export type NotificationInboxPage = {
+  notifications: NotificationInboxItem[]
+  unreadCount: number
+  nextCursor: { createdAt: number; id: string } | null
+}
 export type AdminTripOffers = {
   pendingOffers: AdminDriverTripOffer[]
   processingOffers: AdminDriverTripOffer[]
@@ -265,6 +280,20 @@ export function getAdminTripOffers() {
 }
 export function getDriverTripOfferContact(offerId: string) {
   return authenticatedFetch<DriverContact>(`/api/admin/trip-offers/${encodeURIComponent(offerId)}/driver-contact`, { method: 'POST' })
+}
+export function getNotificationInbox(cursor?: { createdAt: number; id: string } | null) {
+  const params = new URLSearchParams({ limit: '30' })
+  if (cursor) {
+    params.set('createdAt', String(cursor.createdAt))
+    params.set('id', cursor.id)
+  }
+  return authenticatedFetch<NotificationInboxPage>(`/api/notifications/inbox?${params.toString()}`)
+}
+export function markNotificationRead(notificationId: string) {
+  return authenticatedFetch<{ read: true; readAt: number }>(`/api/notifications/inbox/${encodeURIComponent(notificationId)}/read`, { method: 'POST' })
+}
+export function markAllNotificationsRead() {
+  return authenticatedFetch<{ updated: number; readAt: number }>('/api/notifications/inbox/read-all', { method: 'POST' })
 }
 export function recordDriverTripOfferFollowUp(offerId: string, outcome: DriverCallOutcome, note: string) {
   return authenticatedFetch<{ followUpId: string; offerId: string; outcome: DriverCallOutcome; createdAt: number }>(
