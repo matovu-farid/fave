@@ -1,8 +1,57 @@
 import { Hono, type Context } from 'hono'
 import type { AuthBindings } from './auth'
 import { apiError, getSignedInUser } from './marketplace-auth'
+import { listNotifications, markAllNotificationsRead, markNotificationRead } from './notification-store'
+import { safeNotificationCopy } from './notification-delivery'
 
 const notificationsApp = new Hono<{ Bindings: AuthBindings }>()
+
+notificationsApp.get('/inbox', async (c) => {
+  const access = await requireUser(c)
+  if ('error' in access) return access.error
+
+  const rawLimit = Number(c.req.query('limit') ?? 20)
+  const limit = Number.isSafeInteger(rawLimit) ? Math.max(1, Math.min(50, rawLimit)) : 20
+  const rawCreatedAt = c.req.query('createdAt')
+  const rawId = c.req.query('id')
+  const createdAt = rawCreatedAt && /^\d{1,16}$/u.test(rawCreatedAt) ? Number(rawCreatedAt) : null
+  const cursor = createdAt !== null && rawId && rawId.length <= 128
+    ? { createdAt, id: rawId }
+    : null
+
+  const page = await listNotifications(c.env.DB, access.user.id, cursor, limit)
+  return c.json({
+    notifications: page.items.map((item) => ({
+      id: item.id,
+      ...safeNotificationCopy(item.templateKey),
+      routeKey: item.routeKey,
+      priority: item.priority,
+      createdAt: item.createdAt,
+      readAt: item.readAt,
+      isRead: item.readAt !== null,
+    })),
+    unreadCount: page.unreadCount,
+    nextCursor: page.nextCursor,
+  })
+})
+
+notificationsApp.post('/inbox/read-all', async (c) => {
+  const access = await requireUser(c)
+  if ('error' in access) return access.error
+  const readAt = Date.now()
+  const updated = await markAllNotificationsRead(c.env.DB, access.user.id, readAt)
+  return c.json({ updated, readAt })
+})
+
+notificationsApp.post('/inbox/:notificationId/read', async (c) => {
+  const access = await requireUser(c)
+  if ('error' in access) return access.error
+  const readAt = Date.now()
+  const updated = await markNotificationRead(c.env.DB, access.user.id, c.req.param('notificationId'), readAt)
+  return updated
+    ? c.json({ read: true, readAt })
+    : c.json(apiError('NOTIFICATION_NOT_FOUND', 'This notification was not found.'), 404)
+})
 
 function parsePushToken(value: unknown): string | null {
   if (typeof value !== 'string' || value.length > 512) return null
