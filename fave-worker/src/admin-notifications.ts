@@ -46,6 +46,7 @@ adminNotificationsApp.get('/health', async (c) => {
       ? null
       : Math.max(0, now - oldest.createdAt),
     failures: failed.results.map((row) => ({
+      deliveryId: row.deliveryId,
       deliveryRef: row.deliveryId.slice(0, 8),
       eventType: row.eventType,
       status: row.status,

@@ -180,6 +180,7 @@ test('notification health requires an admin and returns redacted delivery metada
   const response = await admin.routes.get('GET /health')(adminContext(admin.DB))
   const serialized = JSON.stringify(response.payload)
   assert.equal(serialized.includes('private-user'), false)
+  assert.equal(response.payload.failures[0].deliveryId, 'delivery-12345678')
   assert.equal(response.payload.failures[0].deliveryRef, 'delivery')
   assert.equal(response.payload.failures[0].attemptCount, 5)
 })

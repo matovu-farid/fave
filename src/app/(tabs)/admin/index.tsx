@@ -7,6 +7,7 @@ import { ActionButton, Card, Field, Message, SectionTitle } from '@/components/m
 import { ThemedText } from '@/components/themed-text'
 import { ThemedView } from '@/components/themed-view'
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme'
+import { AdminNotificationHealth } from '@/components/admin-notification-health'
 import {
   AdminDriverTripOffer,
   DriverCallOutcome,
@@ -148,6 +149,7 @@ export default function AdminScreen() {
 
           {error ? <Message error>{error}</Message> : null}
           {message ? <Message>{message}</Message> : null}
+          <AdminNotificationHealth />
           <SectionTitle title="Waiting for drivers" detail="Offers close after 15 minutes. Fave will not charge the client while waiting." />
           {loading ? <ActivityIndicator accessibilityLabel="Loading trip offers" /> : null}
           {!loading && pendingOffers.length === 0 ? (

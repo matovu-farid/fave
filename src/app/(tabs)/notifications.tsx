@@ -13,7 +13,7 @@ import {
   enablePushNotifications,
   getPushPermissionStatus,
   syncPushTokenForSignedInUser,
-} from '../lib/push-notifications'
+} from '@/lib/push-notifications'
 
 export default function NotificationsScreen() {
   const { notificationId: requestedNotificationId } = useLocalSearchParams<{ notificationId?: string }>()

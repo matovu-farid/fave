@@ -9,7 +9,7 @@ import { ThemedView } from '@/components/themed-view';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 import { authClient } from '@/lib/auth-client';
 import { getAdminAccess } from '@/lib/marketplace';
-import { unregisterPushNotifications } from '../lib/push-notifications';
+import { unregisterPushNotifications } from '@/lib/push-notifications';
 
 export default function HomeScreen() {
   const { data: session } = authClient.useSession();
@@ -43,6 +43,7 @@ export default function HomeScreen() {
           <ThemedText themeColor="textSecondary">Book a verified vehicle for journeys around Kampala and across Uganda.</ThemedText>
           <Card>
             <SectionTitle title={`Welcome${session?.user.name ? `, ${session.user.name}` : ''}`} detail={session?.user.email ?? 'Signed in'} />
+            <ActionButton title="Account" onPress={() => router.push('/account' as Href)} />
             <ActionButton title="Plan a trip" onPress={() => router.push('/trips' as Href)} />
             <ActionButton title="Apply to drive" onPress={() => router.push('/driver' as Href)} />
             <ActionButton title="Notification settings" onPress={() => router.push('/notifications' as Href)} />

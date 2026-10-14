@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
-const screen = readFileSync(fileURLToPath(new URL('../src/app/notifications.tsx', import.meta.url)), 'utf8')
+const screen = readFileSync(fileURLToPath(new URL('../src/app/(tabs)/notifications.tsx', import.meta.url)), 'utf8')
 const marketplace = readFileSync(fileURLToPath(new URL('../src/lib/marketplace.ts', import.meta.url)), 'utf8')
 const api = readFileSync(fileURLToPath(new URL('../fave-worker/src/notifications.ts', import.meta.url)), 'utf8')
 const push = readFileSync(fileURLToPath(new URL('../src/lib/push-notifications.ts', import.meta.url)), 'utf8')

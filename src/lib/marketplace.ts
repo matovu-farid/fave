@@ -181,6 +181,20 @@ export type AdminTripOffers = {
   recentOffers: AdminDriverTripOffer[]
   refreshedAt: number
 }
+export type AdminNotificationFailure = {
+  deliveryId: string
+  deliveryRef: string
+  eventType: string
+  status: string
+  attemptCount: number
+  errorCategory: string | null
+  createdAt: number
+}
+export type AdminNotificationHealth = {
+  statuses: { status: string; count: number }[]
+  oldestPendingAgeMs: number | null
+  failures: AdminNotificationFailure[]
+}
 export type DriverContact = { driver: { name: string; phone: string } }
 export type DriverCallOutcome = 'reached' | 'no_answer' | 'busy' | 'voicemail' | 'other'
 export type TripBooking = {
@@ -301,6 +315,15 @@ export function getAdminAccess() {
 }
 export function getAdminTripOffers() {
   return authenticatedFetch<AdminTripOffers>('/api/admin/trip-offers')
+}
+export function getAdminNotificationHealth() {
+  return authenticatedFetch<AdminNotificationHealth>('/api/admin/notifications/health')
+}
+export function retryAdminNotificationDelivery(deliveryId: string) {
+  return authenticatedFetch<{ result: 'queued' | 'expired' | 'suppressed' }>(
+    `/api/admin/notifications/${encodeURIComponent(deliveryId)}/retry`,
+    { method: 'POST' },
+  )
 }
 export function getDriverTripOfferContact(offerId: string) {
   return authenticatedFetch<DriverContact>(`/api/admin/trip-offers/${encodeURIComponent(offerId)}/driver-contact`, { method: 'POST' })

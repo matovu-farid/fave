@@ -3,8 +3,8 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
-const tripScreen = fileURLToPath(new URL('../src/app/trips/index.tsx', import.meta.url))
-const driverScreen = fileURLToPath(new URL('../src/app/driver/index.tsx', import.meta.url))
+const tripScreen = fileURLToPath(new URL('../src/app/(tabs)/trips/index.tsx', import.meta.url))
+const driverScreen = fileURLToPath(new URL('../src/app/(tabs)/driver/index.tsx', import.meta.url))
 
 test('client quote renders directional vehicle costs using server route snapshots', () => {
   const source = readFileSync(tripScreen, 'utf8')
