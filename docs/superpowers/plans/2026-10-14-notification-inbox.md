@@ -77,23 +77,23 @@ Run `git diff --check`, inspect the migration and test diff, and commit only the
 - Create: `fave-worker/src/notification-store.ts`
 - Test: `tests/notification-store.test.mjs`
 
-- [ ] **Step 1: Add failing contract and idempotency tests**
+- [x] **Step 1: Add failing contract and idempotency tests**
 
 Test the supported V1 event type strings for quote/deposit status, booking cancellation/expiry, driver/vehicle assignment/reassignment, trip progress/check-in, balance due/paid, and safety/support. Verify an event with an unknown type, unapproved template, arbitrary external route, invalid role, or invalid expiry is rejected. Verify two writes of the same `(eventId, recipientUserId)` produce one inbox row and one outbox delivery.
 
-- [ ] **Step 2: Confirm the tests fail before the module exists**
+- [x] **Step 2: Confirm the tests fail before the module exists**
 
 Run the focused Node test file. Expected: FAIL because `notification-contracts.ts` and the event store exports do not exist.
 
-- [ ] **Step 3: Implement the V1 contract catalog**
+- [x] **Step 3: Implement the V1 contract catalog**
 
 Export a discriminated union and immutable catalog from `notification-contracts.ts`. Every event definition names its owner, recipient roles, priority, template key, internal route key, and optional expiry rule. Use only internal route identifiers; do not accept client-provided notification title, preview, recipient, or route.
 
-- [ ] **Step 4: Implement atomic persistence and due-row leasing**
+- [x] **Step 4: Implement atomic persistence and due-row leasing**
 
-In `notification-store.ts`, export `createNotificationEvent(db, input, now)`, `listNotifications(db, userId, cursor, limit)`, `markNotificationRead(db, userId, notificationId, now)`, `markAllNotificationsRead(db, userId, now)`, and `claimDueNotificationDeliveries(db, now, leaseUntil, limit)`. `createNotificationEvent` validates the catalog entry, resolves recipients server-side, and uses one D1 batch to write event, recipient inbox rows, and outbox rows atomically. Database uniqueness handles repeated event IDs. List/read functions always scope by authenticated `userId`; leasing atomically claims only due, unexpired rows whose prior lease is absent or expired.
+In `notification-store.ts`, export `buildNotificationEventStatements(db, input, now)`, `createNotificationEvent(db, input, now)`, `listNotifications(db, userId, cursor, limit)`, `markNotificationRead(db, userId, notificationId, now)`, `markAllNotificationsRead(db, userId, now)`, and `claimDueNotificationDeliveries(db, now, leaseUntil, limit)`. The builder validates the catalog entry and returns event, recipient inbox, and outbox statements that a domain caller can append to the same D1 batch as its business mutation. `createNotificationEvent` wraps that builder in one atomic D1 batch for standalone use. Database uniqueness handles repeated event IDs. List/read functions always scope by authenticated `userId`; leasing atomically claims only due, unexpired rows whose prior lease is absent or expired.
 
-- [ ] **Step 5: Verify schema and store behavior**
+- [x] **Step 5: Verify schema and store behavior**
 
 Run the focused test file and `npm run typecheck` from `fave-worker/`.
 Expected: event validation, dedupe, transaction rollback, no cross-user list/read, unread counts, cursor ordering, expiry, and lease-reclaim tests pass; Worker TypeScript exits 0.
@@ -119,7 +119,7 @@ Run `node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-ty
 
 - [ ] **Step 3: Wire existing transitions through the event store**
 
-Update only current `bookings.ts` state transitions. Use D1 `batch()` for the business mutation and matching event/inbox/outbox inserts; check affected-row counts before returning success. A failed event/outbox write must not leave a committed transition without its durable notification. A later Queue/Expo failure must not roll back an already committed transition.
+Update only current `bookings.ts` state transitions. Build the event statements with `buildNotificationEventStatements` and append them to the exact same D1 `batch()` as the business mutation; gate notification inserts on a successful state transition. Check affected-row counts before returning success. A failed event/outbox write must not leave a committed transition without its durable notification. A later Queue/Expo failure must not roll back an already committed transition.
 
 - [ ] **Step 4: Verify transition, duplicate, expiry, and rollback cases**
 
