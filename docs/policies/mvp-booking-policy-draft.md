@@ -8,7 +8,7 @@
 
 **Owner:** Fave product owner
 
-**Decision date:** Pending approval
+**Decision date:** 2026-10-14 (draft distance rate)
 
 This document turns the current product direction into policy options for issue #15. Proposed rules remain draft; owner-confirmed product directions do not by themselves constitute counsel approval or authorize launch or customer charges.
 
@@ -40,17 +40,17 @@ This document turns the current product direction into policy options for issue 
 | Driver settlement | Break down the driver’s full pay by trip day; send that day’s itemized amount in the morning, including its accommodation fee; verify payment and trip records after completion, with no routine later balance | Owner confirmed full daily pay, timing, and included lodging fee; exact pay breakdown, available balance, payout route, accounting, and legal structure need provider/counsel review |
 | Client payment methods | **Confirmed:** MTN/Airtel mobile money plus local cards for both deposit and final balance | Defines which provider methods #16 must support and the fees included in quotes |
 
-These are recommendations to reduce the decision work, not approved policy. The per-kilometre rate remains open; each driver supplies their own nightly lodging rate during registration, so actual registered values will be available as drivers onboard. The client payment methods above are confirmed product direction; legal, provider, and merchant terms remain subject to review.
+These are recommendations to reduce the decision work, not approved policy. The owner has selected UGX 2,000/km as the draft standard-vehicle transport rate for unit-cost validation; it is not active for customer quotes or charges. Each driver's nightly lodging rate is a separate quote component and is set during registration. The client payment methods above are confirmed product direction; legal, provider, and merchant terms remain subject to review.
 
 ### Researched distance-rate recommendation — 2026-10-14
 
-**Proposed for owner review, not approved or active:** use **UGX 2,000 per routed kilometre** as the initial standard-vehicle distance rate. Add the accepted driver's registered per-night lodging rate as its own quote line. Quote the passenger route only, with expected driver/vehicle repositioning cost and payment-provider fees reflected in the published fare; do not add an unshown return-distance multiplier or checkout surcharge. Before activation, check the rate against actual driver/vehicle costs and the selected provider's written fee schedule.
+**Owner-selected draft rate — 2026-10-14; for validation, not active:** use **UGX 2,000 per routed kilometre** as the standard-vehicle transport component. This per-kilometre amount prices transportation for the passenger route; it does not include the driver's lodging charge. Show the accepted driver's registered per-night lodging rate as a separate quote line. Quote the passenger route only, with expected driver/vehicle repositioning cost and payment-provider fees reflected in the published fare; do not add an unshown return-distance multiplier or checkout surcharge. Before activation, check the rate against actual driver/vehicle costs and the selected provider's written fee schedule.
 
 The public comparison is directional rather than like-for-like: Selam Ride Uganda currently lists UGX 1,500/km for a sedan and UGX 2,000/km for an SUV for city rides. A Kampala car-hire operator lists chauffeur-driven day rates starting at USD 50 for an economy sedan, USD 70 for a compact SUV, and USD 120 for a 4×4, with fuel generally excluded; it separately lists a typical driver overnight allowance of USD 20–30. That points to vehicle-class and fuel costs that a city ride tariff does not capture. I recommend UGX 2,000/km as a single, simple pilot baseline for standard vehicles, not as proof of a sustainable nationwide fare or a price for 4×4/specialty vehicles. The provider fee must be incorporated before any customer-facing total is activated.
 
 Sources: [Selam Ride Uganda fare table](https://www.selamrideuganda.com/ride); [Uganda Car Rental Services Kampala rates and driver overnight allowances](https://www.ugandacarrentalservices.com/car-hire-locations/kampala-city.html).
 
-**Owner decision:** Approve UGX 2,000/km as the standard-vehicle draft rate for unit-cost validation, or supply a different UGX/km amount. Approval here would set a product proposal only; it would not authorize a live fare or customer charge.
+**Owner decision — 2026-10-14:** Use UGX 2,000/km as the draft standard-vehicle transport rate for unit-cost validation. Driver lodging remains separate. This decision sets a product proposal only; it does not authorize a live fare or customer charge.
 
 ## Draft pricing rules for owner review
 
@@ -64,13 +64,13 @@ Sources: [Selam Ride Uganda fare table](https://www.selamrideuganda.com/ride); [
 
 **Proposal:**
 
-1. Distance fare = chargeable Google Maps driving-route distance × the currently effective per-kilometre rate for the selected car or vehicle class.
-2. Per-night components (including driver accommodation) = Kampala calendar nights × the applicable per-night rate saved in the quote.
+1. Transport fare = chargeable Google Maps driving-route distance × the currently effective per-kilometre rate for the selected car or vehicle class. The owner-selected draft rate is UGX 2,000/km for standard vehicles, pending unit-cost, provider-fee, legal, and launch validation.
+2. Driver lodging = Kampala calendar nights × the assigned driver's registered per-night rate saved in the quote; show it separately from the transport fare.
 3. Display the component amounts, assumptions, and quote expiry before confirmation.
 
 For a date-based trip, calculate nights as the number of Kampala calendar dates from the start date up to, but not including, the return date. For example, Monday-to-Tuesday is one night and Monday-to-Wednesday is two. Show the start date, return date, night count, rate, and amount in the quote. If accommodation is based on a different itinerary-specific overnight plan, show and retain that plan and its calculation explicitly rather than silently substituting it for the date-based count.
 
-**Owner decisions:** Set the UGX/km rate; capture each driver’s own lodging rate during registration; finalize the daily driver-pay breakdown, receipt/evidence rules, and handling of exceptional adjustments. Each morning’s payment is the driver’s full pay for that day; after completion, reconcile records only, with no routine additional driver balance. Finalize client refunds for other cancellation cases and any other excess amounts; decide whether other costs can ever be passed through; decide whether empty return/repositioning distance is chargeable. If the trip is cancelled after a daily payment is sent, the driver keeps it; no later daily payments are sent after the trip ends. Fave does not arrange or pay for client/passenger lodging.
+**Remaining decisions:** Validate the draft UGX/km transport rate against actual costs and provider fees; capture each driver's own lodging rate during registration; finalize the daily driver-pay breakdown, receipt/evidence rules, and handling of exceptional adjustments. Each morning's payment is the driver's full pay for that day; after completion, reconcile records only, with no routine additional driver balance. Finalize client refunds for other cancellation cases and any other excess amounts; decide whether other costs can ever be passed through; decide whether empty return/repositioning distance is chargeable. If the trip is cancelled after a daily payment is sent, the driver keeps it; no later daily payments are sent after the trip ends. Fave does not arrange or pay for client/passenger lodging.
 
 **Rate-setting worksheet (no rates invented):** Set a per-car or per-class distance rate from fuel use and price, maintenance/tyre reserve, driver compensation, vehicle wear, taxes/provider costs, and Fave's margin. Each driver supplies their own per-night lodging rate during registration; keep it on that driver's profile and use it across destinations. Assign an eligible driver before presenting the final quote so the correct registered rate is available. The quote and any accepted extension must retain a snapshot of the rate and calculation so a later profile-rate change does not silently alter an existing booking.
 
@@ -133,7 +133,7 @@ Daily driving limits, rest breaks, overnight planning, insurance/transport oblig
 | Decision | Draft / current state | Owner | Date | Rationale / client wording | Admin control |
 |---|---|---|---|---|---|
 | Currency, fees, and rounding | Propose UGX, whole shillings, provider fees included in the quoted total; pending #16 merchant terms and owner approval | Pending | Pending | Avoid foreign-currency surprise and checkout fee surprises; wording pending | Pending |
-| Distance rate | Not set | Pending | Pending | Needs operating-cost and margin inputs | Versioned rate, if approved |
+| Distance rate | UGX 2,000/km standard-vehicle transport component, selected as draft for unit-cost validation; not active | Fave product owner | 2026-10-14 | Driver lodging is a separate quote line; actual costs, provider fees, legal review, and launch validation remain | Versioned rate, if approved |
 | Chargeable distance | Pickup-to-destination only vs. include empty return/repositioning | Pending | Pending | Must be visible before the client accepts | Versioned rule, if approved |
 | Driver lodging and driver pay | Calculate the quote’s lodging component from the saved rate and trip-night count; include the daily accommodation fee in the driver’s full-pay amount sent each morning; verify records after trip completion with no routine later balance. | Fave product owner | 2026-10-13 | Owner-confirmed full morning pay including lodging; nightly rate, daily breakdown, exceptional adjustments, evidence, legal handling, and operating balance need review | Versioned rate/calculation and audited daily payments/records |
 | Quote and deposit deadline | Propose 24 hours; lock quote after confirmed deposit | Pending | Pending | Give the client a clear price and payment deadline | Versioned settings, if approved |
