@@ -8,13 +8,18 @@ import { ThemedText } from '@/components/themed-text'
 import { ThemedView } from '@/components/themed-view'
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme'
 import { ApiError, apiBaseUrl } from '@/lib/api'
+import { authClient } from '@/lib/auth-client'
 import { createLatestRequestGuard } from '@/lib/latest-request'
 import { ClientPrerequisites, ClientTripOffer, confirmTrip, getAvailableVehicles, getClientPrerequisites, getCurrentTripOffer, getMyBookings, getTripOfferStatus, PolicyDocument, requestTripQuote, TripBooking, TripQuote, updateClientProfile, Vehicle, withdrawTripOffer } from '@/lib/marketplace'
+import { BookingProgressStage, getBookingProgress, hasTripDraftContent, restoreSelectedVehicleId, TripDraft } from '@/lib/trip-draft'
+import { tripDraftStore } from '@/lib/trip-draft-storage'
 import { getDriverAccommodationNotice } from '@/lib/trip-quote-display'
 
 function asAddress(value: string) { return { address: value } }
 
 export default function TripsScreen() {
+  const { data: session } = authClient.useSession()
+  const userId = session?.user.id
   const [prerequisites, setPrerequisites] = useState<ClientPrerequisites | null>(null)
   const [bookings, setBookings] = useState<TripBooking[]>([])
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
@@ -30,6 +35,11 @@ export default function TripsScreen() {
   const [startDate, setStartDate] = useState(''); const [endDate, setEndDate] = useState('')
   const [partySize, setPartySize] = useState('1'); const [luggageCount, setLuggageCount] = useState('0')
   const [checkedPolicies, setCheckedPolicies] = useState<string[]>([]); const [sharePhone, setSharePhone] = useState(false)
+  const [tripDraftReady, setTripDraftReady] = useState(false)
+  const [tripDraftOwnerId, setTripDraftOwnerId] = useState('')
+  const [tripDraftSaveFailed, setTripDraftSaveFailed] = useState(false)
+  const [bookingSubmitted, setBookingSubmitted] = useState(false)
+  const hydratedDraftUser = useRef('')
   const searchRevision = useRef(createLatestRequestGuard()); const quoteRevision = useRef(0)
 
   const invalidateQuote = useCallback(() => {
@@ -42,6 +52,7 @@ export default function TripsScreen() {
   const invalidateTripSearch = useCallback(() => {
     searchRevision.current.invalidate()
     invalidateQuote()
+    setBookingSubmitted(false)
     setVehicles([])
     setSelectedVehicle('')
   }, [invalidateQuote])
@@ -63,13 +74,30 @@ export default function TripsScreen() {
 
   const refresh = useCallback(async () => {
     setLoading(true); setError('')
+    if (hydratedDraftUser.current && hydratedDraftUser.current !== userId) {
+      hydratedDraftUser.current = ''
+      setTripDraftReady(false); setTripDraftOwnerId('')
+      setPickup(''); setPickupPin(null); setPinPickerOpen(false)
+      setDestination(''); setStartDate(''); setEndDate('')
+      setPartySize('1'); setLuggageCount('0'); setSelectedVehicle('')
+      setVehicles([]); setOffer(null); setQuote(null); setBookingSubmitted(false)
+      setPrerequisites(null); setBookings([])
+      setLegalName(''); setPhone(''); setAcceptedClientTerms(false)
+      setCheckedPolicies([]); setSharePhone(false)
+    }
+    let currentServerOffer: ClientTripOffer | null = null
+    const offerPromise = getCurrentTripOffer().then((result) => {
+      currentServerOffer = result.offer
+      return result
+    }).catch(() => ({ offer: null }))
     try {
       const [result, bookingResult, offerResult] = await Promise.all([
-        getClientPrerequisites(), getMyBookings(), getCurrentTripOffer().catch(() => ({ offer: null })),
+        getClientPrerequisites(), getMyBookings(), offerPromise,
       ])
       setPrerequisites(result)
       setBookings(bookingResult.bookings)
       restoreTripRequest(offerResult.offer)
+      setBookingSubmitted(offerResult.offer?.status === 'booked')
       setOffer(offerResult.offer && ['pending', 'quoting'].includes(offerResult.offer.status) ? offerResult.offer : null)
       if (offerResult.offer?.status === 'quoted' && offerResult.offer.quote) setQuote(offerResult.offer.quote)
       if (offerResult.offer?.status === 'booked') setSuccess('This trip is already booked. See your trip requests below.')
@@ -78,12 +106,68 @@ export default function TripsScreen() {
           ? 'The quote could not be prepared. No payment was taken. Choose another car and try again.'
           : 'That driver could not accept the trip. No payment was taken. Choose another car to try again.')
       }
+      if (offerResult.offer) {
+        if (userId) void tripDraftStore.clear(userId).catch(() => undefined)
+      }
       setLegalName(result.profile?.legalName ?? '')
       setPhone(result.profile?.phoneNumber ?? '')
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not load booking requirements.') }
-    finally { setLoading(false) }
-  }, [restoreTripRequest])
+    finally {
+      if (userId && hydratedDraftUser.current !== userId) {
+        hydratedDraftUser.current = userId
+        if (currentServerOffer) {
+          void tripDraftStore.clear(userId).catch(() => undefined)
+        } else {
+          const savedDraft = await tripDraftStore.load(userId).catch(() => null)
+          if (savedDraft) {
+            setPickup(savedDraft.pickup)
+            setPickupPin(savedDraft.pickupPin)
+            setPinPickerOpen(Boolean(savedDraft.pickupPin))
+            setDestination(savedDraft.destination)
+            setStartDate(savedDraft.startDate); setEndDate(savedDraft.endDate)
+            setPartySize(savedDraft.partySize); setLuggageCount(savedDraft.luggageCount)
+            if (savedDraft.selectedVehicle && savedDraft.startDate && savedDraft.endDate) {
+              try {
+                const result = await getAvailableVehicles({
+                  startDate: savedDraft.startDate,
+                  endDate: savedDraft.endDate,
+                  partySize: Number(savedDraft.partySize),
+                  luggageCount: Number(savedDraft.luggageCount),
+                })
+                setVehicles(result.vehicles)
+                const restoredVehicleId = restoreSelectedVehicleId(
+                  savedDraft.selectedVehicle,
+                  result.vehicles.map((vehicle) => vehicle.id),
+                )
+                if (restoredVehicleId) {
+                  setSelectedVehicle(restoredVehicleId)
+                } else {
+                  setSelectedVehicle('')
+                  setError('The car you selected is no longer available for these dates. Choose another available car to continue.')
+                }
+              } catch {
+                setSelectedVehicle('')
+                setError('Your trip details are back, but vehicle availability could not be checked. Search again before requesting a driver.')
+              }
+            }
+          }
+        }
+        setTripDraftOwnerId(userId)
+      }
+      setTripDraftReady(true)
+      setLoading(false)
+    }
+  }, [restoreTripRequest, userId])
   useEffect(() => { void Promise.resolve().then(refresh) }, [refresh])
+  useEffect(() => {
+    if (!tripDraftReady || !userId || tripDraftOwnerId !== userId) return
+    const draft: TripDraft = { pickup, destination, pickupPin, startDate, endDate, partySize, luggageCount, selectedVehicle }
+    if (offer || quote || bookingSubmitted || !hasTripDraftContent(draft)) {
+      void tripDraftStore.clear(userId).then(() => setTripDraftSaveFailed(false)).catch(() => setTripDraftSaveFailed(true))
+      return
+    }
+    void tripDraftStore.save(userId, draft).then(() => setTripDraftSaveFailed(false)).catch(() => setTripDraftSaveFailed(true))
+  }, [tripDraftReady, tripDraftOwnerId, userId, pickup, destination, pickupPin, startDate, endDate, partySize, luggageCount, selectedVehicle, offer, quote, bookingSubmitted])
   useEffect(() => {
     if (!offer || !['pending', 'quoting'].includes(offer.status)) return
     let active = true
@@ -176,6 +260,9 @@ export default function TripsScreen() {
   const disclosureIds = useMemo(() => new Set(checkedPolicies), [checkedPolicies])
   const allDisclosureIds = disclosures.length === 6 && disclosures.every((document) => disclosureIds.has(document.id))
   const togglePolicy = (document: PolicyDocument) => setCheckedPolicies((current) => current.includes(document.id) ? current.filter((id) => id !== document.id) : [...current, document.id])
+  const currentBookingStage: BookingProgressStage = offer ? 'driver' : quote ? 'quote' : bookingSubmitted ? 'deposit' : 'trip'
+  const bookingProgress = getBookingProgress(currentBookingStage)
+  const currentProgressStep = bookingProgress.findIndex((step) => step.state === 'current')
 
   const confirm = async () => {
     if (!quote) return
@@ -186,6 +273,7 @@ export default function TripsScreen() {
     setBusy(true); setError(''); setSuccess('')
     try {
       const booking = await confirmTrip(quote.quoteId, disclosures.map((document) => document.id), sharePhone)
+      setBookingSubmitted(true)
       setSuccess(`Trip request placed. Status: ${booking.status.replaceAll('_', ' ')}. The deposit hold expires ${new Date(booking.holdExpiresAt).toLocaleString()}.`)
       setQuote(null); setVehicles([]); setSharePhone(false); setCheckedPolicies([])
       try {
@@ -218,6 +306,26 @@ export default function TripsScreen() {
   return <ThemedView style={styles.page}>
     <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <SectionTitle title="Plan a trip" detail="Choose your dates and vehicle. Pickups must be in Kampala, Mukono, or Wakiso; destinations must be in Uganda." />
+      <Card>
+        <View style={styles.progressRow} accessibilityLabel={`Booking progress, step ${currentProgressStep + 1} of ${bookingProgress.length}: ${bookingProgress[currentProgressStep]?.label}`}>
+          {bookingProgress.map((step, index) => <View key={step.id} style={styles.progressStep}>
+            <View style={styles.progressTrack}>
+              <View style={[styles.progressConnector, index === 0 && styles.progressConnectorHidden, index > 0 && bookingProgress[index - 1]?.state === 'complete' && styles.progressConnectorActive]} />
+              <View style={[styles.progressNode, step.state === 'complete' && styles.progressNodeComplete, step.state === 'current' && styles.progressNodeCurrent]}>
+                <ThemedText type="smallBold" style={[styles.progressNodeText, step.state !== 'upcoming' && styles.progressNodeTextActive]}>
+                  {step.state === 'complete' ? '✓' : index + 1}
+                </ThemedText>
+              </View>
+              <View style={[styles.progressConnector, index === bookingProgress.length - 1 && styles.progressConnectorHidden, step.state === 'complete' && styles.progressConnectorActive]} />
+            </View>
+            <ThemedText type="small" style={[styles.progressLabel, step.state === 'current' && styles.progressLabelCurrent]}>{step.label}</ThemedText>
+          </View>)}
+        </View>
+        <ThemedText type="smallBold" accessibilityLiveRegion="polite">Step {currentProgressStep + 1} of {bookingProgress.length} · {bookingProgress[currentProgressStep]?.label}</ThemedText>
+        {tripDraftSaveFailed
+          ? <Message error>We could not save your trip draft. Keep this screen open so you do not lose these details.</Message>
+          : <ThemedText type="small">Your trip details are saved as you go. Profile details, consent, and payment information are not saved in this draft.</ThemedText>}
+      </Card>
       {error ? <Message error>{error}</Message> : null}{success ? <Message>{success}</Message> : null}
       <Card>
         <ThemedText type="subtitle">Client details and terms</ThemedText>
@@ -334,4 +442,17 @@ const styles = StyleSheet.create({
   vehiclePhoto: { width: 280, height: 190, borderRadius: 14, backgroundColor: '#ddd' },
   quoteLine: { flexDirection: 'row', justifyContent: 'space-between', gap: Spacing.two },
   booking: { gap: Spacing.one, paddingVertical: Spacing.two, borderBottomWidth: 1, borderBottomColor: '#b8bbc2' },
+  progressRow: { flexDirection: 'row', alignItems: 'flex-start' },
+  progressStep: { flex: 1, alignItems: 'center', gap: Spacing.one },
+  progressTrack: { width: '100%', flexDirection: 'row', alignItems: 'center' },
+  progressConnector: { flex: 1, height: 2, backgroundColor: '#d0d5dd' },
+  progressConnectorHidden: { backgroundColor: 'transparent' },
+  progressConnectorActive: { backgroundColor: '#208AEF' },
+  progressNode: { width: 30, height: 30, borderWidth: 1, borderColor: '#b8bbc2', borderRadius: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' },
+  progressNodeComplete: { borderColor: '#208AEF', backgroundColor: '#208AEF' },
+  progressNodeCurrent: { borderColor: '#121212', borderWidth: 2, backgroundColor: '#121212' },
+  progressNodeText: { fontSize: 12, lineHeight: 16, color: '#667085' },
+  progressNodeTextActive: { color: '#fff' },
+  progressLabel: { textAlign: 'center', fontSize: 10, lineHeight: 14, color: '#667085' },
+  progressLabelCurrent: { color: '#121212', fontWeight: '700' },
 })
