@@ -5,7 +5,7 @@
   "compatibility_date": "2026-09-24",
   "compatibility_flags": ["nodejs_compat"],
   "triggers": {
-    "crons": ["0 * * * *"]
+    "crons": ["0 * * * *", "* * * * *"]
   },
   "routes": [
     {
@@ -34,6 +34,26 @@
   ],
   "images": {
     "binding": "IMAGES"
+  },
+  "queues": {
+    "producers": [
+      { "binding": "NOTIFICATION_QUEUE", "queue": "fave-notification-delivery" }
+    ],
+    "consumers": [
+      {
+        "queue": "fave-notification-delivery",
+        "max_batch_size": 10,
+        "max_batch_timeout": 5,
+        "max_retries": 5,
+        "retry_delay": 60,
+        "dead_letter_queue": "fave-notification-dlq"
+      },
+      {
+        "queue": "fave-notification-dlq",
+        "max_batch_size": 10,
+        "max_retries": 1
+      }
+    ]
   }
   // "vars": {
   //   "MY_VAR": "my-variable"

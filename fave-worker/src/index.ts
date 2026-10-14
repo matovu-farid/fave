@@ -10,10 +10,12 @@ import {
 import policiesApp from './marketplace-policies'
 import { adminDriversApp, driversApp } from './drivers'
 import { adminVehiclesApp, purgeExpiredVehicleEvidence, vehiclesApp } from './vehicles'
-import tripsApp, { expireDepositPendingBookings } from './bookings'
+import tripsApp, { expireDepositPendingBookings, expirePendingDriverTripOffers } from './bookings'
 import { purgeExpiredDriverEvidence } from './drivers'
 import adminTripOffersApp from './admin-trip-offers'
 import notificationsApp from './notifications'
+import adminNotificationsApp from './admin-notifications'
+import { dispatchDueNotificationDeliveries, handleNotificationQueue, sweepExpoReceipts } from './notification-delivery'
 
 const app = new Hono<{ Bindings: AuthBindings }>()
 
@@ -37,6 +39,7 @@ app.route('/api/vehicles', vehiclesApp)
 app.route('/api/admin/vehicles', adminVehiclesApp)
 app.route('/api/admin/trip-offers', adminTripOffersApp)
 app.route('/api/notifications', notificationsApp)
+app.route('/api/admin/notifications', adminNotificationsApp)
 app.route('/api/trips', tripsApp)
 
 app.get('/', (c) => {
@@ -262,11 +265,21 @@ app.post('/api/maps/driving-route', async (c) => {
 export default {
   fetch: (request: Request, env: AuthBindings, executionContext: ExecutionContext) =>
     app.fetch(request, env, executionContext),
-  scheduled: (_controller: ScheduledController, env: AuthBindings, executionContext: ExecutionContext) => {
+  scheduled: (controller: ScheduledController, env: AuthBindings, executionContext: ExecutionContext) => {
+    if (controller.cron === '* * * * *') {
+      executionContext.waitUntil(Promise.all([
+        dispatchDueNotificationDeliveries(env),
+        sweepExpoReceipts(env),
+        expirePendingDriverTripOffers(env),
+      ]).then(() => undefined))
+      return
+    }
     executionContext.waitUntil(Promise.all([
       purgeExpiredDriverEvidence(env),
       purgeExpiredVehicleEvidence(env),
       expireDepositPendingBookings(env),
     ]).then(() => undefined))
   },
+  queue: (batch: MessageBatch<{ deliveryId: string }>, env: AuthBindings) =>
+    handleNotificationQueue(batch, env),
 }
