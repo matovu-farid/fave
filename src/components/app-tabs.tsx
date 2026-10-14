@@ -5,6 +5,7 @@ import { useColorScheme } from 'react-native';
 import { Colors } from '@/constants/theme';
 import { authClient } from '@/lib/auth-client';
 import { getAdminAccess } from '@/lib/marketplace';
+import { subscribeToPushTokenChanges, syncPushTokenForSignedInUser } from '../lib/push-notifications';
 
 export default function AppTabs() {
   const scheme = useColorScheme();
@@ -20,6 +21,13 @@ export default function AppTabs() {
       }).catch(() => undefined);
     }
     return () => { active = false; };
+  }, [session?.user.id]);
+
+  useEffect(() => {
+    if (!session?.user.id) return;
+    void syncPushTokenForSignedInUser().catch(() => undefined);
+    const subscription = subscribeToPushTokenChanges();
+    return () => subscription.remove();
   }, [session?.user.id]);
 
   return (
@@ -53,6 +61,14 @@ export default function AppTabs() {
 
       <NativeTabs.Trigger name="trips">
         <NativeTabs.Trigger.Label>Trips</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon
+          src={require('@/assets/images/tabIcons/explore.png')}
+          renderingMode="template"
+        />
+      </NativeTabs.Trigger>
+
+      <NativeTabs.Trigger name="notifications">
+        <NativeTabs.Trigger.Label>Alerts</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon
           src={require('@/assets/images/tabIcons/explore.png')}
           renderingMode="template"

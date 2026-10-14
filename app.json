@@ -45,6 +45,7 @@
           "imageWidth": 76
         }
       ],
+      "expo-notifications",
       [
         "expo-image-picker",
         {

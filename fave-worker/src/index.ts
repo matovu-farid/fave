@@ -13,6 +13,7 @@ import { adminVehiclesApp, purgeExpiredVehicleEvidence, vehiclesApp } from './ve
 import tripsApp, { expireDepositPendingBookings } from './bookings'
 import { purgeExpiredDriverEvidence } from './drivers'
 import adminTripOffersApp from './admin-trip-offers'
+import notificationsApp from './notifications'
 
 const app = new Hono<{ Bindings: AuthBindings }>()
 
@@ -35,6 +36,7 @@ app.route('/api/admin/drivers', adminDriversApp)
 app.route('/api/vehicles', vehiclesApp)
 app.route('/api/admin/vehicles', adminVehiclesApp)
 app.route('/api/admin/trip-offers', adminTripOffersApp)
+app.route('/api/notifications', notificationsApp)
 app.route('/api/trips', tripsApp)
 
 app.get('/', (c) => {

@@ -16,6 +16,7 @@ import { ThemedView } from './themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { authClient } from '@/lib/auth-client';
 import { getAdminAccess } from '@/lib/marketplace';
+import { subscribeToPushTokenChanges, syncPushTokenForSignedInUser } from '../lib/push-notifications';
 
 export default function AppTabs() {
   const { data: session } = authClient.useSession();
@@ -29,6 +30,13 @@ export default function AppTabs() {
       }).catch(() => undefined);
     }
     return () => { active = false; };
+  }, [session?.user.id]);
+
+  useEffect(() => {
+    if (!session?.user.id) return;
+    void syncPushTokenForSignedInUser().catch(() => undefined);
+    const subscription = subscribeToPushTokenChanges();
+    return () => subscription.remove();
   }, [session?.user.id]);
 
   return (
@@ -47,6 +55,9 @@ export default function AppTabs() {
           </TabTrigger>
           <TabTrigger name="trips" href={'/trips' as Href} asChild>
             <TabButton>Trips</TabButton>
+          </TabTrigger>
+          <TabTrigger name="notifications" href={'/notifications' as Href} asChild>
+            <TabButton>Alerts</TabButton>
           </TabTrigger>
           {session?.user.id && adminAccessUserId === session.user.id ? (
             <TabTrigger name="admin" href={'/admin' as Href} asChild>

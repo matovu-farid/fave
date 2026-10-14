@@ -9,10 +9,20 @@ import { ThemedView } from '@/components/themed-view';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 import { authClient } from '@/lib/auth-client';
 import { getAdminAccess } from '@/lib/marketplace';
+import { unregisterPushNotifications } from '../lib/push-notifications';
 
 export default function HomeScreen() {
   const { data: session } = authClient.useSession();
   const [adminAccessUserId, setAdminAccessUserId] = useState('');
+
+  const signOut = async () => {
+    try {
+      await unregisterPushNotifications();
+    } catch {
+      // Keep sign-out available when the device is offline; push previews stay generic.
+    }
+    await authClient.signOut();
+  };
 
   useEffect(() => {
     let active = true;
@@ -35,8 +45,9 @@ export default function HomeScreen() {
             <SectionTitle title={`Welcome${session?.user.name ? `, ${session.user.name}` : ''}`} detail={session?.user.email ?? 'Signed in'} />
             <ActionButton title="Plan a trip" onPress={() => router.push('/trips' as Href)} />
             <ActionButton title="Apply to drive" onPress={() => router.push('/driver' as Href)} />
+            <ActionButton title="Notification settings" onPress={() => router.push('/notifications' as Href)} />
             {session?.user.id && adminAccessUserId === session.user.id ? <ActionButton title="Trip operations" onPress={() => router.push('/admin' as Href)} /> : null}
-            <ThemedText accessibilityRole="link" onPress={() => void authClient.signOut()} style={styles.signOut}>Sign out</ThemedText>
+            <ThemedText accessibilityRole="link" onPress={() => void signOut()} style={styles.signOut}>Sign out</ThemedText>
           </Card>
           <ThemedText type="small" themeColor="textSecondary">Trips use verified vehicles and clear, itemized quotes before a request is placed.</ThemedText>
         </ThemedView>
