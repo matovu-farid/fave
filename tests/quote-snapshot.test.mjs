@@ -237,6 +237,77 @@ test('trip quote request waits for the selected driver before calculating a pric
   assert.equal(queries.some((query) => query.sql.includes('INSERT INTO trip_quotes')), false)
 })
 
+test('a client can withdraw their own pending driver offer without creating a quote', async () => {
+  const { routes } = loadBookings({ signedInUser: { id: 'client-1', name: 'Client' } })
+  let query
+  const DB = {
+    prepare(sql) {
+      query = { sql, args: [] }
+      return {
+        bind(...args) { query.args = args; return this },
+        async run() { return { success: true, meta: { changes: 1 } } },
+      }
+    },
+  }
+  const context = {
+    env: { DB },
+    req: {
+      raw: new Request('https://fave.test/api/trips/quote-requests/offer-1/withdraw', { method: 'POST' }),
+      param: name => name === 'offerId' ? 'offer-1' : undefined,
+    },
+    json: (payload, status = 200) => ({ payload, status }),
+  }
+
+  const response = await routes.get('/quote-requests/:offerId/withdraw')(context)
+
+  assert.equal(response.status, 200)
+  assert.deepEqual(JSON.parse(JSON.stringify(response.payload)), { offerId: 'offer-1', status: 'withdrawn' })
+  assert.match(query.sql, /SET status = 'withdrawn'/u)
+  assert.match(query.sql, /client_user_id = \?/u)
+  assert.match(query.sql, /status = 'pending' AND expires_at > \?/u)
+  assert.equal(query.args[1], 'offer-1')
+  assert.equal(query.args[2], 'client-1')
+  assert.equal(typeof query.args[0], 'number')
+  assert.equal(query.args[3], query.args[0], 'the expiry guard uses the same request timestamp as the update')
+})
+
+test('withdrawing a handled or expired driver offer returns a conflict', async () => {
+  const { routes } = loadBookings({ signedInUser: { id: 'client-1', name: 'Client' } })
+  const DB = {
+    prepare() {
+      return { bind() { return this }, async run() { return { success: true, meta: { changes: 0 } } } }
+    },
+  }
+  const context = {
+    env: { DB },
+    req: {
+      raw: new Request('https://fave.test/api/trips/quote-requests/offer-1/withdraw', { method: 'POST' }),
+      param: name => name === 'offerId' ? 'offer-1' : undefined,
+    },
+    json: (payload, status = 200) => ({ payload, status }),
+  }
+
+  const response = await routes.get('/quote-requests/:offerId/withdraw')(context)
+
+  assert.equal(response.status, 409)
+  assert.equal(response.payload.error.code, 'TRIP_OFFER_NOT_PENDING')
+})
+
+test('an unauthenticated client cannot withdraw a driver offer', async () => {
+  const { routes } = loadBookings()
+  const response = await routes.get('/quote-requests/:offerId/withdraw')({
+    env: { DB: { prepare() { throw new Error('must not query an unauthenticated request') } } },
+    req: {
+      raw: new Request('https://fave.test/api/trips/quote-requests/offer-1/withdraw', { method: 'POST' }),
+      param: name => name === 'offerId' ? 'offer-1' : undefined,
+    },
+    json: (payload, status = 200) => ({ payload, status }),
+  })
+
+  assert.equal(response.status, 401)
+  assert.equal(response.payload.error.code, 'UNAUTHORIZED')
+})
+
 test('requesting a trip saves a private driver offer and does not return a quote before acceptance', async () => {
   let routeCalls = 0
   const { routes } = loadBookings({
