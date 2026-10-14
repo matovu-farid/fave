@@ -42,6 +42,16 @@ This document turns the current product direction into policy options for issue 
 
 These are recommendations to reduce the decision work, not approved policy. The per-kilometre rate remains open; each driver supplies their own nightly lodging rate during registration, so actual registered values will be available as drivers onboard. The client payment methods above are confirmed product direction; legal, provider, and merchant terms remain subject to review.
 
+### Researched distance-rate recommendation — 2026-10-14
+
+**Proposed for owner review, not approved or active:** use **UGX 2,000 per routed kilometre** as the initial standard-vehicle distance rate. Add the accepted driver's registered per-night lodging rate as its own quote line. Quote the passenger route only, with expected driver/vehicle repositioning cost and payment-provider fees reflected in the published fare; do not add an unshown return-distance multiplier or checkout surcharge. Before activation, check the rate against actual driver/vehicle costs and the selected provider's written fee schedule.
+
+The public comparison is directional rather than like-for-like: Selam Ride Uganda currently lists UGX 1,500/km for a sedan and UGX 2,000/km for an SUV for city rides. A Kampala car-hire operator lists chauffeur-driven day rates starting at USD 50 for an economy sedan, USD 70 for a compact SUV, and USD 120 for a 4×4, with fuel generally excluded; it separately lists a typical driver overnight allowance of USD 20–30. That points to vehicle-class and fuel costs that a city ride tariff does not capture. I recommend UGX 2,000/km as a single, simple pilot baseline for standard vehicles, not as proof of a sustainable nationwide fare or a price for 4×4/specialty vehicles. The provider fee must be incorporated before any customer-facing total is activated.
+
+Sources: [Selam Ride Uganda fare table](https://www.selamrideuganda.com/ride); [Uganda Car Rental Services Kampala rates and driver overnight allowances](https://www.ugandacarrentalservices.com/car-hire-locations/kampala-city.html).
+
+**Owner decision:** Approve UGX 2,000/km as the standard-vehicle draft rate for unit-cost validation, or supply a different UGX/km amount. Approval here would set a product proposal only; it would not authorize a live fare or customer charge.
+
 ## Draft pricing rules for owner review
 
 ### Currency and display
