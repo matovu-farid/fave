@@ -16,6 +16,7 @@ import adminTripOffersApp from './admin-trip-offers'
 import notificationsApp from './notifications'
 import adminNotificationsApp from './admin-notifications'
 import { dispatchDueNotificationDeliveries, handleNotificationQueue, sweepExpoReceipts } from './notification-delivery'
+import { isHourlyMaintenanceTick } from './schedules'
 
 const app = new Hono<{ Bindings: AuthBindings }>()
 
@@ -267,18 +268,20 @@ export default {
     app.fetch(request, env, executionContext),
   scheduled: (controller: ScheduledController, env: AuthBindings, executionContext: ExecutionContext) => {
     if (controller.cron === '* * * * *') {
-      executionContext.waitUntil(Promise.all([
+      const scheduledJobs = [
         dispatchDueNotificationDeliveries(env),
         sweepExpoReceipts(env),
         expirePendingDriverTripOffers(env),
-      ]).then(() => undefined))
-      return
+      ]
+      if (isHourlyMaintenanceTick(controller.scheduledTime)) {
+        scheduledJobs.push(
+          purgeExpiredDriverEvidence(env),
+          purgeExpiredVehicleEvidence(env),
+          expireDepositPendingBookings(env),
+        )
+      }
+      executionContext.waitUntil(Promise.all(scheduledJobs).then(() => undefined))
     }
-    executionContext.waitUntil(Promise.all([
-      purgeExpiredDriverEvidence(env),
-      purgeExpiredVehicleEvidence(env),
-      expireDepositPendingBookings(env),
-    ]).then(() => undefined))
   },
   queue: (batch: MessageBatch<{ deliveryId: string }>, env: AuthBindings) =>
     handleNotificationQueue(batch, env),
