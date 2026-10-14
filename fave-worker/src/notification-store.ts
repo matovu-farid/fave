@@ -24,6 +24,16 @@ function changedRows(result: D1Result<unknown>): number {
   return result.meta.changes ?? 0
 }
 
+function pushNotBefore(priority: 'ordinary' | 'urgent' | 'time_sensitive', now: number): number {
+  if (priority !== 'ordinary') return now
+  const kampala = new Date(now + 3 * 60 * 60 * 1000)
+  const hour = kampala.getUTCHours()
+  if (hour >= 8 && hour < 21) return now
+  if (hour >= 21) kampala.setUTCDate(kampala.getUTCDate() + 1)
+  kampala.setUTCHours(8, 0, 0, 0)
+  return kampala.getTime() - 3 * 60 * 60 * 1000
+}
+
 function assertPageLimit(limit: number): number {
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > 50) {
     throw new RangeError('Notification page size must be between 1 and 50.')
@@ -47,6 +57,7 @@ export function buildNotificationEventStatements(
   db: NotificationDatabase,
   input: NotificationEventInput,
   now: number,
+  options: { requirePriorChange?: boolean } = {},
 ): D1PreparedStatement[] {
   validateNotificationEvent(input)
   if (!Number.isSafeInteger(now) || now < input.occurredAt) {
@@ -55,13 +66,17 @@ export function buildNotificationEventStatements(
 
   const contract = getNotificationContract(input.eventType)
   if (!contract) throw new TypeError('Unknown notification event.')
-  const statements: D1PreparedStatement[] = [
-    db.prepare(
-      `INSERT INTO notification_events
+  const eventInsert = options.requirePriorChange
+    ? `INSERT INTO notification_events
+        (id, event_type, event_version, domain_type, domain_id, occurred_at, expires_at, payload_json, created_at)
+       SELECT ?, ?, ?, ?, ?, ?, ?, '{}', ? WHERE changes() = 1
+       ON CONFLICT(id) DO NOTHING`
+    : `INSERT INTO notification_events
         (id, event_type, event_version, domain_type, domain_id, occurred_at, expires_at, payload_json, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, '{}', ?)
-       ON CONFLICT(id) DO NOTHING`,
-    ).bind(
+       ON CONFLICT(id) DO NOTHING`
+  const statements: D1PreparedStatement[] = [
+    db.prepare(eventInsert).bind(
       input.id,
       input.eventType,
       input.eventVersion,
@@ -75,13 +90,17 @@ export function buildNotificationEventStatements(
 
   const sortedRecipients = [...input.recipients].sort((a, b) => a.userId.localeCompare(b.userId))
   for (const recipient of sortedRecipients) {
-    statements.push(
-      db.prepare(
-        `INSERT INTO notifications
+    const notificationInsert = options.requirePriorChange
+      ? `INSERT INTO notifications
+          (id, event_id, recipient_user_id, template_key, route_key, priority, created_at, read_at)
+         SELECT ?, ?, ?, ?, ?, ?, ?, NULL WHERE changes() = 1
+         ON CONFLICT(event_id, recipient_user_id) DO NOTHING`
+      : `INSERT INTO notifications
           (id, event_id, recipient_user_id, template_key, route_key, priority, created_at, read_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, NULL)
-         ON CONFLICT(event_id, recipient_user_id) DO NOTHING`,
-      ).bind(
+         ON CONFLICT(event_id, recipient_user_id) DO NOTHING`
+    statements.push(
+      db.prepare(notificationInsert).bind(
         crypto.randomUUID(),
         input.id,
         recipient.userId,
@@ -98,12 +117,13 @@ export function buildNotificationEventStatements(
          SELECT ?, notification.id, ?, ?, 'pending', ?, ?, 0, ?
            FROM notifications AS notification
           WHERE notification.event_id = ? AND notification.recipient_user_id = ?
+            ${options.requirePriorChange ? 'AND changes() = 1' : ''}
          ON CONFLICT(notification_id) DO NOTHING`,
       ).bind(
         crypto.randomUUID(),
         input.id,
         recipient.userId,
-        now,
+        pushNotBefore(contract.priority, now),
         input.expiresAt ?? null,
         now,
         input.id,

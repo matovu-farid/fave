@@ -14,6 +14,7 @@ function loadBookings({
   onRouteCalculation = () => undefined,
   routeResult = { kind: 'provider_error' },
   currentDocuments = [],
+  notificationEvents = [],
 } = {}) {
   const exports = {}
   const routes = new Map()
@@ -55,6 +56,12 @@ function loadBookings({
         parseTripDateRange: () => ({ startDate: '2099-01-01', endDate: '2099-01-03' }),
       }
       if (name === './vehicles') return { approvedVehicleEvidencePredicate: () => '? AND ? AND ? AND ? AND ? AND ?' }
+      if (name === './notification-store') return {
+        buildNotificationEventStatements(_db, event) {
+          notificationEvents.push(event)
+          return [{ sql: 'SELECT 1 /* notification event */', args: [] }]
+        },
+      }
       throw new Error(`Unexpected module: ${name}`)
     },
     JSON,
@@ -200,7 +207,7 @@ test('trip quote request waits for the selected driver before calculating a pric
     prepare(sql) {
       const query = { sql, args: [] }
       queries.push(query)
-      return {
+      return Object.assign(query, {
         bind(...args) { query.args = args; return this },
         async first() {
           if (sql.includes('FROM driver_trip_offers')) return null
@@ -212,7 +219,10 @@ test('trip quote request waits for the selected driver before calculating a pric
           throw new Error(`Unexpected query: ${sql}`)
         },
         async run() { return { success: true, meta: { changes: 1 } } },
-      }
+      })
+    },
+    async batch(statements) {
+      return statements.map(statement => ({ meta: { changes: statement.sql.includes('notification event') ? 0 : 1 } }))
     },
   }
   const body = {
@@ -228,7 +238,7 @@ test('trip quote request waits for the selected driver before calculating a pric
 
   const response = await routes.get('/quote')(context)
 
-  assert.equal(response.status, 202)
+  assert.equal(response.status, 202, JSON.stringify(response.payload))
   assert.equal(response.payload.status, 'pending_driver_acceptance')
   assert.equal(routeCalls, 0)
   assert.equal(queries.some((query) => query.sql.includes('INSERT INTO driver_trip_offers')), true)
@@ -239,14 +249,19 @@ test('trip quote request waits for the selected driver before calculating a pric
 
 test('a client can withdraw their own pending driver offer without creating a quote', async () => {
   const { routes } = loadBookings({ signedInUser: { id: 'client-1', name: 'Client' } })
-  let query
+  const queries = []
   const DB = {
     prepare(sql) {
-      query = { sql, args: [] }
-      return {
+      const query = { sql, args: [] }
+      queries.push(query)
+      return Object.assign(query, {
         bind(...args) { query.args = args; return this },
+        async first() { return { driverUserId: 'driver-1' } },
         async run() { return { success: true, meta: { changes: 1 } } },
-      }
+      })
+    },
+    async batch(statements) {
+      return statements.map(statement => ({ meta: { changes: statement.sql.includes('UPDATE driver_trip_offers') ? 1 : 0 } }))
     },
   }
   const context = {
@@ -262,21 +277,23 @@ test('a client can withdraw their own pending driver offer without creating a qu
 
   assert.equal(response.status, 200)
   assert.deepEqual(JSON.parse(JSON.stringify(response.payload)), { offerId: 'offer-1', status: 'withdrawn' })
-  assert.match(query.sql, /SET status = 'withdrawn'/u)
-  assert.match(query.sql, /client_user_id = \?/u)
-  assert.match(query.sql, /status = 'pending' AND expires_at > \?/u)
-  assert.equal(query.args[1], 'offer-1')
-  assert.equal(query.args[2], 'client-1')
-  assert.equal(typeof query.args[0], 'number')
-  assert.equal(query.args[3], query.args[0], 'the expiry guard uses the same request timestamp as the update')
+  const update = queries.find(item => item.sql.includes('UPDATE driver_trip_offers'))
+  assert.match(update.sql, /SET status = 'withdrawn'/u)
+  assert.match(update.sql, /client_user_id = \?/u)
+  assert.match(update.sql, /status = 'pending' AND expires_at > \?/u)
+  assert.equal(update.args[1], 'offer-1')
+  assert.equal(update.args[2], 'client-1')
+  assert.equal(typeof update.args[0], 'number')
+  assert.equal(update.args[3], update.args[0], 'the expiry guard uses the same request timestamp as the update')
 })
 
 test('withdrawing a handled or expired driver offer returns a conflict', async () => {
   const { routes } = loadBookings({ signedInUser: { id: 'client-1', name: 'Client' } })
   const DB = {
     prepare() {
-      return { bind() { return this }, async run() { return { success: true, meta: { changes: 0 } } } }
+      return { bind() { return this }, async first() { return { driverUserId: 'driver-1' } }, async run() { return { success: true, meta: { changes: 0 } } } }
     },
+    async batch(statements) { return statements.map(() => ({ meta: { changes: 0 } })) },
   }
   const context = {
     env: { DB },
@@ -310,16 +327,18 @@ test('an unauthenticated client cannot withdraw a driver offer', async () => {
 
 test('requesting a trip saves a private driver offer and does not return a quote before acceptance', async () => {
   let routeCalls = 0
+  const notificationEvents = []
   const { routes } = loadBookings({
     signedInUser: { id: 'client-1', name: 'Client', email: 'client@example.test' },
     onRouteCalculation: () => { routeCalls += 1 },
+    notificationEvents,
   })
   const queries = []
   const DB = {
     prepare(sql) {
       const query = { sql, args: [] }
       queries.push(query)
-      return {
+      return Object.assign(query, {
         bind(...args) { query.args = args; return this },
         async first() {
           if (sql.includes('FROM driver_trip_offers')) return null
@@ -338,7 +357,10 @@ test('requesting a trip saves a private driver offer and does not return a quote
           throw new Error(`Unexpected query: ${sql}`)
         },
         async run() { return { success: true, meta: { changes: 1 } } },
-      }
+      })
+    },
+    async batch(statements) {
+      return statements.map(statement => ({ meta: { changes: statement.sql.includes('notification event') ? 0 : 1 } }))
     },
   }
   const body = {
@@ -356,7 +378,7 @@ test('requesting a trip saves a private driver offer and does not return a quote
   const response = await routes.get('/quote')(context)
 
   const after = Date.now()
-  assert.equal(response.status, 202)
+  assert.equal(response.status, 202, JSON.stringify(response.payload))
   assert.equal(response.payload.status, 'pending_driver_acceptance')
   assert.equal(typeof response.payload.offerId, 'string')
   assert.ok(response.payload.expiresAt >= before + 15 * 60 * 1000)
@@ -364,6 +386,10 @@ test('requesting a trip saves a private driver offer and does not return a quote
   assert.equal(routeCalls, 0, 'do not calculate a client quote before driver acceptance')
   assert.equal(queries.some((query) => query.sql.includes('INSERT INTO driver_trip_offers')), true)
   assert.equal(queries.some((query) => query.sql.includes('INSERT INTO trip_quotes')), false)
+  assert.deepEqual(notificationEvents.map(event => event.eventType), [
+    'booking.quote_requested', 'booking.driver_offer_created',
+  ])
+  assert.equal(notificationEvents[1].recipients[0].userId, 'driver-1')
   const offerInsert = queries.find((query) => query.sql.includes('INSERT INTO driver_trip_offers'))
   assert.doesNotMatch(offerInsert.sql, /phone|email|contact/iu, 'driver offers must not store client contact details')
   for (const query of queries) {
@@ -412,11 +438,12 @@ test('driver acceptance creates the quote using that driver’s registered lodgi
     );
     CREATE TABLE driver_trip_offers (
       id TEXT PRIMARY KEY, status TEXT NOT NULL, expires_at INTEGER NOT NULL,
-      quote_id TEXT UNIQUE REFERENCES trip_quotes(id)
+      quote_id TEXT UNIQUE REFERENCES trip_quotes(id), responded_at INTEGER,
+      driver_application_id TEXT, start_date TEXT, end_date TEXT
     );
   `)
-  sqlite.prepare('INSERT INTO driver_trip_offers (id, status, expires_at) VALUES (?, ?, ?)')
-    .run(offer.id, 'quoting', offer.expires_at)
+  sqlite.prepare('INSERT INTO driver_trip_offers (id, status, expires_at, driver_application_id, start_date, end_date) VALUES (?, ?, ?, ?, ?, ?)')
+    .run(offer.id, 'pending', offer.expires_at, offer.driver_application_id, offer.start_date, offer.end_date)
   const DB = {
     prepare(sql) {
       const query = { sql, args: [] }
@@ -478,23 +505,28 @@ test('driver decline creates no quote and returns only the attached offer status
     passenger_capacity: 4, luggage_capacity: 3,
   }
   let routeCalls = 0
+  const notificationEvents = []
   const { routes } = loadBookings({
     signedInUser: { id: 'driver-1', name: 'Driver' },
     onRouteCalculation: () => { routeCalls += 1 },
+    notificationEvents,
   })
   const queries = []
   const DB = {
     prepare(sql) {
       const query = { sql, args: [] }
       queries.push(query)
-      return {
+      return Object.assign(query, {
         bind(...args) { query.args = args; return this },
         async first() {
           if (sql.includes('FROM driver_trip_offers AS offer')) return offer
           throw new Error(`Unexpected query: ${sql}`)
         },
         async run() { return { success: true, meta: { changes: 1 } } },
-      }
+      })
+    },
+    async batch(statements) {
+      return statements.map(statement => ({ meta: { changes: statement.sql.includes('notification event') ? 0 : 1 } }))
     },
   }
   const response = await routes.get('/driver-offers/:offerId/respond')({
@@ -511,6 +543,8 @@ test('driver decline creates no quote and returns only the attached offer status
   assert.equal(response.payload.status, 'declined')
   assert.equal(routeCalls, 0)
   assert.equal(queries.some((query) => query.sql.includes('INSERT INTO trip_quotes')), false)
+  assert.equal(notificationEvents[0].eventType, 'booking.driver_offer_declined')
+  assert.equal(notificationEvents[0].recipients[0].userId, 'client-1')
 })
 
 test('client current-offer recovery fails a quote preparation that was interrupted past its deadline', async () => {
@@ -524,8 +558,9 @@ test('client current-offer recovery fails a quote preparation that was interrupt
     prepare(sql) {
       const query = { sql, args: [] }
       queries.push(query)
-      return {
+      return Object.assign(query, {
         bind(...args) { query.args = args; return this },
+        async all() { return { results: [] } },
         async first() {
           if (sql.includes('FROM driver_trip_offers')) return offer
           throw new Error(`Unexpected query: ${sql}`)
@@ -536,7 +571,7 @@ test('client current-offer recovery fails a quote preparation that was interrupt
           }
           return { success: true, meta: { changes: 1 } }
         },
-      }
+      })
     },
   }
 
@@ -558,8 +593,10 @@ test('client offer polling recovers an interrupted quote preparation after its d
   const { routes } = loadBookings({ signedInUser: { id: 'client-1', name: 'Client' } })
   const DB = {
     prepare(sql) {
-      return {
+      const query = { sql, args: [] }
+      return Object.assign(query, {
         bind() { return this },
+        async all() { return { results: [] } },
         async first() {
           if (sql.includes('FROM driver_trip_offers')) return offer
           throw new Error(`Unexpected query: ${sql}`)
@@ -570,7 +607,7 @@ test('client offer polling recovers an interrupted quote preparation after its d
           }
           return { success: true, meta: { changes: 1 } }
         },
-      }
+      })
     },
   }
 
@@ -604,14 +641,16 @@ test('client current-offer response restores the saved trip and selected car det
   const { routes } = loadBookings({ signedInUser: { id: 'client-1', name: 'Client' } })
   const DB = {
     prepare(sql) {
-      return {
+      const query = { sql, args: [] }
+      return Object.assign(query, {
         bind() { return this },
+        async all() { return { results: [] } },
         async first() {
           if (sql.includes('FROM driver_trip_offers AS offer')) return offer
           throw new Error(`Unexpected query: ${sql}`)
         },
         async run() { return { success: true, meta: { changes: 0 } } },
-      }
+      })
     },
   }
 
@@ -642,6 +681,7 @@ test('current offer does not restore a quote that already belongs to a booking',
       queries.push(sql)
       return {
         bind() { return this },
+        async all() { return { results: [] } },
         async first() {
           if (sql.includes('FROM driver_trip_offers AS offer')) return offer
           if (sql.includes('FROM bookings WHERE quote_id')) return { id: 'booking-1' }
@@ -688,7 +728,8 @@ test('late route completion cannot save or return a quote after timeout recovery
   })
   const DB = {
     prepare(sql) {
-      return {
+      const query = { sql, args: [] }
+      return Object.assign(query, {
         bind() { return this },
         async first() {
           if (sql.includes('FROM driver_trip_offers AS offer')) return offer
@@ -700,13 +741,17 @@ test('late route completion cannot save or return a quote after timeout recovery
           if (sql.includes('INSERT INTO trip_quotes')) quoteRows += 1
           return { success: true, meta: { changes: sql.includes("SET status = 'quoting'") ? 1 : 0 } }
         },
-      }
+      })
     },
     async batch(statements) {
-      assert.equal(statements.length, 2)
+      if (statements[0].sql.includes("SET status = 'quoting'")) {
+        return [{ meta: { changes: 1 } }, { meta: { changes: 0 } }]
+      }
+      assert.equal(statements.length, 3)
       assert.match(statements[0].sql, /INSERT INTO trip_quotes[\s\S]*status = 'quoting'[\s\S]*expires_at > \?/u)
       assert.match(statements[1].sql, /UPDATE driver_trip_offers SET status = 'quoted'/u)
-      return [{ meta: { changes: 0 } }, { meta: { changes: 0 } }]
+      assert.match(statements[2].sql, /notification event/u)
+      return [{ meta: { changes: 0 } }, { meta: { changes: 0 } }, { meta: { changes: 0 } }]
     },
   }
 

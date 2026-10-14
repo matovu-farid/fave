@@ -220,6 +220,44 @@ test('creating an event atomically stores the event, private inbox row, and push
   }
 })
 
+test('ordinary pushes respect the Africa/Kampala night quiet hours while urgent and driver offers bypass them', async () => {
+  const db = createDatabase()
+  try {
+    const { createNotificationEvent } = loadNotificationStore()
+    const now = Date.parse('2026-10-14T19:00:00.000Z')
+    const event = {
+      id: 'ordinary-1', eventType: 'booking.quote_requested', eventVersion: 1,
+      domainType: 'trip_offer', domainId: 'offer-1', occurredAt: now,
+      expiresAt: now + 24 * 60 * 60 * 1000,
+      recipients: [{ userId: 'user-1', role: 'client' }],
+    }
+    await createNotificationEvent(createD1Adapter(db), event, now)
+    const delayed = db.prepare('SELECT not_before AS notBefore FROM notification_outbox WHERE event_id = ?').get(event.id).notBefore
+    assert.equal(delayed, Date.parse('2026-10-15T05:00:00.000Z'), '22:00 Kampala should wait until 08:00')
+
+    const urgentNow = Date.parse('2026-10-14T20:00:00.000Z')
+    await createNotificationEvent(createD1Adapter(db), {
+      id: 'urgent-1', eventType: 'payment.balance_due', eventVersion: 1,
+      domainType: 'payment', domainId: 'payment-1', occurredAt: urgentNow,
+      recipients: [{ userId: 'user-1', role: 'client' }],
+    }, urgentNow)
+    const urgent = db.prepare('SELECT not_before AS notBefore FROM notification_outbox WHERE event_id = ?').get('urgent-1').notBefore
+    assert.equal(urgent, urgentNow)
+
+    const offerNow = Date.parse('2026-10-14T20:00:00.000Z')
+    await createNotificationEvent(createD1Adapter(db), {
+      id: 'offer-1', eventType: 'booking.driver_offer_created', eventVersion: 1,
+      domainType: 'trip_offer', domainId: 'offer-2', occurredAt: offerNow,
+      expiresAt: offerNow + 15 * 60 * 1000,
+      recipients: [{ userId: 'user-2', role: 'driver' }],
+    }, offerNow)
+    const offer = db.prepare('SELECT not_before AS notBefore FROM notification_outbox WHERE event_id = ?').get('offer-1').notBefore
+    assert.equal(offer, offerNow)
+  } finally {
+    db.close()
+  }
+})
+
 test('notification statements can join a domain transition in the same D1 transaction', async () => {
   const db = createDatabase()
   try {
@@ -244,7 +282,7 @@ test('domain transition rolls back when an atomic notification statement fails',
     db.exec('CREATE TABLE sample_domain_state (id TEXT PRIMARY KEY, status TEXT NOT NULL)')
     db.prepare('INSERT INTO sample_domain_state (id, status) VALUES (?, ?)').run('domain-1', 'pending')
     const { buildNotificationEventStatements } = loadNotificationStore()
-    const d1 = createD1Adapter(db, { failAtBatchStatement: 2 })
+    const d1 = createD1Adapter(db, { failAtBatchStatement: 3 })
     await assert.rejects(
       d1.batch([
         d1.prepare('UPDATE sample_domain_state SET status = ? WHERE id = ?').bind('accepted', 'domain-1'),
@@ -254,6 +292,23 @@ test('domain transition rolls back when an atomic notification statement fails',
     )
     assert.equal(db.prepare('SELECT status FROM sample_domain_state WHERE id = ?').get('domain-1').status, 'pending')
     assert.equal(db.prepare('SELECT COUNT(*) AS count FROM notification_events').get().count, 0)
+  } finally {
+    db.close()
+  }
+})
+
+test('gated notification statements do nothing when the preceding domain transition changed no row', async () => {
+  const db = createDatabase()
+  try {
+    const { buildNotificationEventStatements } = loadNotificationStore()
+    const d1 = createD1Adapter(db)
+    await d1.batch([
+      d1.prepare('UPDATE user SET name = ? WHERE id = ?').bind('Missing', 'missing-user'),
+      ...buildNotificationEventStatements(d1, sampleEvent(), 10, { requirePriorChange: true }),
+    ])
+    assert.equal(db.prepare('SELECT COUNT(*) AS count FROM notification_events').get().count, 0)
+    assert.equal(db.prepare('SELECT COUNT(*) AS count FROM notifications').get().count, 0)
+    assert.equal(db.prepare('SELECT COUNT(*) AS count FROM notification_outbox').get().count, 0)
   } finally {
     db.close()
   }

@@ -9,6 +9,8 @@ import { computeDrivingRoute, classifyLocation, parseLocationInput } from './goo
 import { getCurrentPolicies } from './marketplace-policies'
 import { daysBetween, parseTripDateRange } from './trip-dates'
 import { approvedVehicleEvidencePredicate } from './vehicles'
+import { buildNotificationEventStatements } from './notification-store'
+import type { NotificationEventInput } from './notification-contracts'
 
 type FareComponent = {
   key: string
@@ -102,6 +104,10 @@ function clientTripRequestSnapshot(offer: ClientTripOfferRow) {
 
 const tripsApp = new Hono<{ Bindings: AuthBindings }>()
 const DRIVER_TRIP_OFFER_TTL_MS = 15 * 60 * 1000
+
+function notificationStatements(db: AuthBindings['DB'], event: NotificationEventInput, now: number) {
+  return buildNotificationEventStatements(db, event, now, { requirePriorChange: true })
+}
 
 function toTripLocationSnapshot(
   input: TripLocationSnapshot['input'],
@@ -338,7 +344,8 @@ tripsApp.post('/quote', async (c) => {
   }
 
   const vehicle = await c.env.DB.prepare(
-    `SELECT vehicle.id, vehicle.driver_application_id, vehicle.passenger_capacity, vehicle.luggage_capacity,
+    `SELECT vehicle.id, vehicle.driver_application_id, driver.user_id AS driver_user_id,
+            vehicle.passenger_capacity, vehicle.luggage_capacity,
             driver.lodging_rate_ugx AS driver_lodging_rate_ugx
       FROM vehicles AS vehicle
        JOIN driver_applications AS driver ON driver.id = vehicle.driver_application_id
@@ -347,7 +354,7 @@ tripsApp.post('/quote', async (c) => {
       LIMIT 1`,
   )
     .bind(vehicleId, Date.now(), Date.now(), Date.now(), Date.now(), Date.now(), Date.now())
-    .first<{ id: string; driver_application_id: string; passenger_capacity: number; luggage_capacity: number; driver_lodging_rate_ugx: number | null }>()
+    .first<{ id: string; driver_application_id: string; driver_user_id: string; passenger_capacity: number; luggage_capacity: number; driver_lodging_rate_ugx: number | null }>()
   if (!vehicle) return c.json(apiError('VEHICLE_UNAVAILABLE', 'This vehicle is not available for selection.'), 409)
   if (vehicle.passenger_capacity < validation.partySize || vehicle.luggage_capacity < validation.luggageCount) {
     return c.json(apiError('VEHICLE_CAPACITY', 'This vehicle does not have enough passenger or luggage capacity.'), 422)
@@ -398,7 +405,7 @@ tripsApp.post('/quote', async (c) => {
   const offerId = crypto.randomUUID()
   const createdAt = Date.now()
   const expiresAt = createdAt + DRIVER_TRIP_OFFER_TTL_MS
-  const inserted = await c.env.DB.prepare(
+  const offerInsert = c.env.DB.prepare(
     `INSERT INTO driver_trip_offers
       (id, client_user_id, driver_application_id, vehicle_id, origin_json, destination_json,
        start_date, end_date, party_size, luggage_count, status, expires_at, created_at)
@@ -458,8 +465,30 @@ tripsApp.post('/quote', async (c) => {
       validation.startDate,
       now,
     )
-    .run()
-  if (inserted.meta?.changes !== 1) {
+  const inserted = await c.env.DB.batch([
+    offerInsert,
+    ...notificationStatements(c.env.DB, {
+      id: `booking.quote_requested:${offerId}`,
+      eventType: 'booking.quote_requested',
+      eventVersion: 1,
+      domainType: 'trip_offer',
+      domainId: offerId,
+      occurredAt: createdAt,
+      expiresAt,
+      recipients: [{ userId: user.id, role: 'client' }],
+    }, createdAt),
+    ...notificationStatements(c.env.DB, {
+      id: `booking.driver_offer_created:${offerId}`,
+      eventType: 'booking.driver_offer_created',
+      eventVersion: 1,
+      domainType: 'trip_offer',
+      domainId: offerId,
+      occurredAt: createdAt,
+      expiresAt,
+      recipients: [{ userId: vehicle.driver_user_id, role: 'driver' }],
+    }, createdAt),
+  ])
+  if (inserted[0]?.meta?.changes !== 1) {
     return c.json(apiError('TRIP_OFFER_CONFLICT', 'This car or its driver is no longer available for those dates. Choose another car or try again.'), 409)
   }
 
@@ -476,10 +505,7 @@ tripsApp.get('/quote-requests/current', async (c) => {
   if (!user) return c.json(apiError('UNAUTHORIZED', 'Sign in to continue.'), 401)
 
   const now = Date.now()
-  await c.env.DB.prepare(
-    `UPDATE driver_trip_offers SET status = 'expired'
-      WHERE client_user_id = ? AND status = 'pending' AND expires_at <= ?`,
-  ).bind(user.id, now).run()
+  await expirePendingDriverTripOffers(c.env, now, user.id)
   await c.env.DB.prepare(
     `UPDATE driver_trip_offers SET status = 'quote_failed'
       WHERE client_user_id = ? AND status = 'quoting' AND quote_id IS NULL AND expires_at <= ?`,
@@ -544,11 +570,28 @@ tripsApp.post('/quote-requests/:offerId/withdraw', async (c) => {
   const user = await getSignedInUser(c.env, c.req.raw)
   if (!user) return c.json(apiError('UNAUTHORIZED', 'Sign in to continue.'), 401)
   const now = Date.now()
-  const result = await c.env.DB.prepare(
+  const offer = await c.env.DB.prepare(
+    `SELECT driver.user_id AS driverUserId FROM driver_trip_offers AS offer
+       JOIN driver_applications AS driver ON driver.id = offer.driver_application_id
+      WHERE offer.id = ? AND offer.client_user_id = ? LIMIT 1`,
+  ).bind(c.req.param('offerId'), user.id).first<{ driverUserId: string }>()
+  if (!offer) return c.json(apiError('TRIP_OFFER_NOT_PENDING', 'This trip request can no longer be withdrawn.'), 409)
+  const result = await c.env.DB.batch([
+    c.env.DB.prepare(
     `UPDATE driver_trip_offers SET status = 'withdrawn', responded_at = ?
       WHERE id = ? AND client_user_id = ? AND status = 'pending' AND expires_at > ?`,
-  ).bind(now, c.req.param('offerId'), user.id, now).run()
-  if (result.meta?.changes !== undefined && result.meta.changes !== 1) {
+    ).bind(now, c.req.param('offerId'), user.id, now),
+    ...notificationStatements(c.env.DB, {
+      id: `booking.withdrawn:${c.req.param('offerId')}`,
+      eventType: 'booking.withdrawn',
+      eventVersion: 1,
+      domainType: 'trip_offer',
+      domainId: c.req.param('offerId'),
+      occurredAt: now,
+      recipients: [{ userId: offer.driverUserId, role: 'driver' }],
+    }, now),
+  ])
+  if (result[0]?.meta?.changes !== 1) {
     return c.json(apiError('TRIP_OFFER_NOT_PENDING', 'This trip request can no longer be withdrawn.'), 409)
   }
   return c.json({ offerId: c.req.param('offerId'), status: 'withdrawn' })
@@ -560,10 +603,7 @@ tripsApp.get('/quote-requests/:offerId', async (c) => {
 
   const offerId = c.req.param('offerId')
   const now = Date.now()
-  await c.env.DB.prepare(
-    `UPDATE driver_trip_offers SET status = 'expired'
-      WHERE id = ? AND client_user_id = ? AND status = 'pending' AND expires_at <= ?`,
-  ).bind(offerId, user.id, now).run()
+  await expirePendingDriverTripOffers(c.env, now, user.id, offerId)
   await c.env.DB.prepare(
     `UPDATE driver_trip_offers SET status = 'quote_failed'
       WHERE id = ? AND client_user_id = ? AND status = 'quoting' AND quote_id IS NULL AND expires_at <= ?`,
@@ -631,10 +671,7 @@ tripsApp.get('/driver-offers', async (c) => {
   ).bind(user.id).first<{ id: string }>()
   if (!application) return c.json({ offers: [] })
 
-  await c.env.DB.prepare(
-    `UPDATE driver_trip_offers SET status = 'expired'
-      WHERE driver_application_id = ? AND status = 'pending' AND expires_at <= ?`,
-  ).bind(application.id, now).run()
+  await expirePendingDriverTripOffers(c.env, now, undefined, undefined, application.id)
 
   const offers = await c.env.DB.prepare(
     `SELECT offer.id, offer.vehicle_id, offer.origin_json, offer.destination_json,
@@ -706,11 +743,22 @@ tripsApp.post('/driver-offers/:offerId/respond', async (c) => {
     return c.json({ offerId: offer.id, status: 'expired' }, 409)
   }
   if (decision === 'decline') {
-    const declined = await c.env.DB.prepare(
+    const declined = await c.env.DB.batch([
+      c.env.DB.prepare(
       `UPDATE driver_trip_offers SET status = 'declined', responded_at = ?
         WHERE id = ? AND driver_application_id = ? AND status = 'pending' AND expires_at > ?`,
-    ).bind(now, offer.id, offer.driver_application_id, now).run()
-    if (declined.meta?.changes !== 1) return c.json(apiError('TRIP_OFFER_ALREADY_HANDLED', 'This trip offer has already been handled.'), 409)
+      ).bind(now, offer.id, offer.driver_application_id, now),
+      ...notificationStatements(c.env.DB, {
+        id: `booking.driver_offer_declined:${offer.id}`,
+        eventType: 'booking.driver_offer_declined',
+        eventVersion: 1,
+        domainType: 'trip_offer',
+        domainId: offer.id,
+        occurredAt: now,
+        recipients: [{ userId: offer.client_user_id, role: 'client' }],
+      }, now),
+    ])
+    if (declined[0]?.meta?.changes !== 1) return c.json(apiError('TRIP_OFFER_ALREADY_HANDLED', 'This trip offer has already been handled.'), 409)
     return c.json({ offerId: offer.id, status: 'declined' })
   }
   if (!Number.isSafeInteger(offer.driver_lodging_rate_ugx) || offer.driver_lodging_rate_ugx === null ||
@@ -723,7 +771,8 @@ tripsApp.post('/driver-offers/:offerId/respond', async (c) => {
     return c.json({ offerId: offer.id, status: 'quote_failed' }, 409)
   }
 
-  const claimed = await c.env.DB.prepare(
+  const claimed = await c.env.DB.batch([
+    c.env.DB.prepare(
     `UPDATE driver_trip_offers SET status = 'quoting', responded_at = ?, expires_at = ?
       WHERE id = ? AND driver_application_id = ? AND status = 'pending' AND expires_at > ?
         AND NOT EXISTS (
@@ -734,8 +783,18 @@ tripsApp.post('/driver-offers/:offerId/respond', async (c) => {
              AND other.end_date > driver_trip_offers.start_date
              AND other.status IN ('pending', 'quoting') AND other.expires_at > ?
         )`,
-  ).bind(now, now + DRIVER_TRIP_OFFER_TTL_MS, offer.id, offer.driver_application_id, now, now).run()
-  if (claimed.meta?.changes !== 1) {
+    ).bind(now, now + DRIVER_TRIP_OFFER_TTL_MS, offer.id, offer.driver_application_id, now, now),
+    ...notificationStatements(c.env.DB, {
+      id: `booking.driver_offer_accepted:${offer.id}`,
+      eventType: 'booking.driver_offer_accepted',
+      eventVersion: 1,
+      domainType: 'trip_offer',
+      domainId: offer.id,
+      occurredAt: now,
+      recipients: [{ userId: offer.client_user_id, role: 'client' }],
+    }, now),
+  ])
+  if (claimed[0]?.meta?.changes !== 1) {
     return c.json(apiError('TRIP_OFFER_ALREADY_HANDLED', 'This trip offer has already been handled.'), 409)
   }
 
@@ -812,6 +871,16 @@ tripsApp.post('/driver-offers/:offerId/respond', async (c) => {
       `UPDATE driver_trip_offers SET status = 'quoted', quote_id = ?
         WHERE id = ? AND status = 'quoting' AND expires_at > ?`,
     ).bind(quoteId, offer.id, committedAt),
+    ...notificationStatements(c.env.DB, {
+      id: `booking.quote_status_changed:${offer.id}:${quoteId}`,
+      eventType: 'booking.quote_status_changed',
+      eventVersion: 1,
+      domainType: 'trip_offer',
+      domainId: offer.id,
+      occurredAt: committedAt,
+      expiresAt,
+      recipients: [{ userId: offer.client_user_id, role: 'client' }],
+    }, committedAt),
   ])
   if (commit[0]?.meta.changes !== 1 || commit[1]?.meta.changes !== 1) {
     await c.env.DB.prepare(
@@ -1078,11 +1147,22 @@ tripsApp.post('/confirm', async (c) => {
      SELECT ?, ?, 'booking_hold_created', 'booking', ?, 'Client accepted current disclosures and contact-sharing consent.', NULL, 'deposit_pending', ?
       WHERE EXISTS (SELECT 1 FROM bookings WHERE id = ? AND status = 'deposit_pending')`,
   ).bind(crypto.randomUUID(), user.id, bookingId, now, bookingId)
+  const holdCreatedNotification = notificationStatements(c.env.DB, {
+    id: `booking.hold_created:${bookingId}`,
+    eventType: 'booking.hold_created',
+    eventVersion: 1,
+    domainType: 'booking',
+    domainId: bookingId,
+    occurredAt: now,
+    expiresAt: holdExpiresAt,
+    recipients: [{ userId: user.id, role: 'client' }],
+  }, now)
 
   let result
   try {
     result = await c.env.DB.batch([
       insertBooking,
+      ...holdCreatedNotification,
       ...acceptanceStatements,
       snapshotQuoteTerms,
       insertContactConsent,
@@ -1229,15 +1309,55 @@ tripsApp.get('/:bookingId', async (c) => {
 
 export default tripsApp
 
+export async function expirePendingDriverTripOffers(
+  env: AuthBindings,
+  now = Date.now(),
+  clientUserId?: string,
+  offerId?: string,
+  driverApplicationId?: string,
+): Promise<number> {
+  const filters = ["status = 'pending'", 'expires_at <= ?']
+  const bindings: Array<string | number> = [now]
+  if (clientUserId) { filters.push('client_user_id = ?'); bindings.push(clientUserId) }
+  if (offerId) { filters.push('id = ?'); bindings.push(offerId) }
+  if (driverApplicationId) { filters.push('driver_application_id = ?'); bindings.push(driverApplicationId) }
+  const pending = await env.DB.prepare(
+    `SELECT id, client_user_id FROM driver_trip_offers WHERE ${filters.join(' AND ')}
+      ORDER BY expires_at ASC LIMIT 100`,
+  ).bind(...bindings).all<{ id: string; client_user_id: string }>()
+
+  let expired = 0
+  for (const offer of pending.results) {
+    const transitionedAt = Date.now()
+    const result = await env.DB.batch([
+      env.DB.prepare(
+        `UPDATE driver_trip_offers SET status = 'expired'
+          WHERE id = ? AND status = 'pending' AND expires_at <= ?`,
+      ).bind(offer.id, transitionedAt),
+      ...notificationStatements(env.DB, {
+        id: `booking.driver_offer_expired:${offer.id}`,
+        eventType: 'booking.driver_offer_expired',
+        eventVersion: 1,
+        domainType: 'trip_offer',
+        domainId: offer.id,
+        occurredAt: transitionedAt,
+        recipients: [{ userId: offer.client_user_id, role: 'client' }],
+      }, transitionedAt),
+    ])
+    if ((result[0]?.meta.changes ?? 0) === 1) expired += 1
+  }
+  return expired
+}
+
 export async function expireDepositPendingBookings(env: AuthBindings): Promise<number> {
   const now = Date.now()
   const pending = await env.DB.prepare(
-    `SELECT id FROM bookings
+    `SELECT id, client_user_id FROM bookings
       WHERE status = 'deposit_pending' AND hold_expires_at <= ?
       ORDER BY hold_expires_at ASC LIMIT 100`,
   )
     .bind(now)
-    .all<{ id: string }>()
+    .all<{ id: string; client_user_id: string }>()
 
   let expired = 0
   for (const booking of pending.results) {
@@ -1255,6 +1375,15 @@ export async function expireDepositPendingBookings(env: AuthBindings): Promise<n
                 'Deposit hold expired before confirmation.', 'deposit_pending', 'expired', ?
           WHERE changes() = 1`,
       ).bind(crypto.randomUUID(), booking.id, transitionedAt),
+      ...notificationStatements(env.DB, {
+        id: `booking.expired:${booking.id}`,
+        eventType: 'booking.expired',
+        eventVersion: 1,
+        domainType: 'booking',
+        domainId: booking.id,
+        occurredAt: transitionedAt,
+        recipients: [{ userId: booking.client_user_id, role: 'client' }],
+      }, transitionedAt),
     ])
     if ((result[0]?.meta.changes ?? 0) === 1) expired += 1
   }
