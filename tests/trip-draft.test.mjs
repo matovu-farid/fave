@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { createTripDraftStore, getBookingProgress, hasTripDraftContent, restoreSelectedVehicleId } from '../src/lib/trip-draft.ts'
+import { createTripDraftStore, getBookingProgress, hasActiveDepositHold, hasTripDraftContent, restoreSelectedVehicleId } from '../src/lib/trip-draft.ts'
 
 function createMemoryStorage(initial = null) {
   let value = initial
@@ -78,4 +78,17 @@ test('booking progress marks earlier stages complete and the current stage clear
 test('trip draft restoration never silently substitutes an unavailable selected car', () => {
   assert.equal(restoreSelectedVehicleId('vehicle-1', ['vehicle-1', 'vehicle-2']), 'vehicle-1')
   assert.equal(restoreSelectedVehicleId('vehicle-1', ['vehicle-2']), '')
+})
+
+test('booking progress restores the deposit step while a pending deposit hold is active', () => {
+  assert.equal(hasActiveDepositHold([
+    { status: 'deposit_pending', holdExpiresAt: 2_000 },
+  ], 1_000), true)
+})
+
+test('booking progress ignores expired and already settled deposit holds', () => {
+  assert.equal(hasActiveDepositHold([
+    { status: 'deposit_pending', holdExpiresAt: 999 },
+    { status: 'confirmed', holdExpiresAt: 2_000 },
+  ], 1_000), false)
 })

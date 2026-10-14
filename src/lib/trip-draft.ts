@@ -17,6 +17,8 @@ export type BookingProgressStep = {
   state: 'complete' | 'current' | 'upcoming'
 }
 
+type BookingHold = { status: string; holdExpiresAt: number }
+
 export interface AsyncKeyValueStorage {
   getItem(key: string): Promise<string | null>
   setItem(key: string, value: string): Promise<void>
@@ -77,6 +79,10 @@ export function getBookingProgress(currentStage: BookingProgressStage): BookingP
     ...stage,
     state: index < currentIndex ? 'complete' : index === currentIndex ? 'current' : 'upcoming',
   }))
+}
+
+export function hasActiveDepositHold(bookings: BookingHold[], now: number) {
+  return bookings.some((booking) => booking.status === 'deposit_pending' && booking.holdExpiresAt > now)
 }
 
 export function restoreSelectedVehicleId(requestedId: string, availableVehicleIds: string[]) {

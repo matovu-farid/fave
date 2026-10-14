@@ -11,7 +11,7 @@ import { ApiError, apiBaseUrl } from '@/lib/api'
 import { authClient } from '@/lib/auth-client'
 import { createLatestRequestGuard } from '@/lib/latest-request'
 import { ClientPrerequisites, ClientTripOffer, confirmTrip, getAvailableVehicles, getClientPrerequisites, getCurrentTripOffer, getMyBookings, getTripOfferStatus, PolicyDocument, requestTripQuote, TripBooking, TripQuote, updateClientProfile, Vehicle, withdrawTripOffer } from '@/lib/marketplace'
-import { BookingProgressStage, getBookingProgress, hasTripDraftContent, restoreSelectedVehicleId, TripDraft } from '@/lib/trip-draft'
+import { BookingProgressStage, getBookingProgress, hasActiveDepositHold, hasTripDraftContent, restoreSelectedVehicleId, TripDraft } from '@/lib/trip-draft'
 import { tripDraftStore } from '@/lib/trip-draft-storage'
 import { getDriverAccommodationNotice } from '@/lib/trip-quote-display'
 
@@ -97,7 +97,7 @@ export default function TripsScreen() {
       setPrerequisites(result)
       setBookings(bookingResult.bookings)
       restoreTripRequest(offerResult.offer)
-      setBookingSubmitted(offerResult.offer?.status === 'booked')
+      setBookingSubmitted(offerResult.offer?.status === 'booked' || hasActiveDepositHold(bookingResult.bookings, Date.now()))
       setOffer(offerResult.offer && ['pending', 'quoting'].includes(offerResult.offer.status) ? offerResult.offer : null)
       if (offerResult.offer?.status === 'quoted' && offerResult.offer.quote) setQuote(offerResult.offer.quote)
       if (offerResult.offer?.status === 'booked') setSuccess('This trip is already booked. See your trip requests below.')
