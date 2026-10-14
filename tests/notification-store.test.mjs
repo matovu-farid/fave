@@ -235,6 +235,24 @@ test('ordinary pushes respect the Africa/Kampala night quiet hours while urgent 
     const delayed = db.prepare('SELECT not_before AS notBefore FROM notification_outbox WHERE event_id = ?').get(event.id).notBefore
     assert.equal(delayed, Date.parse('2026-10-15T05:00:00.000Z'), '22:00 Kampala should wait until 08:00')
 
+    const quietHourBoundaries = [
+      { id: 'before-quiet-hours', at: '2026-10-14T17:59:00.000Z', expected: '2026-10-14T17:59:00.000Z' }, // 20:59 EAT
+      { id: 'quiet-hours-start', at: '2026-10-14T18:00:00.000Z', expected: '2026-10-15T05:00:00.000Z' }, // 21:00 EAT
+      { id: 'quiet-hours-end-minus-one', at: '2026-10-15T04:59:00.000Z', expected: '2026-10-15T05:00:00.000Z' }, // 07:59 EAT
+      { id: 'quiet-hours-end', at: '2026-10-15T05:00:00.000Z', expected: '2026-10-15T05:00:00.000Z' }, // 08:00 EAT
+    ]
+    for (const boundary of quietHourBoundaries) {
+      const boundaryTime = Date.parse(boundary.at)
+      await createNotificationEvent(createD1Adapter(db), {
+        id: boundary.id, eventType: 'booking.quote_requested', eventVersion: 1,
+        domainType: 'trip_offer', domainId: `offer-${boundary.id}`, occurredAt: boundaryTime,
+        expiresAt: boundaryTime + 24 * 60 * 60 * 1000,
+        recipients: [{ userId: 'user-1', role: 'client' }],
+      }, boundaryTime)
+      const actual = db.prepare('SELECT not_before AS notBefore FROM notification_outbox WHERE event_id = ?').get(boundary.id).notBefore
+      assert.equal(actual, Date.parse(boundary.expected), `${boundary.at} should follow the Kampala quiet-hours boundary`)
+    }
+
     const urgentNow = Date.parse('2026-10-14T20:00:00.000Z')
     await createNotificationEvent(createD1Adapter(db), {
       id: 'urgent-1', eventType: 'payment.balance_due', eventVersion: 1,
