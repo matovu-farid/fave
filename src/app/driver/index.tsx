@@ -7,7 +7,7 @@ import { ActionButton, Card, CheckRow, Field, Message, SectionTitle, formStyles 
 import { ThemedText } from '@/components/themed-text'
 import { ThemedView } from '@/components/themed-view'
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme'
-import { acceptDriverPolicies, DriverApplication, DriverPrerequisites, getDriverApplication, getDriverPrerequisites, getMyVehicles, getVehicleAvailability, getVehicleRequirements, setDriverLodgingRate, submitDriverApplication, submitVehicle, submitVehicleCorrections, updateVehicle, markUnavailable, removeUnavailable, Vehicle, VehicleAvailability, VehicleRequirements } from '@/lib/marketplace'
+import { acceptDriverPolicies, DriverApplication, DriverPrerequisites, DriverTripOffer, getDriverApplication, getDriverPrerequisites, getDriverTripOffers, getMyVehicles, getVehicleAvailability, getVehicleRequirements, respondToDriverTripOffer, setDriverLodgingRate, submitDriverApplication, submitVehicle, submitVehicleCorrections, updateVehicle, markUnavailable, removeUnavailable, Vehicle, VehicleAvailability, VehicleRequirements } from '@/lib/marketplace'
 
 type Picked = { uri: string; fileName: string; mimeType: string; file?: Blob }
 const maxEvidenceBytes = 8 * 1024 * 1024
@@ -78,6 +78,8 @@ export default function DriverScreen() {
   const [prerequisites, setPrerequisites] = useState<DriverPrerequisites | null>(null)
   const [application, setApplication] = useState<DriverApplication | null>(null)
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
+  const [tripOffers, setTripOffers] = useState<DriverTripOffer[]>([])
+  const [offerMessage, setOfferMessage] = useState('')
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -97,6 +99,10 @@ export default function DriverScreen() {
       setPrerequisites(requirements)
       setApplication(result.application)
       setVehicles(mine.vehicles)
+      const offers = result.application?.status === 'approved'
+        ? await getDriverTripOffers().catch(() => ({ offers: [] }))
+        : { offers: [] }
+      setTripOffers(offers.offers)
       if (result.application?.needsEvidenceRefresh || result.application?.needsPolicyAcceptance) setAccepted(false)
       setLegalName(result.application?.legalName ?? '')
       setPhoneNumber(result.application?.phoneNumber ?? '')
@@ -107,6 +113,29 @@ export default function DriverScreen() {
   }, [])
 
   useEffect(() => { void Promise.resolve().then(refresh) }, [refresh])
+
+  const refreshOffers = useCallback(async () => {
+    if (application?.status !== 'approved') return
+    try { setTripOffers((await getDriverTripOffers()).offers) } catch { /* Preserve the last known offer list during a brief network failure. */ }
+  }, [application?.status])
+  useEffect(() => {
+    if (application?.status !== 'approved') return
+    const timer = setInterval(() => { void refreshOffers() }, 12000)
+    return () => clearInterval(timer)
+  }, [application?.status, refreshOffers])
+
+  const respondToOffer = async (offer: DriverTripOffer, decision: 'accept' | 'decline') => {
+    setBusy(true); setError(''); setOfferMessage('')
+    try {
+      const result = await respondToDriverTripOffer(offer.offerId, decision)
+      setTripOffers((current) => current.filter((item) => item.offerId !== offer.offerId))
+      setOfferMessage(decision === 'accept'
+        ? 'You accepted the trip. Fave sent the client a quote using your registered overnight rate.'
+        : 'You declined the trip. The client can choose another car.')
+      if (result.status !== 'quoted' && decision === 'accept') setOfferMessage('This offer could not be completed. Refresh your offers and try again if it is still available.')
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not respond to this trip offer.') }
+    finally { setBusy(false) }
+  }
 
   const pick = async (key: string, allowPdf = false) => {
     try {
@@ -174,6 +203,21 @@ export default function DriverScreen() {
         {application.retentionExpiresAt ? <ThemedText type="small">Private evidence deletion deadline · {new Date(application.retentionExpiresAt).toLocaleString()}{application.retentionPolicyVersion ? ` · policy v${application.retentionPolicyVersion}` : ''}. Cleanup runs hourly.</ThemedText> : null}
         {application.applicantMessage ? <Message>{application.applicantMessage}</Message> : null}
         {application.documents.map((doc) => <ThemedText key={doc.id} type="small">{doc.type.replaceAll('_', ' ')}{doc.requirementVersion ? ` · v${doc.requirementVersion}` : ''} · {doc.status}</ThemedText>)}
+      </Card> : null}
+      {application?.status === 'approved' ? <Card>
+        <ThemedText type="subtitle">Trip offers</ThemedText>
+        {offerMessage ? <Message>{offerMessage}</Message> : null}
+        {tripOffers.length === 0 ? <ThemedText>No new trip offers. This section refreshes automatically.</ThemedText> : tripOffers.map((offer) => <View key={offer.offerId} style={styles.offer}>
+          <ThemedText type="smallBold">{offer.vehicle.year} {offer.vehicle.make} {offer.vehicle.model} · {offer.startDate} to {offer.endDate}</ThemedText>
+          <ThemedText>Pickup · {offer.pickup.formattedAddress ?? offer.pickup.address}</ThemedText>
+          <ThemedText>Destination · {offer.destination.formattedAddress ?? offer.destination.address}</ThemedText>
+          <ThemedText>{offer.passengerCount} passengers · {offer.luggageCount} luggage pieces</ThemedText>
+          <ThemedText type="small">Respond by {new Date(offer.expiresAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</ThemedText>
+          <View style={formStyles.row}>
+            <ActionButton title="Accept trip" onPress={() => void respondToOffer(offer, 'accept')} busy={busy} />
+            <ActionButton title="Decline" onPress={() => void respondToOffer(offer, 'decline')} busy={busy} />
+          </View>
+        </View>)}
       </Card> : null}
       {application?.status === 'approved' && application.lodgingRateUgx === null ? <Card>
         <ThemedText type="subtitle">Set your overnight rate</ThemedText>
@@ -454,6 +498,7 @@ const styles = StyleSheet.create({
   page: { flex: 1 }, loading: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   content: { width: '100%', maxWidth: MaxContentWidth, alignSelf: 'center', padding: Spacing.three, paddingBottom: BottomTabInset + Spacing.five, gap: Spacing.three },
   document: { gap: Spacing.two, padding: Spacing.three, backgroundColor: '#fff', borderRadius: 12 },
+  offer: { gap: Spacing.two, paddingVertical: Spacing.two, borderTopWidth: 1, borderTopColor: '#b8bbc2' },
   correction: { gap: Spacing.two, paddingTop: Spacing.two, borderTopWidth: 1, borderTopColor: '#b8bbc2' },
   availabilityRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.two },
   pickWrap: { flex: 1, minWidth: 140, gap: Spacing.two }, preview: { width: '100%', height: 120, borderRadius: 12, backgroundColor: '#ddd' },

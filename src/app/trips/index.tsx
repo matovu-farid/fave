@@ -9,7 +9,7 @@ import { ThemedView } from '@/components/themed-view'
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme'
 import { ApiError, apiBaseUrl } from '@/lib/api'
 import { createLatestRequestGuard } from '@/lib/latest-request'
-import { ClientPrerequisites, confirmTrip, getAvailableVehicles, getClientPrerequisites, getMyBookings, PolicyDocument, requestTripQuote, TripBooking, TripQuote, updateClientProfile, Vehicle } from '@/lib/marketplace'
+import { ClientPrerequisites, ClientTripOffer, confirmTrip, getAvailableVehicles, getClientPrerequisites, getCurrentTripOffer, getMyBookings, getTripOfferStatus, PolicyDocument, requestTripQuote, TripBooking, TripQuote, updateClientProfile, Vehicle, withdrawTripOffer } from '@/lib/marketplace'
 import { getDriverAccommodationNotice } from '@/lib/trip-quote-display'
 
 function asAddress(value: string) { return { address: value } }
@@ -20,6 +20,8 @@ export default function TripsScreen() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
   const [selectedVehicle, setSelectedVehicle] = useState('')
   const [quote, setQuote] = useState<TripQuote | null>(null)
+  const [offer, setOffer] = useState<ClientTripOffer | null>(null)
+  const [offerCountdown, setOfferCountdown] = useState(0)
   const [loading, setLoading] = useState(true); const [busy, setBusy] = useState(false); const [error, setError] = useState(''); const [success, setSuccess] = useState('')
   const [legalName, setLegalName] = useState(''); const [phone, setPhone] = useState(''); const [acceptedClientTerms, setAcceptedClientTerms] = useState(false)
   const [pickup, setPickup] = useState(''); const [destination, setDestination] = useState('')
@@ -44,18 +46,80 @@ export default function TripsScreen() {
     setSelectedVehicle('')
   }, [invalidateQuote])
 
+  const restoreTripRequest = useCallback((current: ClientTripOffer | null) => {
+    const trip = current?.tripRequest
+    if (!trip) return
+    const pickupInput = trip.pickup.input
+    setPickup(trip.pickup.address)
+    setPickupPin('latitude' in pickupInput
+      ? { latitude: pickupInput.latitude, longitude: pickupInput.longitude }
+      : null)
+    setPinPickerOpen('latitude' in pickupInput)
+    setDestination(trip.destination.address)
+    setStartDate(trip.startDate); setEndDate(trip.endDate)
+    setPartySize(String(trip.partySize)); setLuggageCount(String(trip.luggageCount))
+    setSelectedVehicle(current.vehicleId)
+  }, [])
+
   const refresh = useCallback(async () => {
     setLoading(true); setError('')
     try {
-      const [result, bookingResult] = await Promise.all([getClientPrerequisites(), getMyBookings()])
+      const [result, bookingResult, offerResult] = await Promise.all([
+        getClientPrerequisites(), getMyBookings(), getCurrentTripOffer().catch(() => ({ offer: null })),
+      ])
       setPrerequisites(result)
       setBookings(bookingResult.bookings)
+      restoreTripRequest(offerResult.offer)
+      setOffer(offerResult.offer && ['pending', 'quoting'].includes(offerResult.offer.status) ? offerResult.offer : null)
+      if (offerResult.offer?.status === 'quoted' && offerResult.offer.quote) setQuote(offerResult.offer.quote)
+      if (offerResult.offer?.status === 'booked') setSuccess('This trip is already booked. See your trip requests below.')
+      if (offerResult.offer && ['declined', 'expired', 'withdrawn', 'quote_failed'].includes(offerResult.offer.status)) {
+        setError(offerResult.offer.status === 'quote_failed'
+          ? 'The quote could not be prepared. No payment was taken. Choose another car and try again.'
+          : 'That driver could not accept the trip. No payment was taken. Choose another car to try again.')
+      }
       setLegalName(result.profile?.legalName ?? '')
       setPhone(result.profile?.phoneNumber ?? '')
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not load booking requirements.') }
     finally { setLoading(false) }
-  }, [])
+  }, [restoreTripRequest])
   useEffect(() => { void Promise.resolve().then(refresh) }, [refresh])
+  useEffect(() => {
+    if (!offer || !['pending', 'quoting'].includes(offer.status)) return
+    let active = true
+    const poll = async () => {
+      try {
+        const status = await getTripOfferStatus(offer.offerId)
+        if (!active) return
+        if (status.status === 'quoted' && status.quote) {
+          setQuote(status.quote)
+          setOffer(null)
+          setSuccess('The driver accepted. Review the trip estimate and continue when you are ready.')
+        } else if (status.status === 'booked') {
+          setOffer(null)
+          setSuccess('This trip is already booked. See your trip requests below.')
+        } else if (['declined', 'expired', 'withdrawn', 'quote_failed'].includes(status.status)) {
+          setOffer(null)
+          setError(status.status === 'quote_failed'
+            ? 'The quote could not be prepared. No payment was taken. Choose another car and try again.'
+            : 'That driver could not accept the trip. No payment was taken. Choose another car to try again.')
+        } else {
+          setOffer(status)
+        }
+      } catch {
+        // Keep the pending screen visible; a later poll can recover the current status.
+      }
+    }
+    const timer = setInterval(() => { void poll() }, 4000)
+    return () => { active = false; clearInterval(timer) }
+  }, [offer])
+  useEffect(() => {
+    if (!offer) return
+    const updateCountdown = () => setOfferCountdown(Math.max(0, Math.ceil((offer.expiresAt - Date.now()) / 1000)))
+    updateCountdown()
+    const timer = setInterval(updateCountdown, 1000)
+    return () => clearInterval(timer)
+  }, [offer])
 
   const canProfile = Boolean(legalName.trim() && phone.trim() && acceptedClientTerms && prerequisites?.documents.length === 2)
   const configureProfile = async () => {
@@ -91,8 +155,20 @@ export default function TripsScreen() {
       const result = await requestTripQuote({ origin: pickupPin ?? asAddress(pickup.trim()), destination: asAddress(destination.trim()), startDate, endDate, partySize: Number(partySize), luggageCount: Number(luggageCount), vehicleId: requestedVehicle })
       if (revision !== quoteRevision.current) return
       setCheckedPolicies([]); setSharePhone(false)
-      setQuote(result)
+      setOffer({ offerId: result.offerId, vehicleId: result.vehicleId, status: 'pending', expiresAt: result.expiresAt })
+      setSuccess('Your request is with this car’s driver. You will see the price after they confirm availability. No payment is taken while you wait.')
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not create a trip quote.') }
+    finally { setBusy(false) }
+  }
+
+  const withdrawOffer = async () => {
+    if (!offer) return
+    setBusy(true); setError('')
+    try {
+      await withdrawTripOffer(offer.offerId)
+      setOffer(null); setSelectedVehicle('')
+      setSuccess('Trip request withdrawn. No payment was taken. You can choose another car.')
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not withdraw this request.') }
     finally { setBusy(false) }
   }
 
@@ -167,19 +243,19 @@ export default function TripsScreen() {
       <Card>
         <ThemedText type="subtitle">Trip details</ThemedText>
         <Message>When you request a route quote, Fave sends your pickup and destination addresses or map pins to Google Maps to verify pickup coverage and estimate the route. Exact locations are stored with your trip request and are not shown in public vehicle listings.</Message>
-        <Field label="Pickup address" value={pickup} onChangeText={(value) => { setPickup(value); setPickupPin(null); setPinPickerOpen(false); invalidateTripSearch() }} placeholder="Street, landmark, Kampala / Wakiso / Mukono" editable={!busy} />
-        <ActionButton title={pinPickerOpen ? 'Use pickup address' : 'Drop a pickup pin'} onPress={() => { setPinPickerOpen(!pinPickerOpen); if (!pinPickerOpen) setPickup(''); setPickupPin(null); invalidateTripSearch() }} busy={busy} />
+        <Field label="Pickup address" value={pickup} onChangeText={(value) => { setPickup(value); setPickupPin(null); setPinPickerOpen(false); invalidateTripSearch() }} placeholder="Street, landmark, Kampala / Wakiso / Mukono" editable={!busy && !offer} />
+        <ActionButton title={pinPickerOpen ? 'Use pickup address' : 'Drop a pickup pin'} onPress={() => { setPinPickerOpen(!pinPickerOpen); if (!pinPickerOpen) setPickup(''); setPickupPin(null); invalidateTripSearch() }} disabled={Boolean(offer)} busy={busy} />
         {pinPickerOpen ? <>
           <PickupMap value={pickupPin} onChange={(value) => { if (!busy) { setPickupPin(value); invalidateTripSearch() } }} />
           {pickupPin ? <Message>Pickup pin · {pickupPin.latitude.toFixed(5)}, {pickupPin.longitude.toFixed(5)}. Fave sends these coordinates to Google Maps when you request a route quote to verify coverage and estimate the route.</Message> : <Message>Place a pin in Kampala, Wakiso, or Mukono. Your pin stays private in the trip details.</Message>}
         </> : null}
-        <Field label="Destination address" value={destination} onChangeText={(value) => { setDestination(value); invalidateTripSearch() }} placeholder="Town or address in Uganda" editable={!busy} />
-        <View style={formStyles.row}><Field label="Start date (YYYY-MM-DD)" value={startDate} onChangeText={(value) => { setStartDate(value); invalidateTripSearch() }} placeholder="YYYY-MM-DD" editable={!busy} /><Field label="End date (YYYY-MM-DD)" value={endDate} onChangeText={(value) => { setEndDate(value); invalidateTripSearch() }} placeholder="YYYY-MM-DD" editable={!busy} /></View>
-        <View style={formStyles.row}><Field label="Passengers" value={partySize} onChangeText={(value) => { setPartySize(value); invalidateTripSearch() }} keyboardType="numeric" editable={!busy} /><Field label="Luggage pieces" value={luggageCount} onChangeText={(value) => { setLuggageCount(value); invalidateTripSearch() }} keyboardType="numeric" editable={!busy} /></View>
-        <ActionButton title="Find available vehicles" onPress={() => void findVehicles()} disabled={(!pickupPin && !pickup.trim()) || (pinPickerOpen && !pickupPin) || !destination.trim() || !startDate || !endDate} busy={busy} />
+        <Field label="Destination address" value={destination} onChangeText={(value) => { setDestination(value); invalidateTripSearch() }} placeholder="Town or address in Uganda" editable={!busy && !offer} />
+        <View style={formStyles.row}><Field label="Start date (YYYY-MM-DD)" value={startDate} onChangeText={(value) => { setStartDate(value); invalidateTripSearch() }} placeholder="YYYY-MM-DD" editable={!busy && !offer} /><Field label="End date (YYYY-MM-DD)" value={endDate} onChangeText={(value) => { setEndDate(value); invalidateTripSearch() }} placeholder="YYYY-MM-DD" editable={!busy && !offer} /></View>
+        <View style={formStyles.row}><Field label="Passengers" value={partySize} onChangeText={(value) => { setPartySize(value); invalidateTripSearch() }} keyboardType="numeric" editable={!busy && !offer} /><Field label="Luggage pieces" value={luggageCount} onChangeText={(value) => { setLuggageCount(value); invalidateTripSearch() }} keyboardType="numeric" editable={!busy && !offer} /></View>
+        <ActionButton title="Find available vehicles" onPress={() => void findVehicles()} disabled={Boolean(offer) || (!pickupPin && !pickup.trim()) || (pinPickerOpen && !pickupPin) || !destination.trim() || !startDate || !endDate} busy={busy} />
         {!prerequisites?.bookingReady ? <Message>Booking requires saved client details, current client terms, and all current booking disclosures.</Message> : null}
       </Card>
-      {vehicles.map((vehicle) => <Card key={vehicle.id}>
+      {!offer ? vehicles.map((vehicle) => <Card key={vehicle.id}>
         {vehicle.photos?.length ? <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -198,8 +274,23 @@ export default function TripsScreen() {
         <ThemedText>{vehicle.comfortDetails}</ThemedText>
         {vehicle.accessibilityDetails ? <ThemedText>{vehicle.accessibilityDetails}</ThemedText> : null}
         <CheckRow title="Select this vehicle" checked={selectedVehicle === vehicle.id} onPress={() => { if (selectedVehicle !== vehicle.id) invalidateQuote(); setSelectedVehicle(vehicle.id) }} disabled={busy} />
-      </Card>)}
-      {vehicles.length > 0 && !quote ? <ActionButton title="Get route and price quote" onPress={() => void getQuote()} disabled={!selectedVehicle} busy={busy} /> : null}
+      </Card>) : null}
+      {offer ? <Card>
+        {(() => {
+          const vehicle = offer.tripRequest?.vehicle ?? vehicles.find((item) => item.id === offer.vehicleId)
+          return vehicle ? <ThemedText type="smallBold">Selected car · {vehicle.year} {vehicle.make} {vehicle.model}</ThemedText> : null
+        })()}
+        {offer.status === 'pending' ? <>
+          <ThemedText type="subtitle">Waiting for the driver</ThemedText>
+          <ThemedText>The selected car’s driver has up to 15 minutes to confirm availability. We’ll show the price after they accept. No payment details or money are taken while you wait.</ThemedText>
+          <ThemedText type="smallBold">Time remaining · {Math.floor(offerCountdown / 60)}:{String(offerCountdown % 60).padStart(2, '0')}</ThemedText>
+          <ActionButton title="Withdraw request" onPress={() => void withdrawOffer()} busy={busy} />
+        </> : <>
+          <ThemedText type="subtitle">The driver accepted</ThemedText>
+          <ThemedText>We’re preparing your trip estimate. You won’t be charged while we calculate the quote.</ThemedText>
+        </>}
+      </Card> : null}
+      {vehicles.length > 0 && !quote && !offer ? <ActionButton title="Ask driver to confirm availability" onPress={() => void getQuote()} disabled={!selectedVehicle} busy={busy} /> : null}
       {quote ? <Card>
         <ThemedText type="subtitle">Your trip estimate · {quote.quote.currency}</ThemedText>
         <ThemedText>Pickup · {quote.pickup.formattedAddress ?? quote.pickup.address} ({quote.pickup.latitude.toFixed(5)}, {quote.pickup.longitude.toFixed(5)})</ThemedText>

@@ -730,12 +730,24 @@ vehiclesApp.get('/catalog', async (c) => {
              AND (booking.status = 'confirmed' OR
                   (booking.status = 'deposit_pending' AND booking.hold_expires_at > ?))
         )
+        AND NOT EXISTS (
+          SELECT 1 FROM driver_trip_offers AS offer
+           WHERE offer.vehicle_id = vehicle.id
+             AND offer.start_date < ? AND offer.end_date > ?
+             AND offer.status IN ('pending', 'quoting') AND offer.expires_at > ?
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM driver_trip_offers AS offer
+           WHERE offer.driver_application_id = driver.id
+             AND offer.start_date < ? AND offer.end_date > ?
+             AND offer.status IN ('pending', 'quoting') AND offer.expires_at > ?
+        )
         AND ${approvedVehicleEvidencePredicate('vehicle')}
       ORDER BY vehicle.make, vehicle.model, vehicle.model_year DESC
       LIMIT 50`,
   )
     .bind(partySize, luggageCount, endDate, startDate, endDate, startDate,
-      now, now, now, now, now, now, now)
+      now, endDate, startDate, now, endDate, startDate, now, now, now, now, now, now, now)
     .all<{
       id: string
       make: string

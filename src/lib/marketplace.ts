@@ -64,11 +64,18 @@ export type ClientPrerequisites = {
   profile: { legalName: string; phoneNumber: string } | null
   bookingReady: boolean
 }
+export type TripLocation = {
+  input: { address: string } | { latitude: number; longitude: number }
+  address: string
+  formattedAddress: string | null
+  latitude: number
+  longitude: number
+}
 export type TripQuote = {
   quoteId: string
   vehicleId: string
-  pickup: { address: string; formattedAddress: string | null; latitude: number; longitude: number }
-  destination: { address: string; formattedAddress: string | null; latitude: number; longitude: number }
+  pickup: TripLocation
+  destination: TripLocation
   route: { distanceMeters: number; durationSeconds: number }
   quote: {
     currency: string
@@ -88,6 +95,56 @@ export type TripQuote = {
   }
   expiresAt: number
 }
+export type TripOfferStatus = 'pending' | 'quoting' | 'quoted' | 'booked' | 'declined' | 'expired' | 'withdrawn' | 'quote_failed'
+export type ClientTripRequestSnapshot = {
+  pickup: TripQuote['pickup']
+  destination: TripQuote['destination']
+  startDate: string
+  endDate: string
+  partySize: number
+  luggageCount: number
+  vehicle: Pick<Vehicle, 'id' | 'make' | 'model' | 'year' | 'passengerCapacity' | 'luggageCapacity'> | null
+}
+export type ClientTripOffer = {
+  offerId: string
+  vehicleId: string
+  status: TripOfferStatus
+  expiresAt: number
+  quote?: TripQuote
+  tripRequest?: ClientTripRequestSnapshot
+}
+export type DriverTripOffer = {
+  offerId: string
+  vehicleId: string
+  pickup: { address: string; formattedAddress: string | null }
+  destination: { address: string; formattedAddress: string | null }
+  startDate: string
+  endDate: string
+  passengerCount: number
+  luggageCount: number
+  expiresAt: number
+  vehicle: { make: string; model: string; year: number }
+}
+export type AdminDriverTripOffer = {
+  offerId: string
+  status: string
+  expiresAt: number
+  createdAt: number
+  respondedAt: number | null
+  startDate: string
+  endDate: string
+  vehicle: { make: string; model: string }
+  route: { pickupArea: string; destinationArea: string }
+  followUpCount: number
+}
+export type AdminTripOffers = {
+  pendingOffers: AdminDriverTripOffer[]
+  processingOffers: AdminDriverTripOffer[]
+  recentOffers: AdminDriverTripOffer[]
+  refreshedAt: number
+}
+export type DriverContact = { driver: { name: string; phone: string } }
+export type DriverCallOutcome = 'reached' | 'no_answer' | 'busy' | 'voicemail' | 'other'
 export type TripBooking = {
   bookingId: string
   status: string
@@ -178,9 +235,42 @@ export function requestTripQuote(input: {
   origin: { address: string } | { latitude: number; longitude: number }; destination: { address: string }; startDate: string; endDate: string;
   partySize: number; luggageCount: number; vehicleId: string
 }) {
-  return authenticatedFetch<TripQuote>('/api/trips/quote', {
+  return authenticatedFetch<{ status: 'pending_driver_acceptance'; offerId: string; vehicleId: string; expiresAt: number }>('/api/trips/quote', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input),
   })
+}
+export function getCurrentTripOffer() {
+  return authenticatedFetch<{ offer: ClientTripOffer | null }>('/api/trips/quote-requests/current')
+}
+export function getTripOfferStatus(offerId: string) {
+  return authenticatedFetch<ClientTripOffer>(`/api/trips/quote-requests/${encodeURIComponent(offerId)}`)
+}
+export function withdrawTripOffer(offerId: string) {
+  return authenticatedFetch<{ offerId: string; status: 'withdrawn' }>(`/api/trips/quote-requests/${encodeURIComponent(offerId)}/withdraw`, { method: 'POST' })
+}
+export function getDriverTripOffers() {
+  return authenticatedFetch<{ offers: DriverTripOffer[] }>('/api/trips/driver-offers')
+}
+export function respondToDriverTripOffer(offerId: string, decision: 'accept' | 'decline') {
+  return authenticatedFetch<{ offerId: string; status: string; quote?: TripQuote }>(
+    `/api/trips/driver-offers/${encodeURIComponent(offerId)}/respond`,
+    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ decision }) },
+  )
+}
+export function getAdminAccess() {
+  return authenticatedFetch<{ authorized: true }>('/api/admin/trip-offers/access')
+}
+export function getAdminTripOffers() {
+  return authenticatedFetch<AdminTripOffers>('/api/admin/trip-offers')
+}
+export function getDriverTripOfferContact(offerId: string) {
+  return authenticatedFetch<DriverContact>(`/api/admin/trip-offers/${encodeURIComponent(offerId)}/driver-contact`, { method: 'POST' })
+}
+export function recordDriverTripOfferFollowUp(offerId: string, outcome: DriverCallOutcome, note: string) {
+  return authenticatedFetch<{ followUpId: string; offerId: string; outcome: DriverCallOutcome; createdAt: number }>(
+    `/api/admin/trip-offers/${encodeURIComponent(offerId)}/follow-ups`,
+    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ outcome, note }) },
+  )
 }
 export function confirmTrip(quoteId: string, acceptedDisclosureIds: string[], contactSharingConsent: boolean) {
   return authenticatedFetch<{ bookingId: string; status: string; holdExpiresAt: number }>('/api/trips/confirm', {

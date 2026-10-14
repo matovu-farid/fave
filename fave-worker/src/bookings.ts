@@ -54,7 +54,53 @@ type TripLocationSnapshot = {
   longitude: number
 }
 
+type ClientTripOfferRow = {
+  id: string
+  vehicle_id: string
+  status: string
+  quote_id: string | null
+  expires_at: number
+  origin_json: string
+  destination_json: string
+  start_date: string
+  end_date: string
+  party_size: number
+  luggage_count: number
+  vehicle_make: string | null
+  vehicle_model: string | null
+  vehicle_year: number | null
+  passenger_capacity: number | null
+  luggage_capacity: number | null
+}
+
+function clientTripRequestSnapshot(offer: ClientTripOfferRow) {
+  try {
+    return {
+      pickup: JSON.parse(offer.origin_json) as TripLocationSnapshot,
+      destination: JSON.parse(offer.destination_json) as TripLocationSnapshot,
+      startDate: offer.start_date,
+      endDate: offer.end_date,
+      partySize: offer.party_size,
+      luggageCount: offer.luggage_count,
+      vehicle: offer.vehicle_make && offer.vehicle_model && offer.vehicle_year !== null &&
+          offer.passenger_capacity !== null && offer.luggage_capacity !== null
+        ? {
+            id: offer.vehicle_id,
+            make: offer.vehicle_make,
+            model: offer.vehicle_model,
+            year: offer.vehicle_year,
+            passengerCapacity: offer.passenger_capacity,
+            luggageCapacity: offer.luggage_capacity,
+          }
+        : null,
+    }
+  } catch {
+    return null
+  }
+}
+
 const tripsApp = new Hono<{ Bindings: AuthBindings }>()
+const DRIVER_TRIP_OFFER_TTL_MS = 15 * 60 * 1000
 
 function toTripLocationSnapshot(
   input: TripLocationSnapshot['input'],
@@ -290,7 +336,7 @@ tripsApp.post('/quote', async (c) => {
   }
 
   const vehicle = await c.env.DB.prepare(
-    `SELECT vehicle.id, vehicle.passenger_capacity, vehicle.luggage_capacity,
+    `SELECT vehicle.id, vehicle.driver_application_id, vehicle.passenger_capacity, vehicle.luggage_capacity,
             driver.lodging_rate_ugx AS driver_lodging_rate_ugx
       FROM vehicles AS vehicle
        JOIN driver_applications AS driver ON driver.id = vehicle.driver_application_id
@@ -299,7 +345,7 @@ tripsApp.post('/quote', async (c) => {
       LIMIT 1`,
   )
     .bind(vehicleId, Date.now(), Date.now(), Date.now(), Date.now(), Date.now(), Date.now())
-    .first<{ id: string; passenger_capacity: number; luggage_capacity: number; driver_lodging_rate_ugx: number | null }>()
+    .first<{ id: string; driver_application_id: string; passenger_capacity: number; luggage_capacity: number; driver_lodging_rate_ugx: number | null }>()
   if (!vehicle) return c.json(apiError('VEHICLE_UNAVAILABLE', 'This vehicle is not available for selection.'), 409)
   if (vehicle.passenger_capacity < validation.partySize || vehicle.luggage_capacity < validation.luggageCount) {
     return c.json(apiError('VEHICLE_CAPACITY', 'This vehicle does not have enough passenger or luggage capacity.'), 422)
@@ -309,6 +355,15 @@ tripsApp.post('/quote', async (c) => {
   }
 
   const now = Date.now()
+  const currentOffer = await c.env.DB.prepare(
+    `SELECT id, vehicle_id, status, expires_at FROM driver_trip_offers
+      WHERE client_user_id = ? AND status IN ('pending', 'quoting') AND expires_at > ?
+      ORDER BY created_at DESC LIMIT 1`,
+  ).bind(user.id, now).first<{ id: string; vehicle_id: string; status: string; expires_at: number }>()
+  if (currentOffer) {
+    return c.json(apiError('TRIP_OFFER_PENDING', 'You already have a trip request waiting for a driver. Check its status before requesting another car.'), 409)
+  }
+
   const overlap = await c.env.DB.prepare(
     `SELECT 1 AS unavailable FROM vehicle_unavailability
       WHERE vehicle_id = ? AND start_date < ? AND end_date > ?
@@ -316,10 +371,20 @@ tripsApp.post('/quote', async (c) => {
      SELECT 1 AS unavailable FROM bookings
       WHERE vehicle_id = ? AND start_date < ? AND end_date > ?
         AND (status = 'confirmed' OR (status = 'deposit_pending' AND hold_expires_at > ?))
+     UNION ALL
+     SELECT 1 AS unavailable FROM driver_trip_offers
+      WHERE vehicle_id = ? AND start_date < ? AND end_date > ?
+        AND status IN ('pending', 'quoting') AND expires_at > ?
+     UNION ALL
+     SELECT 1 AS unavailable FROM driver_trip_offers
+      WHERE driver_application_id = ? AND start_date < ? AND end_date > ?
+        AND status IN ('pending', 'quoting') AND expires_at > ?
      LIMIT 1`,
   )
     .bind(vehicleId, validation.endDate, validation.startDate,
-      vehicleId, validation.endDate, validation.startDate, now)
+      vehicleId, validation.endDate, validation.startDate, now,
+      vehicleId, validation.endDate, validation.startDate, now,
+      vehicle.driver_application_id, validation.endDate, validation.startDate, now)
     .first<{ unavailable: number }>()
   if (overlap) return c.json(apiError('VEHICLE_DATES_UNAVAILABLE', 'This vehicle already has a hold or booking for those dates.'), 409)
 
@@ -328,67 +393,438 @@ tripsApp.post('/quote', async (c) => {
     return c.json(apiError('FARE_POLICY_UNAVAILABLE', 'Trip quotes are unavailable until the approved fare policy is configured.'), 409)
   }
 
-  const route = await computeDrivingRoute(c.env, validation.origin, validation.destination)
-  if (route.kind === 'provider_error') {
-    return c.json(apiError('GOOGLE_MAPS_UNAVAILABLE', 'We could not calculate this road route right now.'), 503)
-  }
-  if (route.kind === 'no_route') {
-    return c.json(apiError('ROUTE_NOT_FOUND', 'Google Maps could not find a drivable route for these locations.'), 422)
-  }
-
-  const quoteSnapshot = buildQuoteSnapshot(
-    farePolicy,
-    route,
-    daysBetween(validation.startDate, validation.endDate),
-    validation.partySize,
-    vehicle.driver_lodging_rate_ugx,
-  )
-  if (!quoteSnapshot) {
-    return c.json(apiError('FARE_POLICY_INVALID', 'The active fare policy is incomplete.'), 409)
-  }
-
-  const quoteId = crypto.randomUUID()
+  const offerId = crypto.randomUUID()
   const createdAt = Date.now()
-  const expiresAt = createdAt + farePolicy.quote_ttl_seconds * 1000
-  await c.env.DB.prepare(
-    `INSERT INTO trip_quotes
-      (id, client_user_id, vehicle_id, policy_id, origin_json, destination_json,
-       start_date, end_date, party_size, luggage_count, route_distance_meters,
-       route_duration_seconds, quote_json, expires_at, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  const expiresAt = createdAt + DRIVER_TRIP_OFFER_TTL_MS
+  const inserted = await c.env.DB.prepare(
+    `INSERT INTO driver_trip_offers
+      (id, client_user_id, driver_application_id, vehicle_id, origin_json, destination_json,
+       start_date, end_date, party_size, luggage_count, status, expires_at, created_at)
+     SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?
+      WHERE NOT EXISTS (
+        SELECT 1 FROM driver_trip_offers
+         WHERE client_user_id = ? AND status IN ('pending', 'quoting') AND expires_at > ?
+      )
+        AND NOT EXISTS (
+          SELECT 1 FROM vehicle_unavailability
+           WHERE vehicle_id = ? AND start_date < ? AND end_date > ?
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM bookings
+           WHERE vehicle_id = ? AND start_date < ? AND end_date > ?
+             AND (status = 'confirmed' OR (status = 'deposit_pending' AND hold_expires_at > ?))
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM driver_trip_offers
+           WHERE vehicle_id = ? AND start_date < ? AND end_date > ?
+             AND status IN ('pending', 'quoting') AND expires_at > ?
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM driver_trip_offers
+           WHERE driver_application_id = ? AND start_date < ? AND end_date > ?
+             AND status IN ('pending', 'quoting') AND expires_at > ?
+        )`,
   )
     .bind(
-      quoteId,
+      offerId,
       user.id,
+      vehicle.driver_application_id,
       vehicleId,
-      farePolicy.id,
       JSON.stringify(validation.originSnapshot),
       JSON.stringify(validation.destinationSnapshot),
       validation.startDate,
       validation.endDate,
       validation.partySize,
       validation.luggageCount,
-      route.distanceMeters,
-      route.durationSeconds,
-      JSON.stringify(quoteSnapshot),
       expiresAt,
       createdAt,
+      user.id,
+      now,
+      vehicleId,
+      validation.endDate,
+      validation.startDate,
+      vehicleId,
+      validation.endDate,
+      validation.startDate,
+      now,
+      vehicleId,
+      validation.endDate,
+      validation.startDate,
+      now,
+      vehicle.driver_application_id,
+      validation.endDate,
+      validation.startDate,
+      now,
     )
     .run()
+  if (inserted.meta?.changes !== 1) {
+    return c.json(apiError('TRIP_OFFER_CONFLICT', 'This car or its driver is no longer available for those dates. Choose another car or try again.'), 409)
+  }
 
   return c.json({
-    quoteId,
+    status: 'pending_driver_acceptance',
+    offerId,
     vehicleId,
-    pickup: validation.originSnapshot,
-    destination: validation.destinationSnapshot,
-    route: {
-      distanceMeters: route.distanceMeters,
-      durationSeconds: route.durationSeconds,
-      provider: 'google_maps',
-    },
-    quote: quoteSnapshot,
     expiresAt,
-  }, 201)
+  }, 202)
+})
+
+tripsApp.get('/quote-requests/current', async (c) => {
+  const user = await getSignedInUser(c.env, c.req.raw)
+  if (!user) return c.json(apiError('UNAUTHORIZED', 'Sign in to continue.'), 401)
+
+  const now = Date.now()
+  await c.env.DB.prepare(
+    `UPDATE driver_trip_offers SET status = 'expired'
+      WHERE client_user_id = ? AND status = 'pending' AND expires_at <= ?`,
+  ).bind(user.id, now).run()
+  await c.env.DB.prepare(
+    `UPDATE driver_trip_offers SET status = 'quote_failed'
+      WHERE client_user_id = ? AND status = 'quoting' AND quote_id IS NULL AND expires_at <= ?`,
+  ).bind(user.id, now).run()
+  const offer = await c.env.DB.prepare(
+    `SELECT offer.id, offer.vehicle_id, offer.status, offer.quote_id, offer.expires_at,
+            offer.origin_json, offer.destination_json, offer.start_date, offer.end_date,
+            offer.party_size, offer.luggage_count, vehicle.make AS vehicle_make,
+            vehicle.model AS vehicle_model, vehicle.model_year AS vehicle_year,
+            vehicle.passenger_capacity, vehicle.luggage_capacity
+       FROM driver_trip_offers AS offer
+       LEFT JOIN vehicles AS vehicle ON vehicle.id = offer.vehicle_id
+      WHERE offer.client_user_id = ? ORDER BY offer.created_at DESC LIMIT 1`,
+  ).bind(user.id).first<ClientTripOfferRow>()
+  if (!offer) return c.json({ offer: null })
+  const tripRequest = clientTripRequestSnapshot(offer)
+  if (offer.status === 'quoted' && offer.quote_id) {
+    const existingBooking = await c.env.DB.prepare(
+      `SELECT id FROM bookings WHERE quote_id = ? AND client_user_id = ? LIMIT 1`,
+    ).bind(offer.quote_id, user.id).first<{ id: string }>()
+    if (existingBooking) {
+      return c.json({ offer: {
+        offerId: offer.id, vehicleId: offer.vehicle_id, status: 'booked', expiresAt: offer.expires_at,
+        ...(tripRequest ? { tripRequest } : {}),
+      } })
+    }
+  }
+  if (offer.status !== 'quoted' || !offer.quote_id) {
+    return c.json({ offer: {
+      offerId: offer.id, vehicleId: offer.vehicle_id, status: offer.status, expiresAt: offer.expires_at,
+      ...(tripRequest ? { tripRequest } : {}),
+    } })
+  }
+
+  const quote = await c.env.DB.prepare(
+    `SELECT id, origin_json, destination_json, route_distance_meters,
+            route_duration_seconds, quote_json, expires_at
+       FROM trip_quotes WHERE id = ? AND client_user_id = ? LIMIT 1`,
+  ).bind(offer.quote_id, user.id).first<{
+    id: string; origin_json: string; destination_json: string; route_distance_meters: number
+    route_duration_seconds: number; quote_json: string; expires_at: number
+  }>()
+  if (!quote) return c.json(apiError('TRIP_QUOTE_NOT_FOUND', 'The accepted trip offer could not produce a quote. Choose another vehicle.'), 409)
+  try {
+    return c.json({ offer: {
+      offerId: offer.id, vehicleId: offer.vehicle_id, status: 'quoted', expiresAt: quote.expires_at,
+      ...(tripRequest ? { tripRequest } : {}),
+      quote: {
+        quoteId: quote.id, vehicleId: offer.vehicle_id,
+        pickup: JSON.parse(quote.origin_json) as TripLocationSnapshot,
+        destination: JSON.parse(quote.destination_json) as TripLocationSnapshot,
+        route: { distanceMeters: quote.route_distance_meters, durationSeconds: quote.route_duration_seconds },
+        quote: JSON.parse(quote.quote_json) as QuoteSnapshot, expiresAt: quote.expires_at,
+      },
+    } })
+  } catch {
+    return c.json(apiError('TRIP_QUOTE_INVALID', 'The trip quote could not be loaded. Choose another vehicle.'), 409)
+  }
+})
+
+tripsApp.post('/quote-requests/:offerId/withdraw', async (c) => {
+  const user = await getSignedInUser(c.env, c.req.raw)
+  if (!user) return c.json(apiError('UNAUTHORIZED', 'Sign in to continue.'), 401)
+  const now = Date.now()
+  const result = await c.env.DB.prepare(
+    `UPDATE driver_trip_offers SET status = 'withdrawn', responded_at = ?
+      WHERE id = ? AND client_user_id = ? AND status = 'pending' AND expires_at > ?`,
+  ).bind(now, c.req.param('offerId'), user.id, now).run()
+  if (result.meta?.changes !== undefined && result.meta.changes !== 1) {
+    return c.json(apiError('TRIP_OFFER_NOT_PENDING', 'This trip request can no longer be withdrawn.'), 409)
+  }
+  return c.json({ offerId: c.req.param('offerId'), status: 'withdrawn' })
+})
+
+tripsApp.get('/quote-requests/:offerId', async (c) => {
+  const user = await getSignedInUser(c.env, c.req.raw)
+  if (!user) return c.json(apiError('UNAUTHORIZED', 'Sign in to continue.'), 401)
+
+  const offerId = c.req.param('offerId')
+  const now = Date.now()
+  await c.env.DB.prepare(
+    `UPDATE driver_trip_offers SET status = 'expired'
+      WHERE id = ? AND client_user_id = ? AND status = 'pending' AND expires_at <= ?`,
+  ).bind(offerId, user.id, now).run()
+  await c.env.DB.prepare(
+    `UPDATE driver_trip_offers SET status = 'quote_failed'
+      WHERE id = ? AND client_user_id = ? AND status = 'quoting' AND quote_id IS NULL AND expires_at <= ?`,
+  ).bind(offerId, user.id, now).run()
+
+  const offer = await c.env.DB.prepare(
+    `SELECT offer.id, offer.vehicle_id, offer.status, offer.quote_id, offer.expires_at,
+            offer.origin_json, offer.destination_json, offer.start_date, offer.end_date,
+            offer.party_size, offer.luggage_count, vehicle.make AS vehicle_make,
+            vehicle.model AS vehicle_model, vehicle.model_year AS vehicle_year,
+            vehicle.passenger_capacity, vehicle.luggage_capacity
+       FROM driver_trip_offers AS offer
+       LEFT JOIN vehicles AS vehicle ON vehicle.id = offer.vehicle_id
+      WHERE offer.id = ? AND offer.client_user_id = ? LIMIT 1`,
+  ).bind(offerId, user.id).first<ClientTripOfferRow>()
+  if (!offer) return c.json(apiError('TRIP_OFFER_NOT_FOUND', 'This trip request was not found.'), 404)
+  const tripRequest = clientTripRequestSnapshot(offer)
+  if (offer.status === 'quoted' && offer.quote_id) {
+    const existingBooking = await c.env.DB.prepare(
+      `SELECT id FROM bookings WHERE quote_id = ? AND client_user_id = ? LIMIT 1`,
+    ).bind(offer.quote_id, user.id).first<{ id: string }>()
+    if (existingBooking) {
+      return c.json({ offerId: offer.id, vehicleId: offer.vehicle_id, status: 'booked', expiresAt: offer.expires_at, ...(tripRequest ? { tripRequest } : {}) })
+    }
+  }
+  if (offer.status !== 'quoted' || !offer.quote_id) {
+    return c.json({ offerId: offer.id, vehicleId: offer.vehicle_id, status: offer.status, expiresAt: offer.expires_at, ...(tripRequest ? { tripRequest } : {}) })
+  }
+
+  const quote = await c.env.DB.prepare(
+    `SELECT id, origin_json, destination_json, route_distance_meters,
+            route_duration_seconds, quote_json, expires_at
+       FROM trip_quotes WHERE id = ? AND client_user_id = ? LIMIT 1`,
+  ).bind(offer.quote_id, user.id).first<{
+    id: string; origin_json: string; destination_json: string; route_distance_meters: number
+    route_duration_seconds: number; quote_json: string; expires_at: number
+  }>()
+  if (!quote) return c.json(apiError('TRIP_QUOTE_NOT_FOUND', 'The accepted trip offer could not produce a quote. Choose another vehicle.'), 409)
+
+  try {
+    return c.json({
+      offerId: offer.id,
+      vehicleId: offer.vehicle_id,
+      status: 'quoted',
+      quoteId: quote.id,
+      ...(tripRequest ? { tripRequest } : {}),
+      pickup: JSON.parse(quote.origin_json) as TripLocationSnapshot,
+      destination: JSON.parse(quote.destination_json) as TripLocationSnapshot,
+      route: { distanceMeters: quote.route_distance_meters, durationSeconds: quote.route_duration_seconds, provider: 'google_maps' },
+      quote: JSON.parse(quote.quote_json) as QuoteSnapshot,
+      expiresAt: quote.expires_at,
+    })
+  } catch {
+    return c.json(apiError('TRIP_QUOTE_INVALID', 'The trip quote could not be loaded. Choose another vehicle.'), 409)
+  }
+})
+
+tripsApp.get('/driver-offers', async (c) => {
+  const user = await getSignedInUser(c.env, c.req.raw)
+  if (!user) return c.json(apiError('UNAUTHORIZED', 'Sign in to continue.'), 401)
+
+  const now = Date.now()
+  const application = await c.env.DB.prepare(
+    `SELECT id FROM driver_applications WHERE user_id = ? AND status = 'approved' LIMIT 1`,
+  ).bind(user.id).first<{ id: string }>()
+  if (!application) return c.json({ offers: [] })
+
+  await c.env.DB.prepare(
+    `UPDATE driver_trip_offers SET status = 'expired'
+      WHERE driver_application_id = ? AND status = 'pending' AND expires_at <= ?`,
+  ).bind(application.id, now).run()
+
+  const offers = await c.env.DB.prepare(
+    `SELECT offer.id, offer.vehicle_id, offer.origin_json, offer.destination_json,
+            offer.start_date, offer.end_date, offer.party_size, offer.luggage_count,
+            offer.expires_at, vehicle.make, vehicle.model, vehicle.model_year
+       FROM driver_trip_offers AS offer
+       JOIN vehicles AS vehicle ON vehicle.id = offer.vehicle_id
+      WHERE offer.driver_application_id = ? AND offer.status = 'pending' AND offer.expires_at > ?
+        AND vehicle.status = 'approved' AND ${approvedVehicleEvidencePredicate('vehicle')}
+      ORDER BY offer.created_at ASC LIMIT 50`,
+  ).bind(application.id, now, now, now, now, now, now, now).all<{
+    id: string; vehicle_id: string; origin_json: string; destination_json: string
+    start_date: string; end_date: string; party_size: number; luggage_count: number
+    expires_at: number; make: string; model: string; model_year: number
+  }>()
+
+  return c.json({ offers: offers.results.map((offer) => {
+    try {
+      return {
+        offerId: offer.id, vehicleId: offer.vehicle_id,
+        pickup: JSON.parse(offer.origin_json) as TripLocationSnapshot,
+        destination: JSON.parse(offer.destination_json) as TripLocationSnapshot,
+        startDate: offer.start_date, endDate: offer.end_date,
+        passengerCount: offer.party_size, luggageCount: offer.luggage_count,
+        expiresAt: offer.expires_at,
+        vehicle: { make: offer.make, model: offer.model, year: offer.model_year },
+      }
+    } catch {
+      return null
+    }
+  }).filter((offer) => offer !== null) })
+})
+
+tripsApp.post('/driver-offers/:offerId/respond', async (c) => {
+  const user = await getSignedInUser(c.env, c.req.raw)
+  if (!user) return c.json(apiError('UNAUTHORIZED', 'Sign in to continue.'), 401)
+
+  const body: unknown = await c.req.json().catch(() => null)
+  if (typeof body !== 'object' || body === null || Array.isArray(body) ||
+      !['accept', 'decline'].includes(String((body as Record<string, unknown>).decision))) {
+    return c.json(apiError('INVALID_DRIVER_RESPONSE', 'Choose accept or decline for this trip offer.'), 400)
+  }
+  const decision = (body as Record<string, unknown>).decision as 'accept' | 'decline'
+  const now = Date.now()
+  const offer = await c.env.DB.prepare(
+    `SELECT offer.id, offer.client_user_id, offer.vehicle_id, offer.origin_json, offer.destination_json,
+            offer.start_date, offer.end_date, offer.party_size, offer.luggage_count,
+            offer.status, offer.expires_at, driver.id AS driver_application_id,
+            driver.lodging_rate_ugx AS driver_lodging_rate_ugx,
+            vehicle.passenger_capacity, vehicle.luggage_capacity
+       FROM driver_trip_offers AS offer
+       JOIN driver_applications AS driver ON driver.id = offer.driver_application_id
+       JOIN vehicles AS vehicle ON vehicle.id = offer.vehicle_id
+      WHERE offer.id = ? AND driver.user_id = ? AND driver.status = 'approved'
+        AND vehicle.status = 'approved' AND ${approvedVehicleEvidencePredicate('vehicle')} LIMIT 1`,
+  ).bind(c.req.param('offerId'), user.id, now, now, now, now, now, now).first<{
+    id: string; client_user_id: string; vehicle_id: string; origin_json: string; destination_json: string
+    start_date: string; end_date: string; party_size: number; luggage_count: number
+    status: string; expires_at: number; driver_application_id: string; driver_lodging_rate_ugx: number | null
+    passenger_capacity: number; luggage_capacity: number
+  }>()
+  if (!offer) return c.json(apiError('TRIP_OFFER_NOT_FOUND', 'This trip offer was not found.'), 404)
+  if (offer.status !== 'pending') return c.json({ offerId: offer.id, status: offer.status }, 409)
+  if (offer.expires_at <= now) {
+    await c.env.DB.prepare(
+      `UPDATE driver_trip_offers SET status = 'expired'
+        WHERE id = ? AND driver_application_id = ? AND status = 'pending' AND expires_at <= ?`,
+    ).bind(offer.id, offer.driver_application_id, now).run()
+    return c.json({ offerId: offer.id, status: 'expired' }, 409)
+  }
+  if (decision === 'decline') {
+    const declined = await c.env.DB.prepare(
+      `UPDATE driver_trip_offers SET status = 'declined', responded_at = ?
+        WHERE id = ? AND driver_application_id = ? AND status = 'pending' AND expires_at > ?`,
+    ).bind(now, offer.id, offer.driver_application_id, now).run()
+    if (declined.meta?.changes !== 1) return c.json(apiError('TRIP_OFFER_ALREADY_HANDLED', 'This trip offer has already been handled.'), 409)
+    return c.json({ offerId: offer.id, status: 'declined' })
+  }
+  if (!Number.isSafeInteger(offer.driver_lodging_rate_ugx) || offer.driver_lodging_rate_ugx === null ||
+      offer.driver_lodging_rate_ugx < 1 || offer.passenger_capacity < offer.party_size ||
+      offer.luggage_capacity < offer.luggage_count) {
+    await c.env.DB.prepare(
+      `UPDATE driver_trip_offers SET status = 'quote_failed', responded_at = ?
+        WHERE id = ? AND driver_application_id = ? AND status = 'pending' AND expires_at > ?`,
+    ).bind(now, offer.id, offer.driver_application_id, now).run()
+    return c.json({ offerId: offer.id, status: 'quote_failed' }, 409)
+  }
+
+  const claimed = await c.env.DB.prepare(
+    `UPDATE driver_trip_offers SET status = 'quoting', responded_at = ?, expires_at = ?
+      WHERE id = ? AND driver_application_id = ? AND status = 'pending' AND expires_at > ?
+        AND NOT EXISTS (
+          SELECT 1 FROM driver_trip_offers AS other
+           WHERE other.driver_application_id = driver_trip_offers.driver_application_id
+             AND other.id != driver_trip_offers.id
+             AND other.start_date < driver_trip_offers.end_date
+             AND other.end_date > driver_trip_offers.start_date
+             AND other.status IN ('pending', 'quoting') AND other.expires_at > ?
+        )`,
+  ).bind(now, now + DRIVER_TRIP_OFFER_TTL_MS, offer.id, offer.driver_application_id, now, now).run()
+  if (claimed.meta?.changes !== 1) {
+    return c.json(apiError('TRIP_OFFER_ALREADY_HANDLED', 'This trip offer has already been handled.'), 409)
+  }
+
+  const overlap = await c.env.DB.prepare(
+    `SELECT 1 AS unavailable FROM vehicle_unavailability
+      WHERE vehicle_id = ? AND start_date < ? AND end_date > ?
+     UNION ALL
+     SELECT 1 AS unavailable FROM bookings
+      WHERE vehicle_id = ? AND start_date < ? AND end_date > ?
+        AND (status = 'confirmed' OR (status = 'deposit_pending' AND hold_expires_at > ?))
+     LIMIT 1`,
+  ).bind(offer.vehicle_id, offer.end_date, offer.start_date,
+    offer.vehicle_id, offer.end_date, offer.start_date, now).first<{ unavailable: number }>()
+  if (overlap) {
+    await c.env.DB.prepare(`UPDATE driver_trip_offers SET status = 'quote_failed' WHERE id = ? AND status = 'quoting'`).bind(offer.id).run()
+    return c.json({ offerId: offer.id, status: 'quote_failed' }, 409)
+  }
+
+  const farePolicy = await getActiveFarePolicy(c.env)
+  if (!farePolicy) {
+    await c.env.DB.prepare(`UPDATE driver_trip_offers SET status = 'quote_failed' WHERE id = ? AND status = 'quoting'`).bind(offer.id).run()
+    return c.json({ offerId: offer.id, status: 'quote_failed' }, 409)
+  }
+  let originSnapshot: TripLocationSnapshot
+  let destinationSnapshot: TripLocationSnapshot
+  let originInput: TripLocationSnapshot['input']
+  let destinationInput: TripLocationSnapshot['input']
+  try {
+    originSnapshot = JSON.parse(offer.origin_json) as TripLocationSnapshot
+    destinationSnapshot = JSON.parse(offer.destination_json) as TripLocationSnapshot
+    const parsedOrigin = parseStoredLocationInput(originSnapshot)
+    const parsedDestination = parseStoredLocationInput(destinationSnapshot)
+    if (!parsedOrigin || !parsedDestination) throw new Error('invalid stored locations')
+    originInput = parsedOrigin
+    destinationInput = parsedDestination
+  } catch {
+    await c.env.DB.prepare(`UPDATE driver_trip_offers SET status = 'quote_failed' WHERE id = ? AND status = 'quoting'`).bind(offer.id).run()
+    return c.json({ offerId: offer.id, status: 'quote_failed' }, 409)
+  }
+  const route = await computeDrivingRoute(c.env, originInput, destinationInput)
+  if (route.kind !== 'ok') {
+    await c.env.DB.prepare(`UPDATE driver_trip_offers SET status = 'quote_failed' WHERE id = ? AND status = 'quoting'`).bind(offer.id).run()
+    return c.json({ offerId: offer.id, status: 'quote_failed' }, route.kind === 'provider_error' ? 503 : 422)
+  }
+  const quoteSnapshot = buildQuoteSnapshot(
+    farePolicy, route, daysBetween(offer.start_date, offer.end_date), offer.party_size, offer.driver_lodging_rate_ugx,
+  )
+  if (!quoteSnapshot) {
+    await c.env.DB.prepare(`UPDATE driver_trip_offers SET status = 'quote_failed' WHERE id = ? AND status = 'quoting'`).bind(offer.id).run()
+    return c.json({ offerId: offer.id, status: 'quote_failed' }, 409)
+  }
+
+  const quoteId = crypto.randomUUID()
+  const createdAt = Date.now()
+  const expiresAt = createdAt + farePolicy.quote_ttl_seconds * 1000
+  const committedAt = Date.now()
+  const commit = await c.env.DB.batch([
+    c.env.DB.prepare(
+      `INSERT INTO trip_quotes
+      (id, client_user_id, vehicle_id, policy_id, origin_json, destination_json,
+       start_date, end_date, party_size, luggage_count, route_distance_meters,
+       route_duration_seconds, quote_json, expires_at, created_at)
+      SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+       WHERE EXISTS (
+         SELECT 1 FROM driver_trip_offers
+          WHERE id = ? AND status = 'quoting' AND expires_at > ?
+       )`,
+    ).bind(
+      quoteId, offer.client_user_id, offer.vehicle_id, farePolicy.id, offer.origin_json, offer.destination_json,
+      offer.start_date, offer.end_date, offer.party_size, offer.luggage_count, route.distanceMeters,
+      route.durationSeconds, JSON.stringify(quoteSnapshot), expiresAt, createdAt, offer.id, committedAt,
+    ),
+    c.env.DB.prepare(
+      `UPDATE driver_trip_offers SET status = 'quoted', quote_id = ?
+        WHERE id = ? AND status = 'quoting' AND expires_at > ?`,
+    ).bind(quoteId, offer.id, committedAt),
+  ])
+  if (commit[0]?.meta.changes !== 1 || commit[1]?.meta.changes !== 1) {
+    await c.env.DB.prepare(
+      `UPDATE driver_trip_offers SET status = 'quote_failed'
+        WHERE id = ? AND status = 'quoting' AND expires_at <= ?`,
+    ).bind(offer.id, committedAt).run()
+    return c.json({ offerId: offer.id, status: 'quote_failed' }, 409)
+  }
+
+  return c.json({
+    offerId: offer.id, status: 'quoted', quoteId, vehicleId: offer.vehicle_id,
+    pickup: originSnapshot, destination: destinationSnapshot,
+    route: { distanceMeters: route.distanceMeters, durationSeconds: route.durationSeconds, provider: 'google_maps' },
+    quote: quoteSnapshot, expiresAt,
+  })
 })
 
 tripsApp.post('/confirm', async (c) => {

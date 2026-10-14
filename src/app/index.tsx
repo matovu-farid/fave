@@ -1,4 +1,5 @@
 import { router, type Href } from 'expo-router';
+import { useEffect, useState } from 'react';
 import { StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -7,9 +8,21 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 import { authClient } from '@/lib/auth-client';
+import { getAdminAccess } from '@/lib/marketplace';
 
 export default function HomeScreen() {
   const { data: session } = authClient.useSession();
+  const [adminAccessUserId, setAdminAccessUserId] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    if (session?.user.id) {
+      getAdminAccess().then(() => {
+        if (active) setAdminAccessUserId(session.user.id);
+      }).catch(() => undefined);
+    }
+    return () => { active = false; };
+  }, [session?.user.id]);
 
   return (
     <ThemedView style={styles.container}>
@@ -22,6 +35,7 @@ export default function HomeScreen() {
             <SectionTitle title={`Welcome${session?.user.name ? `, ${session.user.name}` : ''}`} detail={session?.user.email ?? 'Signed in'} />
             <ActionButton title="Plan a trip" onPress={() => router.push('/trips' as Href)} />
             <ActionButton title="Apply to drive" onPress={() => router.push('/driver' as Href)} />
+            {session?.user.id && adminAccessUserId === session.user.id ? <ActionButton title="Trip operations" onPress={() => router.push('/admin' as Href)} /> : null}
             <ThemedText accessibilityRole="link" onPress={() => void authClient.signOut()} style={styles.signOut}>Sign out</ThemedText>
           </Card>
           <ThemedText type="small" themeColor="textSecondary">Trips use verified vehicles and clear, itemized quotes before a request is placed.</ThemedText>

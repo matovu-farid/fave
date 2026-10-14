@@ -1,11 +1,26 @@
 import { NativeTabs } from 'expo-router/unstable-native-tabs';
+import { useEffect, useState } from 'react';
 import { useColorScheme } from 'react-native';
 
 import { Colors } from '@/constants/theme';
+import { authClient } from '@/lib/auth-client';
+import { getAdminAccess } from '@/lib/marketplace';
 
 export default function AppTabs() {
   const scheme = useColorScheme();
+  const { data: session } = authClient.useSession();
+  const [adminAccessUserId, setAdminAccessUserId] = useState('');
   const colors = Colors[scheme === 'unspecified' ? 'light' : scheme];
+
+  useEffect(() => {
+    let active = true;
+    if (session?.user.id) {
+      getAdminAccess().then(() => {
+        if (active) setAdminAccessUserId(session.user.id);
+      }).catch(() => undefined);
+    }
+    return () => { active = false; };
+  }, [session?.user.id]);
 
   return (
     <NativeTabs
@@ -43,6 +58,14 @@ export default function AppTabs() {
           renderingMode="template"
         />
       </NativeTabs.Trigger>
+
+      {session?.user.id && adminAccessUserId === session.user.id ? <NativeTabs.Trigger name="admin">
+        <NativeTabs.Trigger.Label>Operations</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon
+          src={require('@/assets/images/tabIcons/home.png')}
+          renderingMode="template"
+        />
+      </NativeTabs.Trigger> : null}
     </NativeTabs>
   );
 }
