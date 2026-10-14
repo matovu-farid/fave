@@ -281,11 +281,14 @@ and acknowledges the message. An authorized marketplace admin can inspect
 `POST /api/admin/notifications/:deliveryId/retry`. Retries recheck expiry and
 current device registration; expired driver offers are never redriven.
 
-Queue names and retry settings live in `wrangler.jsonc`. Wrangler creates the
-configured Queues when the Worker configuration is deployed. Local
-`wrangler dev` uses local Queue simulation; it does not create or modify
-production Queues. Run the Worker and Expo web app locally, apply local D1
-migrations, then inspect `/notifications` at `http://localhost:8081`. The
+Queue bindings and retry settings live in `wrangler.jsonc`, but Queues are
+separate Cloudflare resources. Create `fave-notification-delivery` and
+`fave-notification-dlq` with `npx wrangler queues create <name>` before
+deploying the Worker. `wrangler deploy --dry-run` checks the Worker bundle and
+bindings; it does not provision those Queue resources. Local `wrangler dev`
+uses local Queue simulation and does not create or modify production Queues.
+Run the Worker and Expo web app locally, apply local D1 migrations, then
+inspect `/notifications` at `http://localhost:8081`. The
 local web API proxy forwards `/api/*` to the local Worker. Existing production
 API configuration will not provide these new routes until a Worker release
 has been deployed.

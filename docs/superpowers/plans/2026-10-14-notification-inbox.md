@@ -267,7 +267,7 @@ Manually exercise signed-in inbox, mark-read, empty/error states, mobile-width l
 
 - [ ] **Step 5: Commit documentation and required final fixes**
 
-Commit only the README/spec/final targeted fixes with `docs: document notification queue operations`. Do not deploy production queues or Worker as part of issue #22 implementation without a separate explicit deployment request.
+Commit only the README/spec/final targeted fixes with `docs: document notification queue operations`. The user explicitly requested the production Worker release on 2026-10-14; create the configured queues, apply migration 0017, and deploy only after Wrangler can authenticate and reach Cloudflare. Queue inventory inspection on 2026-10-14 failed because `api.cloudflare.com` could not be resolved, so production resource state is currently unknown.
 
 ## Verification map
 
