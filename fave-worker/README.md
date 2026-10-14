@@ -262,3 +262,43 @@ The authenticated `POST /api/maps/pickup-eligibility` endpoint accepts either
 authenticated `POST /api/maps/driving-route` endpoint accepts `origin` and
 `destination` with either shape and returns driving distance in meters and
 duration in seconds. Neither endpoint logs addresses or coordinates.
+
+## Notification inbox and push delivery
+
+Migration `0017_notifications.sql` adds the private inbox, versioned event
+ledger, D1 delivery outbox, per-device Expo ticket/receipt history, and
+operator retry audit. Apply it locally with `npm run db:migrate:local` before
+testing inbox routes. Inbox APIs are mounted under `/api/notifications`; the
+existing Notifications screen uses them alongside device push settings.
+
+The Worker dispatches due outbox rows every minute to the
+`fave-notification-delivery` Queue. Queue bodies contain only an opaque delivery ID; the consumer
+loads the recipient and safe message copy from D1 immediately before sending.
+The Queue retries five times with a 60-second delay, then sends exhausted
+messages to `fave-notification-dlq`. The DLQ consumer records a redacted failure
+and acknowledges the message. An authorized marketplace admin can inspect
+`GET /api/admin/notifications/health` and retry an eligible delivery with
+`POST /api/admin/notifications/:deliveryId/retry`. Retries recheck expiry and
+current device registration; expired driver offers are never redriven.
+
+Queue names and retry settings live in `wrangler.jsonc`. Wrangler creates the
+configured Queues when the Worker configuration is deployed. Local
+`wrangler dev` uses local Queue simulation; it does not create or modify
+production Queues. Run the Worker and Expo web app locally, apply local D1
+migrations, then inspect `/notifications` at `http://localhost:8081`. The
+local web API proxy forwards `/api/*` to the local Worker. Existing production
+API configuration will not provide these new routes until a Worker release
+has been deployed.
+
+Push delivery uses Expo Push Service. Configure the Expo project and its
+platform credentials (APNs for iOS and FCM for Android) through the Expo/EAS
+project settings; do not place provider keys, push tokens, or device-specific
+message content in source control, app configuration, queue bodies, or logs.
+Expo accepts a message with a ticket first; the Worker stores the ticket and
+checks receipts after at least 15 minutes. Expo acceptance is not proof of
+device delivery. A `DeviceNotRegistered` receipt removes only that device's
+token. Cloudflare Queues provide at-least-once processing, so a crash after
+Expo accepts a push but before its ticket is saved may cause a duplicate push.
+Delivery IDs and inbox event IDs are idempotent in D1, but mobile push display
+cannot be guaranteed exactly once. Notification history has no automatic
+retention cleanup; deletion policy remains a separate decision.

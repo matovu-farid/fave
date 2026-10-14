@@ -98,7 +98,7 @@ In `notification-store.ts`, export `buildNotificationEventStatements(db, input, 
 Run the focused test file and `npm run typecheck` from `fave-worker/`.
 Expected: event validation, dedupe, transaction rollback, no cross-user list/read, unread counts, cursor ordering, expiry, and lease-reclaim tests pass; Worker TypeScript exits 0.
 
-- [ ] **Step 6: Commit contracts and store**
+- [x] **Step 6: Commit contracts and store**
 
 Run `git diff --check`, inspect the changed files, and commit with `feat: add versioned notification event store`.
 
@@ -109,7 +109,7 @@ Run `git diff --check`, inspect the changed files, and commit with `feat: add ve
 - Modify: `fave-worker/src/notification-store.ts` only if a transaction helper is needed
 - Test: `tests/notification-producers.test.mjs`
 
-- [ ] **Step 1: Add failing tests for existing domain transitions**
+- [x] **Step 1: Add failing tests for existing domain transitions**
 
 Cover the current quote request created, driver accepted/declined/expired, booking hold created, deposit-pending booking expired, and client withdrawal transitions. Assert authorized client/driver inbox recipients, correct event type/expiry, exactly one inbox event per transition, and rollback when event persistence fails. Do not invent payment completion or safety transitions that do not exist yet.
 
@@ -117,11 +117,11 @@ Cover the current quote request created, driver accepted/declined/expired, booki
 
 Run `node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test tests/notification-producers.test.mjs`. Expected: event assertions fail because current booking transitions do not publish issue #22 events.
 
-- [ ] **Step 3: Wire existing transitions through the event store**
+- [x] **Step 3: Wire existing transitions through the event store**
 
 Update only current `bookings.ts` state transitions. Build the event statements with `buildNotificationEventStatements` and append them to the exact same D1 `batch()` as the business mutation; gate notification inserts on a successful state transition. Check affected-row counts before returning success. A failed event/outbox write must not leave a committed transition without its durable notification. A later Queue/Expo failure must not roll back an already committed transition.
 
-- [ ] **Step 4: Verify transition, duplicate, expiry, and rollback cases**
+- [x] **Step 4: Verify transition, duplicate, expiry, and rollback cases**
 
 Run `node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test tests/notification-store.test.mjs tests/notification-producers.test.mjs` and `npm run typecheck` from `fave-worker/`.
 Expected: repeated requests do not duplicate inbox rows; declined/expired 15-minute offers cannot remain actionable; transition and outbox commit/rollback together.
@@ -140,7 +140,7 @@ Run `git diff --check`, inspect only the booking/event changes, and commit with 
 - Regenerate: `fave-worker/worker-configuration.d.ts` using `npm run cf-typegen` from `fave-worker/`
 - Create: `tests/notification-delivery.test.mjs`
 
-- [ ] **Step 1: Add failing adapter and consumer tests**
+- [x] **Step 1: Add failing adapter and consumer tests**
 
 Use injected fake `fetch`, fake Queue bindings, and a SQLite fixture to test: an ID-only Queue message; a per-device Expo request with generic safe preview; `expo_accepted` ticket storage; receipt `ok` and receipt error states; temporary errors that throw for Queue retry; invalid-device receipts that disable only that device token; preference/ownership recheck immediately before sending; expired offers acknowledged without sending; and duplicate/out-of-order Queue messages that do not duplicate inbox items.
 
@@ -149,19 +149,19 @@ Use injected fake `fetch`, fake Queue bindings, and a SQLite fixture to test: an
 Run: `node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test tests/notification-delivery.test.mjs`
 Expected: FAIL because the Queue and Expo delivery handlers do not exist.
 
-- [ ] **Step 3: Implement Queue and Expo adapters**
+- [x] **Step 3: Implement Queue and Expo adapters**
 
 Implement a one-minute outbox dispatcher with leases, ID-only primary Queue messages, per-device Expo send, ticket storage, and receipt sweep for tickets at least 15 minutes old. Before every send, recheck event expiry, role/recipient eligibility, token ownership, and the current push preference. Use a stable notification ID and document the crash window between upstream acceptance and D1 ticket persistence; do not claim exactly-once push display.
 
-- [ ] **Step 4: Implement retries and DLQ recovery**
+- [x] **Step 4: Implement retries and DLQ recovery**
 
 Configure the main Queue for five retries with a 60-second retry delay and a DLQ. The DLQ consumer stores a redacted failure and acknowledges its Queue message. Admin redrive re-enqueues the D1 delivery ID to the primary Queue only after rechecking expiry, recipient, and preference. A 15-minute driver offer past expiry is marked expired and never resent.
 
-- [ ] **Step 5: Wire bindings and Worker handlers**
+- [x] **Step 5: Wire bindings and Worker handlers**
 
 Add main Queue producer/consumer and DLQ consumer bindings in `wrangler.jsonc`; update the cron to run the outbox dispatcher every minute alongside current scheduled work. Add `queue` handler routing in `index.ts`, and type the bindings in `auth.ts`. Run `npm run cf-typegen` from `fave-worker/` and inspect the generated binding declarations rather than editing generated types by hand.
 
-- [ ] **Step 6: Verify retry, receipt, privacy, and Worker configuration**
+- [x] **Step 6: Verify retry, receipt, privacy, and Worker configuration**
 
 Run the focused delivery test file, `npm run typecheck` from `fave-worker/`, and `npx wrangler deploy --dry-run` from `fave-worker/`.
 Expected: tests pass, typecheck exits 0, and Wrangler validates producer/consumer/DLQ/cron bindings without deploying.
@@ -178,7 +178,7 @@ Run `git diff --check`, review Queue config and source diff, and commit with `fe
 - Modify: `fave-worker/src/index.ts`
 - Test: `tests/notification-api.test.mjs`
 
-- [ ] **Step 1: Add failing API security tests**
+- [x] **Step 1: Add failing API security tests**
 
 Test `GET /api/notifications`, `POST /api/notifications/:id/read`, and `POST /api/notifications/read-all` for signed-out and signed-in users. Assert user A cannot list, mark read, or infer the existence of user B's notification. Test `GET /api/admin/notifications/health` and `POST /api/admin/notifications/:deliveryId/retry` for signed-out, non-admin, and admin contexts. Assert health output and errors never serialize message body, token, phone, address, or payment reference.
 
@@ -187,15 +187,15 @@ Test `GET /api/notifications`, `POST /api/notifications/:id/read`, and `POST /ap
 Run: `node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test tests/notification-api.test.mjs`
 Expected: FAIL because inbox and admin-notification routes are absent.
 
-- [ ] **Step 3: Implement recipient-scoped inbox routes**
+- [x] **Step 3: Implement recipient-scoped inbox routes**
 
 Implement cursor-paginated newest-first listing with unread count, single-read, and read-all. Resolve user identity with `getSignedInUser`; ignore any client-supplied recipient ID. Return only rendered safe fields, event timestamp, unread state, and a catalog route key.
 
-- [ ] **Step 4: Implement admin health and audited retry routes**
+- [x] **Step 4: Implement admin health and audited retry routes**
 
 Use `isMarketplaceAdmin` and `writeMarketplaceAudit` from `marketplace-auth.ts`. Return aggregate states, oldest pending age, attempts, failure category, event category, and redacted delivery ID. Retry writes the actor, timestamp, reason, and outcome, then rechecks current eligibility/preferences/expiry before enqueue. Return the same not-found response for an unknown or unauthorized delivery to avoid revealing it.
 
-- [ ] **Step 5: Verify APIs and Worker types**
+- [x] **Step 5: Verify APIs and Worker types**
 
 Run the focused API tests and `npm run typecheck` from `fave-worker/`.
 Expected: signed-out requests receive 401; non-admin operations receive 403; cross-user records remain private; audited admin retry cannot resend stale offers.
@@ -211,7 +211,7 @@ Run `git diff --check`, inspect route registration and response shapes, and comm
 - Modify: `src/app/notifications.tsx`
 - Create: `tests/notification-inbox-ui.test.mjs`
 
-- [ ] **Step 1: Add failing UI/API contract tests**
+- [x] **Step 1: Add failing UI/API contract tests**
 
 Test that the screen loads a first page, renders an empty state, renders safe notification title/body/time/unread state, retries a failed load, marks an item read when opened, and marks all read. Assert push permission controls continue to invoke the existing registration/unregistration behavior and browser keeps the existing mobile-only push message while showing the inbox.
 
@@ -220,15 +220,15 @@ Test that the screen loads a first page, renders an empty state, renders safe no
 Run: `node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test tests/notification-inbox-ui.test.mjs`
 Expected: FAIL because the client inbox API helpers and inbox list are not implemented.
 
-- [ ] **Step 3: Add typed client helpers**
+- [x] **Step 3: Add typed client helpers**
 
 In `src/lib/marketplace.ts`, define the notification item/page/health response types matching Task 5 and add authenticated list, mark-one-read, and mark-all-read helpers. Do not include recipient IDs, Expo tokens, or raw event payloads in client response types.
 
-- [ ] **Step 4: Extend Notifications screen**
+- [x] **Step 4: Extend Notifications screen**
 
 In `src/app/notifications.tsx`, retain current enable/disable/settings behavior and add inbox loading, newest-first list, unread indicators, tap-to-open internal routes, mark-read, mark-all-read, empty, and retryable error states. Use existing themed UI components and spacing. Do not add a new route, dependency, external link, or persistent client-side copy of notification data.
 
-- [ ] **Step 5: Verify UI and static checks**
+- [x] **Step 5: Verify UI and static checks**
 
 Run the focused UI test, `npx expo lint`, and `npx tsc --noEmit` from the repository root.
 Expected: inbox behavior and push settings tests pass; lint and TypeScript checks exit 0.
@@ -248,15 +248,15 @@ Run `git diff --check`, inspect the screen at a mobile-width browser viewport, a
 - Modify: `docs/superpowers/specs/2026-10-14-notification-inbox-design.md` only for implementation facts that changed during execution
 - Modify: current domain owner modules only if a supported transition is missing its event call
 
-- [ ] **Step 1: Cross-check issue #22 acceptance criteria**
+- [x] **Step 1: Cross-check issue #22 acceptance criteria**
 
 Map each issue criterion to a migration, module, API/UI behavior, or test. Verify existing token rotation, multi-device ownership, opt-out, and sign-out cleanup tests still pass. Identify missing producer hooks for payment (#11), trip progress (#13), safety (#19), or operations console (#17); wire only transitions that exist on `main`, and leave future owner-module work explicitly tracked as a dependency.
 
-- [ ] **Step 2: Document setup and failure semantics**
+- [x] **Step 2: Document setup and failure semantics**
 
 Update `fave-worker/README.md` with Queue and DLQ resource creation/bindings, five retries/60-second retry delay, minute dispatcher and 15-minute Expo receipt sweep, local `wrangler dev` usage, required Expo/APNs/FCM setup, secret handling, DLQ redrive behavior, at-least-once duplicates, and the current no-retention-cleanup decision. Include no live credentials or user tokens.
 
-- [ ] **Step 3: Run full automated checks**
+- [x] **Step 3: Run full automated checks**
 
 From repository root run `npm test`, `npx expo lint`, and `npx tsc --noEmit`. From `fave-worker/` run `npm run typecheck` and `npx wrangler deploy --dry-run`.
 Expected: all non-loopback tests and required static/configuration checks pass. Report any environment-only skipped tests by name rather than treating them as passing.
