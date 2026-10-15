@@ -279,10 +279,13 @@ Commit only the README/spec/final targeted fixes with `docs: document notificati
 - Mobile/web inbox and push settings: focused UI tests, Expo lint/typecheck, and manual browser inspection.
 - Issue #22 completion: acceptance-criteria crosswalk against current source and tests; missing producers for unbuilt dependent domains remain explicit follow-up work rather than fabricated behavior.
 
-## Production release checkpoint — 2026-10-14
+## Production release checkpoint — 2026-10-15
 
 - Created Cloudflare Queues `fave-notification-dlq` and `fave-notification-delivery`.
 - Applied remote D1 migrations `0016_notification_push_tokens.sql` and `0017_notifications.sql`; Wrangler subsequently reported no migrations pending.
 - The first Worker deploy published code and Queue consumers but could not add both cron triggers because the account had reached its five-trigger Free limit. Consolidated minute dispatch and hourly maintenance onto one `* * * * *` trigger; hourly cleanup runs when `scheduledTime` is at minute zero. The second deploy succeeded as Worker version `d5376d04-1305-47c2-9b1e-59076b02f708` with both Queue consumers and the single cron.
 - Production `GET /api/notifications/inbox` returns 401 signed out; the signed-in localhost browser displays the empty inbox state successfully. Production `GET /api/admin/notifications/health` also returns 401 signed out.
-- Do not create production test notifications or send live pushes to test the populated/read paths. Payment, trip-progress, and safety producers remain dependent on their owning state machines and the unresolved counsel/policy decisions in #14/#15; provider selection and account-specific approval also remain open in #16.
+- Commit `f9dd169` adds the full opaque `deliveryId` to the admin health response so authorized operators can invoke the existing audited retry route. The change is on `main` and the push-triggered CI run passed. `wrangler deploy --dry-run` succeeds with the configured D1, R2, Images, Queue, and environment-variable bindings.
+- The production release for `f9dd169` is pending: on 2026-10-15, Wrangler 4.137.0 reported that its saved Cloudflare auth token had expired and could not be refreshed in the non-interactive shell. `wrangler whoami` therefore cannot identify the active account or role yet. Refresh the locally managed deploy credentials, verify identity/scope, then deploy and check the Worker version and `/api/admin/notifications/health` response shape.
+- The local browser is signed out: direct visits to `/notifications` and `/admin` show the Fave sign-in gate. Signed-in inbox, admin health, and mobile-width browser checks remain outstanding until the owner selects an account in the Google account chooser. Do not create production test notifications or send live pushes to test populated/read paths.
+- Payment, trip-progress, and safety producers remain dependent on their owning state machines and the unresolved counsel/policy decisions in #14/#15; provider selection and account-specific approval also remain open in #16.
