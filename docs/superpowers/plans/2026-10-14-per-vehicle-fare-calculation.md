@@ -61,11 +61,11 @@ export function calculateVehicleFareLeg(
 ): { amountUgx: number; rateUgxPerKm: number } | null
 ```
 
-- [ ] **Step 1: Write failing tests for benchmark validation and per-leg calculation**
+- [x] **Step 1: Write failing tests for benchmark validation and per-leg calculation**
 
 Test that a valid positive whole-UGX benchmark and positive versioned round-trip meter distance yield a stable rational rate. Test per-leg amount calculation using exact integer arithmetic with the configured rounding rule, separate outbound and return distances, non-identical directional distances, and safe-maximum boundaries. Reject zero, negative, fractional, malformed, unsafe-integer, missing-distance, and unsupported-rounding inputs. Add a test proving outbound plus return uses the full driver-entered round-trip basis without doubling or hiding a direction.
 
-- [ ] **Step 2: Run the focused test and confirm the expected missing-module failure**
+- [x] **Step 2: Run the focused test and confirm the expected missing-module failure**
 
 Run from the repository root:
 
@@ -75,15 +75,15 @@ node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types -
 
 Expected: FAIL because `fave-worker/src/vehicle-fares.ts` does not exist yet.
 
-- [ ] **Step 3: Implement only the pure calculations exercised by the tests**
+- [x] **Step 3: Implement only the pure calculations exercised by the tests**
 
 Export the declared benchmark types and calculator. Represent the effective rate by the original amount and reference round-trip meter distance so calculations retain full precision; do not store a second lossy rate. Calculate line amounts with overflow-safe integer arithmetic using the rounding mode explicitly supplied by the approved fare policy; do not choose a rounding mode in code or invent a default. Expose the mathematical per-kilometre rate for display. Return `null` if the mode or basis is absent, invalid, or unsupported. Tests may exercise a supported mode, but it must remain unavailable to real quotes unless explicitly configured and approved. Do not put Google Maps calls, D1 queries, or user-facing route labels in this module.
 
-- [ ] **Step 4: Run focused fare tests and inspect arithmetic boundaries**
+- [x] **Step 4: Run focused fare tests and inspect arithmetic boundaries**
 
 Run the same focused Node test command. Expected: all rate, direction, validation, overflow, and configured-rounding assertions pass.
 
-- [ ] **Step 5: Commit the calculation module and tests on `main`**
+- [x] **Step 5: Commit the calculation module and tests on `main`**
 
 Run `git diff --check`, stage only the new module and test, and commit with `feat: add per-vehicle fare calculations`.
 
@@ -105,23 +105,23 @@ ALTER TABLE vehicles ADD COLUMN benchmark_distance_meters INTEGER
 ALTER TABLE vehicles ADD COLUMN benchmark_rounding TEXT;
 ```
 
-- [ ] **Step 1: Add migration-backed failing tests**
+- [x] **Step 1: Add migration-backed failing tests**
 
 Apply migrations `0001` through `0018` in the existing SQLite fixture. Assert the vehicle table stores benchmark UGX, reference route ID/version, and round-trip reference distance; the database rejects invalid ranges; existing vehicles migrate with null/unpriced benchmark fields; and the new benchmark is not present in any public listing projection.
 
-- [ ] **Step 2: Run the vehicle migration tests and confirm the missing-column failure**
+- [x] **Step 2: Run the vehicle migration tests and confirm the missing-column failure**
 
 Run the targeted test file with the repository's Node test command. Expected: FAIL because migration `0018_vehicle_fare_benchmarks.sql` does not exist.
 
-- [ ] **Step 3: Add migration 0018 with safe legacy defaults**
+- [x] **Step 3: Add migration 0018 with safe legacy defaults**
 
 Add the nullable benchmark columns above so legacy vehicles remain unpriced and no old policy becomes an implicit benchmark. Do not fabricate a distance, route, approval, or 2,000/km value for existing records. Read an optional `vehicleBenchmark` object from the versioned approved `fare_policies.rules_json`. Validate its route ID/version, nonempty labels, valid Uganda coordinates, positive round-trip distance, and explicit approved rounding mode. Do not seed sample coordinates, distances, or a guessed rounding choice. If any field is missing or invalid, report the basis as unavailable and disable vehicle pricing. Keep the submitted amount and a copy of the route ID/version/distance/rounding together on each vehicle so a later policy change cannot silently rebase an already submitted benchmark.
 
-- [ ] **Step 4: Apply the migration in the test fixture and verify legacy records remain unpriced**
+- [x] **Step 4: Apply the migration in the test fixture and verify legacy records remain unpriced**
 
 Run the targeted SQLite test and confirm both the new constraints and null legacy state.
 
-- [ ] **Step 5: Commit the migration and tests on `main`**
+- [x] **Step 5: Commit the migration and tests on `main`**
 
 Run `git diff --check`; commit with `feat: store per-vehicle fare benchmarks`.
 
@@ -134,27 +134,27 @@ Run `git diff --check`; commit with `feat: store per-vehicle fare benchmarks`.
 - Create: `tests/vehicle-registration.test.mjs`
 - Modify: `tests/vehicle-catalog.test.mjs`
 
-- [ ] **Step 1: Write failing Worker tests for submitted and changed benchmarks**
+- [x] **Step 1: Write failing Worker tests for submitted and changed benchmarks**
 
 Cover a driver's required round-trip amount, server-side whole-number bounds, rejection when the approved benchmark route/rounding basis is unavailable, no saved-rate mutation on malformed updates, audit data for rate changes, and approved-listing review behavior when an existing driver changes the benchmark. Assert the public catalog omits private benchmark submission and operating data while the authenticated owner and authorized review response expose only the needed fields.
 
-- [ ] **Step 2: Run the targeted tests and confirm they fail on absent benchmark handling**
+- [x] **Step 2: Run the targeted tests and confirm they fail on absent benchmark handling**
 
 Run the focused vehicle test file. Expected: the current endpoint accepts registration without a benchmark and ignores a benchmark update.
 
-- [ ] **Step 3: Extend vehicle registration and owner/review responses**
+- [x] **Step 3: Extend vehicle registration and owner/review responses**
 
 Read the current `vehicles.ts` registration, owner-list, edit, and admin-review code before editing. Validate the amount with `Number.isSafeInteger` and the same upper bound in both app and API. Snapshot the approved route basis with the amount. Include an amount change in the existing listing-change comparison so an approved vehicle moves to the existing re-review state; existing quote snapshots remain unaffected. Keep registration evidence and IDs private, and keep benchmark submissions out of client catalog results.
 
-- [ ] **Step 4: Add one labeled benchmark input to the driver car form**
+- [x] **Step 4: Add one labeled benchmark input to the driver car form**
 
 Before editing Expo UI, use the SDK 57 docs linked by `AGENTS.md` (`https://docs.expo.dev/versions/v57.0.0/`) for any Expo API touched. Add one numeric field per vehicle, labeled with the configured Kampala ↔ Jinja round-trip route and its saved road distance. Explain that the one amount includes operating cost and vehicle type. Disable submission and show the exact missing configuration state when the approved route basis is unavailable. Keep all existing private-evidence and existing-vehicle review behavior.
 
-- [ ] **Step 5: Run the focused Worker/UI tests, lint, and typecheck**
+- [x] **Step 5: Run the focused Worker/UI tests, lint, and typecheck**
 
 Run the vehicle tests, then from the repository root run `npm run lint` and `npm run typecheck`. Expected: benchmark validation, rate edit review, data privacy, and existing vehicle flows pass.
 
-- [ ] **Step 6: Commit the vehicle entry/API changes on `main`**
+- [x] **Step 6: Commit the vehicle entry/API changes on `main`**
 
 Run `git diff --check`; commit with `feat: collect a fare benchmark for each vehicle`.
 
@@ -165,27 +165,27 @@ Run `git diff --check`; commit with `feat: collect a fare benchmark for each veh
 - Modify: `fave-worker/src/google-maps.ts` only if a typed route failure or route metadata helper is needed
 - Modify: `tests/quote-snapshot.test.mjs` and current booking integration tests
 
-- [ ] **Step 1: Add failing quote snapshot tests for two directions and saved calculation inputs**
+- [x] **Step 1: Add failing quote snapshot tests for two directions and saved calculation inputs**
 
 Test a selected vehicle with one benchmark, an outbound route distance, a separately requested return route distance, lodging nights/rate, and current non-transport fare policy components. Assert the quote contains `Outbound transport`, `Return transport`, and `Driver lodging`, with each direction's own meters, duration, quantity, calculated amount, and selected-vehicle rate basis. Assert the snapshot also contains the driver-entered benchmark amount, currency, route ID/version/distance, derivation version, driver and vehicle identifiers, dates/night count, policy version, deposit basis, and expiry. Reject a missing approval/basis, failed route leg, invalid rounding config, missing vehicle rate, or stale offer; prove the global UGX 2,000/km policy component is never used as a fallback or double-counted.
 
-- [ ] **Step 2: Run quote tests and confirm the expected one-route/missing-rate failures**
+- [x] **Step 2: Run quote tests and confirm the expected one-route/missing-rate failures**
 
 Run `node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test tests/quote-snapshot.test.mjs`. Expected: new assertions fail because quote construction currently uses one route and a policy-wide per-kilometer rate.
 
-- [ ] **Step 3: Extend quote snapshot construction using the pure calculation module**
+- [x] **Step 3: Extend quote snapshot construction using the pure calculation module**
 
 Replace the single-route transport calculation with a typed outbound/return input pair and selected vehicle's approved benchmark snapshot. Preserve accepted non-transport fare-policy components, replace the global transport component with two distinct transport lines, and retain the separately registered driver lodging rate. Do not show either final line before the selected driver accepts. If either route or any approved rate basis is missing, transition the offer to quote failure and return no partial price.
 
-- [ ] **Step 4: Fetch Google Maps directions independently after driver acceptance**
+- [x] **Step 4: Fetch Google Maps directions independently after driver acceptance**
 
 Call the existing route service once for pickup → destination and once for destination → pickup. Preserve each route's distance and duration. Reject either provider failure; do not substitute the first route for the second. Keep the offer's 15-minute deadline and accepted-driver/vehicle relationship checks in force through quote persistence.
 
-- [ ] **Step 5: Verify quote and immutability regression tests**
+- [x] **Step 5: Verify quote and immutability regression tests**
 
 Run quote snapshot tests and all current booking tests. Expected: distinct directional distances price independently, lodging remains separate, missing rates fail closed, immutable quote and booking snapshots retain the full calculation, and offer/deposit state transitions remain atomic.
 
-- [ ] **Step 6: Commit quote calculation and tests on `main`**
+- [x] **Step 6: Commit quote calculation and tests on `main`**
 
 Run `git diff --check`; commit with `feat: quote outbound and return transport by vehicle`.
 
@@ -199,27 +199,27 @@ Run `git diff --check`; commit with `feat: quote outbound and return transport b
 - Modify: `tests/trip-quote-display.test.mjs`
 - Create: `tests/vehicle-fare-quote-ui.test.mjs`
 
-- [ ] **Step 1: Add failing client contract and extension tests**
+- [x] **Step 1: Add failing client contract and extension tests**
 
 Assert the client quote type accepts the full fare basis and two route legs; UI strings include separate outbound and return lines with each actual distance, rate, amount, and lodging nights/rate; and no synthetic aggregate route masks different directional distances. Test that an accommodation-only extension uses the source accepted lodging rate and retains the source vehicle benchmark snapshot without recalculating transport. Test that changing route/distance requires a replacement quote and explicit client acceptance rather than mutating the accepted snapshot.
 
-- [ ] **Step 2: Run the focused UI/extension tests and verify they fail**
+- [x] **Step 2: Run the focused UI/extension tests and verify they fail**
 
 Run the focused UI and extension Node tests. Expected: client quote types contain one route and current extension snapshots only include per-night components.
 
-- [ ] **Step 3: Update typed quote and accepted-snapshot contracts**
+- [x] **Step 3: Update typed quote and accepted-snapshot contracts**
 
 Add outbound and return route data and immutable vehicle benchmark calculation metadata to the client quote types. Preserve a validated rate basis in accepted quote data used by the extension helper. Keep extension amounts limited to the policy-defined added-night lines; do not add an unapproved transport extension multiplier.
 
-- [ ] **Step 4: Render route-by-route transport line items**
+- [x] **Step 4: Render route-by-route transport line items**
 
 Show two separate labeled transport rows and each leg's Google Maps driving distance; show the rate calculation and line total for each, keep driver lodging as its own nightly row, and display total/deposit/expiry from the server quote. Do not recompute prices in the client. Keep the booking progress, driver-acceptance wait, no-payment-before-acceptance, terms, and existing mobile/web behavior intact.
 
-- [ ] **Step 5: Run focused UI/extension tests, Expo lint, and app typecheck**
+- [x] **Step 5: Run focused UI/extension tests, Expo lint, and app typecheck**
 
 Run the focused tests, `npm run lint`, and `npm run typecheck`. Expected: UI renders the two server-calculated lines and extension calculation preserves the immutable source rate.
 
-- [ ] **Step 6: Commit quote presentation and extension tests on `main`**
+- [x] **Step 6: Commit quote presentation and extension tests on `main`**
 
 Run `git diff --check`; commit with `feat: show separate vehicle transport legs`.
 
@@ -230,15 +230,17 @@ Run `git diff --check`; commit with `feat: show separate vehicle transport legs`
 - Modify: `docs/superpowers/specs/2026-10-14-per-vehicle-fare-calculation-design.md` only to record implementation facts or owner decisions
 - Modify: any test or source file above only if a verification failure demonstrates a requirement gap
 
-- [ ] **Step 1: Update the inactive product-policy draft**
+- [x] **Step 1: Update the inactive product-policy draft**
 
 Replace the obsolete single passenger-route rate draft with the owner-confirmed per-car Kampala–Jinja round-trip benchmark and separately displayed outbound and return charges. State that the amount combines vehicle operating cost and type value and is distinct from driver lodging. Preserve the 2,000/km value as a comparison/reference only. Keep exact benchmark route, component rounding, actual-cost validation, fare policy approval, provider terms, and legal/launch approval marked as unresolved activation gates.
 
-- [ ] **Step 2: Run the whole repository test suite and static checks**
+- [x] **Step 2: Run the whole repository test suite and static checks**
 
 Run `npm test`, `npm run lint`, and `npm run typecheck` at the repository root. Run `npm run typecheck` and `npx wrangler deploy --dry-run` in `fave-worker/`. Expected: all non-environment-dependent tests, app/Worker types, lint, and Wrangler configuration pass; report loopback-only skips precisely.
 
 - [ ] **Step 3: Manually test the browser booking flow**
+
+> **Blocked on signed-in browser access:** the local app's `/` and `/driver` routes both show the sign-in screen when no session exists. The Google OAuth account chooser currently offers two accounts and awaits the owner’s selection. Only these unauthenticated access gates have been manually verified so far; do not enter credentials on the owner’s behalf.
 
 Use the signed-in app at `http://localhost:8081`. Verify driver benchmark entry is one amount per car when an approved basis is configured, invalid amounts are blocked, client vehicle selection is unchanged, the final price remains hidden while the selected driver is deciding, and accepted quotes show the separate outbound and return distances/amounts plus lodging. Verify approved terms and active policy gates still block payment when unpublished. The local web API proxy currently targets the production Worker; do not create test vehicles, offers, quotes, or notifications in production. Use an isolated local Worker/D1 fixture for populated flows, then leave user-facing browser state clean.
 

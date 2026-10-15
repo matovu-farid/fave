@@ -50,6 +50,8 @@ The public comparison is directional rather than like-for-like: public car-hire 
 
 Sources: [Selam Ride Uganda fare table](https://www.selamrideuganda.com/ride); [Uganda Car Rental Services Kampala rates and driver overnight allowances](https://www.ugandacarrentalservices.com/car-hire-locations/kampala-city.html).
 
+**Google Maps route observation — 2026-10-15; not an approved benchmark:** Driving directions between Google's generic Kampala and Jinja places showed a fastest outbound route of 97.2 km via Kampala–Jinja Expressway and Kampala–Jinja Highway/A109, plus a 79.6 km A109 alternative. Reversing the places showed a fastest return of 97.5 km via the Expressway/A109 and a 98.2 km Expressway alternative. These results depend on Google's selected endpoints, route choice, and traffic; they do not establish one fixed road distance for Fave. The 80 km example is therefore plausible for one route but is not a unique Kampala–Jinja benchmark. Before activation, the owner must approve exact reference endpoints and a fixed route/distance basis, including how outbound and return reference legs are combined and versioned. [Google Maps driving directions: Kampala → Jinja](https://www.google.com/maps/dir/Kampala,+Uganda/Jinja,+Uganda); [Jinja → Kampala](https://www.google.com/maps/dir/Jinja,+Uganda/Kampala,+Uganda).
+
 **Owner decision — 2026-10-14:** Use a driver-entered round-trip benchmark for each car, then derive that car's transport rate. Display outbound and return transport lines separately. The UGX 2,000/km comparison does not activate a standard fare or authorize customer charges.
 
 ## Draft pricing rules for owner review
