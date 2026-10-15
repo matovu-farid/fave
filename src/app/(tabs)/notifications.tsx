@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, AppState, Linking, Pressable, ScrollView, StyleSheet } from 'react-native'
-import { router, useFocusEffect, useLocalSearchParams, type Href } from 'expo-router'
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 
 import { ActionButton, Card, Message, SectionTitle } from '@/components/marketplace-ui'
@@ -8,6 +8,7 @@ import { ThemedText } from '@/components/themed-text'
 import { ThemedView } from '@/components/themed-view'
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme'
 import { getNotificationInbox, markAllNotificationsRead, markNotificationRead, type NotificationInboxItem } from '@/lib/marketplace'
+import { getNotificationDestination } from '@/lib/notification-destination'
 import {
   disablePushNotifications,
   enablePushNotifications,
@@ -143,13 +144,7 @@ export default function NotificationsScreen() {
         setInboxError(cause instanceof Error ? cause.message : 'Could not update this notification.')
       }
     }
-    const destination: Href = item.routeKey === 'driver_offers'
-      ? { pathname: '/driver', params: { focusTargetId: item.targetId, focusTargetType: 'offer' } }
-      : { pathname: '/trips', params: {
-          focusTargetId: item.targetId,
-          focusTargetType: item.routeKey === 'booking' ? 'booking' : 'offer',
-        } }
-    router.push(destination)
+    router.push(getNotificationDestination(item))
   }, [])
 
   useEffect(() => {
