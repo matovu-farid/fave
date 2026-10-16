@@ -885,10 +885,7 @@ tripsApp.post('/driver-offers/:offerId/respond', async (c) => {
   if (!offer) return c.json(apiError('TRIP_OFFER_NOT_FOUND', 'This trip offer was not found.'), 404)
   if (offer.status !== 'pending') return c.json({ offerId: offer.id, status: offer.status }, 409)
   if (offer.expires_at <= now) {
-    await c.env.DB.prepare(
-      `UPDATE driver_trip_offers SET status = 'expired'
-        WHERE id = ? AND driver_application_id = ? AND status = 'pending' AND expires_at <= ?`,
-    ).bind(offer.id, offer.driver_application_id, now).run()
+    await expirePendingDriverTripOffers(c.env, now, undefined, offer.id, offer.driver_application_id)
     return c.json({ offerId: offer.id, status: 'expired' }, 409)
   }
   if (decision === 'decline') {

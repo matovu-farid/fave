@@ -109,11 +109,11 @@ Run `git diff --check`, inspect the changed files, and commit with `feat: add ve
 - Modify: `fave-worker/src/notification-store.ts` only if a transaction helper is needed
 - Test: `tests/notification-producers.test.mjs`
 
-- [x] **Step 1: Add failing tests for existing domain transitions**
+- [ ] **Step 1: Add failing tests for existing domain transitions**
 
 Cover the current quote request created, driver accepted/declined/expired, booking hold created, deposit-pending booking expired, and client withdrawal transitions. Assert authorized client/driver inbox recipients, correct event type/expiry, exactly one inbox event per transition, and rollback when event persistence fails. Do not invent payment completion or safety transitions that do not exist yet.
 
-- [ ] **Step 2: Run the focused tests and verify the missing-event failures**
+- [x] **Step 2: Run the focused tests and verify the missing-event failures**
 
 Run `node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test tests/notification-producers.test.mjs`. Expected: event assertions fail because current booking transitions do not publish issue #22 events.
 
@@ -121,7 +121,7 @@ Run `node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-ty
 
 Update only current `bookings.ts` state transitions. Build the event statements with `buildNotificationEventStatements` and append them to the exact same D1 `batch()` as the business mutation; gate notification inserts on a successful state transition. Check affected-row counts before returning success. A failed event/outbox write must not leave a committed transition without its durable notification. A later Queue/Expo failure must not roll back an already committed transition.
 
-- [x] **Step 4: Verify transition, duplicate, expiry, and rollback cases**
+- [ ] **Step 4: Verify transition, duplicate, expiry, and rollback cases**
 
 Run `node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test tests/notification-store.test.mjs tests/notification-producers.test.mjs` and `npm run typecheck` from `fave-worker/`.
 Expected: repeated requests do not duplicate inbox rows; declined/expired 15-minute offers cannot remain actionable; transition and outbox commit/rollback together.
@@ -291,3 +291,40 @@ Commit only the README/spec/final targeted fixes with `docs: document notificati
 - On 2026-10-16 the owner selected a signed-in client account for the localhost browser test. `/notifications` opens and shows the expected empty inbox; `/admin` redirects to home, confirming this account is not an admin. Admin-health authorization and mobile-width checks remain outstanding. Do not create production test notifications or send live pushes to test populated/read paths.
 - Payment, trip-progress, and safety producers remain dependent on their owning state machines and the unresolved counsel/policy decisions in #14/#15; provider selection and account-specific approval also remain open in #16.
 - **Fresh-session browser check — 2026-10-16:** Google sign-in with the owner-selected account survives reload. The authenticated inbox loads its empty state and correctly explains that push alerts require the mobile app. Mobile web inspection at 320/390px found clipped navigation; the shared web tab bar now wraps within the viewport, reserves space above screen content, and provides 44px-high links. Checks at 320, 390, and 1280px show all five non-admin tabs in bounds. Populated/read paths, admin-session controls, live push delivery, and owner-module producers remain unverified; no production test notifications or push sends were created.
+
+
+### Producer regression and browser verification — 16 October 2026
+
+The originally named `tests/notification-producers.test.mjs` was absent. Added
+real-SQLite/Hono coverage using every production migration. A late response to a
+legacy driver offer reproduced the missing event (the offer expired but its
+client had zero inbox/outbox rows). The response now uses the existing filtered,
+atomic expiry helper, including its conditional transition guard. This maintains
+compatibility for old offers; new requests still use staff confirmation.
+
+Ten test cases/subcases cover late expiry and duplicate retries, a competing
+withdrawal, unrelated-user denial, decline and client withdrawal recipients,
+staff confirmation and deposit-hold recipients/expiry, plus injected outbox
+failures during expiry, staff confirmation and booking conversion. The expiry
+failure leaves the offer pending with no partial notification rows; retry after
+recovery expires it with one notice. Staff/booking failures leave no partial
+quote, hold, acceptance or consent changes. Independent focused review found no
+material code regression and requested the direct expiry rollback test, now added.
+
+The Task 3 coverage checkboxes above are corrected to remain partial: legacy
+acceptance/quote readiness and scheduled deposit-expiry producer integration
+coverage still need completion. Future payment/trip/safety producers remain with
+their owner issues; these tests do not establish their implementation.
+
+Manually exercised the actual static app and Worker against an isolated loopback
+synthetic database: populated inbox, opening the expiry alert to its own current
+trip request, one unread remaining, mark-all-read, and persisted read state after
+reload. Checked at390px width. Authorized operations displays pending delivery
+counts and no message/recipient details. No browser errors/warnings observed.
+Closed the test tab and stopped its server; the owner's production security page
+was retained. No production notification, push, real booking or charge was created.
+
+Validation for this checkpoint:264 tests passed, zero failures/skips; Expo lint,
+app TypeScript and Worker TypeScript passed. The initial sandboxed full-suite run
+skipped three loopback tests; the successful final run allowed loopback and ran
+all of them. Independent review confirmed the direct expiry rollback coverage.
