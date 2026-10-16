@@ -446,3 +446,20 @@ neither attempted a push. At390px, both original inbox records remain with two
 unread items. No console errors/warnings. Screenshot:
 /tmp/fave-notification-timing-status.jpg. Test server/tab stopped and viewport
 reset; production owner console retained. No production test event or push sent.
+
+### Reliability release checkpoint
+
+- Main implementation:1f29f053831a1ccacea8a149c42ef84a964629bd.
+- CI38914738960 passed for that exact commit; Worker packaging dry-run passed.
+- Applied production migration0021_notification_delivery_leases.sql successfully
+  (four commands including migration bookkeeping). No migrations remain pending.
+- Worker version:50a039e2-8b93-4a17-b317-2c47add038ec, tagmain-1f29f05.
+- Deployment:f60ddb9f-79e5-4023-9b92-7e02c70cb33f, created2026-10-16T14:22:07.253125Z,
+  serving100% traffic. Runtime, assets configuration and all bindings match the
+  preceding version; no Queue/Cron trigger or fare/legal activation changes.
+- Earlier version:f4bb66e1-b3b8-4c0d-bd82-89a7a43dfd90. It predates the generation
+  envelope:follow the compatibility/reconciliation procedure in the operations
+  runbook rather than blindly restoring it with new messages still queued.
+- Read-only production checks:health/databaseok; signed-out inbox, operations
+  notification health and staff security APIs401JSON; console200HTML after its
+  trailing-slash redirect; unknown API404JSON. No live push was used as a probe.
