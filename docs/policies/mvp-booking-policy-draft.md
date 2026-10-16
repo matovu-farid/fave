@@ -8,7 +8,9 @@
 
 **Owner:** Fave product owner
 
-**Updated:** 2026-10-16 (owner-approved staff availability, fixed-estimate flow, and hold durations)
+**Customer copy:** The finished [booking](client-booking-policy.md), [payment](client-payment-policy.md), [cancellation](client-cancellation-policy.md), [safety](client-safety-policy.md) and [client terms/privacy](client-terms-and-privacy-notice.md) documents replace historical customer wording. This file remains the internal decision record, including unresolved operating and activation decisions. See the [publication/review map](../legal/booking-policy-research-and-review.md).
+
+**Updated:** 2026-10-17 (included processing fees and finished customer policy set)
 
 This document turns the current product direction into policy options for issue #15. Proposed rules remain draft; owner-confirmed product directions do not by themselves constitute counsel approval or authorize launch or customer charges.
 
@@ -43,7 +45,7 @@ This document turns the current product direction into policy options for issue 
 | Driver settlement | Break down the driver’s full pay by trip day; send that day’s itemized amount in the morning, including its accommodation fee; verify payment and trip records after completion, with no routine later balance | Owner confirmed full daily pay, timing, and included lodging fee; exact pay breakdown, available balance, payout route, accounting, and legal structure need provider/counsel review |
 | Client payment methods | **Confirmed:** MTN/Airtel mobile money plus local cards for both deposit and final balance | Defines which provider methods #16 must support and the fees included in quotes |
 
-These are recommendations to reduce the decision work, not approved policy. The previously discussed UGX 2,000/km value is a comparison point for unit-cost validation only. It is not an active or universal fare and must not be used as a fallback for a car without an approved benchmark. Each driver's nightly lodging rate is a separate quote component and is set during registration. The client payment methods above are confirmed product direction; legal, provider, and merchant terms remain subject to review.
+Rows explicitly marked owner-confirmed record settled product decisions; remaining proposals are recommendations and have not been approved or activated. The previously discussed UGX 2,000/km value is a comparison point for unit-cost validation only. It is not an active or universal fare and must not be used as a fallback for a car without an approved benchmark. Each driver's nightly lodging rate is a separate quote component and is set during registration. The client payment methods above are confirmed product direction; legal, provider, and merchant terms remain subject to review.
 
 ### Researched distance-rate recommendation — 2026-10-14
 

@@ -99,7 +99,7 @@ For each item below, please provide the applicable authority and source, a writt
 
 ### H. Legal documents and consent evidence
 
-Please draft or approve, with version and effective date:
+The finished customer set and its [publication/review map](booking-policy-research-and-review.md) are available for exact-version review. The earlier payment template now serves only as an internal provider-readiness record. Please approve or identify required changes, with version and effective date:
 
 - customer booking and transport terms, pricing/refunds/cancellation disclosures, privacy notice, and incident/contact guidance;
 - driver/provider agreement, onboarding and verification notice, vehicle-use/insurance requirements, conduct and safety standards, complaint and incident cooperation terms, and payment/tax terms;
