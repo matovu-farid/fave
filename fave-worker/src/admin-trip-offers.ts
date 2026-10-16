@@ -182,11 +182,24 @@ adminTripOffersApp.post('/:offerId/follow-ups', async (c) => {
   }
 
   const followUpId = crypto.randomUUID()
-  await c.env.DB.prepare(
+  const inserted = await c.env.DB.prepare(
     `INSERT INTO driver_trip_offer_followups
       (id, offer_id, actor_user_id, outcome, note, created_at)
-     VALUES (?, ?, ?, ?, ?, ?)`,
-  ).bind(followUpId, offer.id, access.user.id, outcome, typeof note === 'string' ? note.trim() || null : null, now).run()
+     SELECT ?, offer.id, ?, ?, ?, ?
+       FROM driver_trip_offers AS offer
+      WHERE offer.id = ? AND offer.status = 'pending' AND offer.expires_at > ?`,
+  ).bind(
+    followUpId,
+    access.user.id,
+    outcome,
+    typeof note === 'string' ? note.trim() || null : null,
+    now,
+    offer.id,
+    now,
+  ).run()
+  if (inserted.meta.changes !== 1) {
+    return c.json(apiError('TRIP_OFFER_NOT_PENDING', 'Call attempts can only be recorded for an offer still awaiting a driver.'), 409)
+  }
   await writeMarketplaceAudit(c.env, {
     actorUserId: access.user.id,
     action: 'driver_trip_offer_followup_recorded',

@@ -241,3 +241,40 @@ test('call follow-up records allowed outcome and audit without changing offer st
   assert.doesNotMatch(queries.join('\n'), /UPDATE driver_trip_offers/u)
   assert.equal(app.audits[0].action, 'driver_trip_offer_followup_recorded')
 })
+
+test('call follow-up is rejected if the offer stops being pending before the write', async () => {
+  const queries = []
+  const offer = { id: 'offer-1', status: 'pending', expires_at: Date.now() + 60_000 }
+  let followUps = 0
+  const db = { prepare(sql) { queries.push(sql); return {
+    bind() { return this },
+    async first() {
+      const snapshot = { ...offer }
+      offer.status = 'accepted'
+      return snapshot
+    },
+    async run() {
+      if (sql.includes('INSERT INTO driver_trip_offer_followups')) {
+        if (sql.includes('SELECT') && offer.status === 'pending' && offer.expires_at > Date.now()) {
+          followUps += 1
+          return { meta: { changes: 1 } }
+        }
+        if (!sql.includes('SELECT')) {
+          followUps += 1
+          return { meta: { changes: 1 } }
+        }
+        return { meta: { changes: 0 } }
+      }
+      return { meta: { changes: 1 } }
+    },
+  } } }
+  const app = loadAdminTripOffers({ db })
+  const response = await app.routes.get('POST /:offerId/follow-ups')(context(db, {
+    method: 'POST', path: '/api/admin/trip-offers/offer-1/follow-ups',
+    body: { outcome: 'no_answer', note: 'Call crossed the response deadline' },
+  }))
+
+  assert.equal(response.status, 409)
+  assert.equal(followUps, 0)
+  assert.equal(app.audits.length, 0)
+})
