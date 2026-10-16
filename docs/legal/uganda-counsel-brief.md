@@ -3,7 +3,7 @@
 **Status:** Draft for qualified Ugandan counsel. This is a product brief and issue checklist, not legal advice, a legal opinion, or launch approval. The owner reports counsel approved the payment-provider terms on 12 October 2026; the written advice is not attached, and no general legal review or approval of the operating model is recorded here.
 
 **Prepared:** 30 September 2026
-**Updated:** 13 October 2026
+**Updated:** 16 October 2026
 **Related issue:** [#14 — Uganda legal, regulatory, privacy, and safety review](https://github.com/matovu-farid/fave/issues/14)
 **Research scope:** Public primary and regulator sources listed below; counsel must verify the current consolidated law, amendments, administrative practice, and applicability to Fave before decisions are treated as final.
 
@@ -12,6 +12,7 @@
 Please confirm or correct these working assumptions before advising:
 
 - Fave is a mobile platform connecting customers who need long-distance, potentially multi-day rides with drivers using private cars. The customer browses and selects a vehicle; Fave assigns the driver.
+- **Owner-confirmed booking sequence (2026-10-16; not legal approval):** show a saved estimate for the selected car before client intent. When the client asks to book, create a linked staff availability request. Staff call the assigned driver and confirm only the requested dates, replacing the previous 15-minute driver-app acceptance step. A pending check has no automatic timeout, vehicle hold, or payment. Staff confirmation preserves the estimate price and holds the car and driver through the configured quote window; the client reviews current terms before starting the deposit. If unavailable, the client chooses another car. If the quote expires, use a new estimate/check. Please review contract formation, reservation disclosures, changed availability, and the operational duties of this staff confirmation process; numeric hold/quote durations remain unapproved. See the [approved product design](../superpowers/specs/2026-10-16-staff-confirmed-availability-design.md).
 - The first service area is Greater Kampala, with pickup addresses in Kampala, Mukono, or Wakiso. The product will use Google Maps address results to determine which of these named areas contains a pickup. Destinations may be anywhere in Uganda.
 - Trips may last up to about seven days. Pricing is intended to account for driving distance and a per-night allowance for the driver's lodging of any kind (not hotels only). Fave does not arrange or pay for client/passenger lodging.
 - **Owner-confirmed trip-night calculation (2026-10-13; not legal approval):** count Kampala calendar dates from the start/check-in date up to, but excluding, the return/check-out date. Monday to Tuesday is one night. Retain the dates, night count, per-night rate, and calculation in the accepted quote and any revised quote.
