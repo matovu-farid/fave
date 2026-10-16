@@ -212,3 +212,17 @@ No payment-provider contract, legal-policy approval, or payment launch gate was 
   Full suite: 306 passed, zero failed/skipped with loopback available; app lint,
   app/Worker typechecks, cleared production web export and Worker dry-run passed.
   This checkpoint does not activate legal/fare policies or live payments.
+
+### Booking walkthrough release checkpoint
+
+- Main 961c61840522f3039b1112540f19409c38018639 passed CI38968341433.
+  Version 667a5fcc-1b85-45eb-a1d2-04b6870ef390 (main-961c618) serves 100%
+  traffic through deployment db947333-f091-47ae-baa6-271732244601, created
+  2026-10-16T21:20:11.494412Z (17 October in Kampala). Predecessor:
+  e9a7194a-5f71-4fe5-a2cc-963fbb20f473. Runtime and all 17 bindings match;
+  no migration or trigger change was required.
+- Curl production checks: health/database 200 ok, signed-out current request,
+  staff availability and review-security APIs 401 JSON, operations page 200 HTML.
+  Production still has zero active approved fare policies; live payments and legal
+  publication were not activated. The isolated test server/tab were stopped;
+  viewport restored. No production test transaction was created.
