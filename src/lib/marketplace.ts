@@ -73,7 +73,7 @@ export type VehicleRequirements = {
 }
 export type VehicleAvailability = {
   unavailable: { id: string; start_date: string; end_date: string }[]
-  holdsAndBookings: { start_date: string; end_date: string; status: string; hold_expires_at: number }[]
+  holdsAndBookings: { start_date: string; end_date: string; status: 'confirmed' | 'deposit_pending' | 'quote_hold'; hold_expires_at: number }[]
 }
 export type ClientPrerequisites = {
   documents: PolicyDocument[]

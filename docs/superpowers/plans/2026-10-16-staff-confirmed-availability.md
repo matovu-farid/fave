@@ -68,6 +68,7 @@ The initial plan’s separate proposed snapshot/API/conversion test files were c
 - `tests/trip-estimate-migration.test.mjs`: immutable estimate and schema constraints.
 - `tests/trip-availability-view.test.mjs`: estimate versus payable quote, expiry/review states, saved input recovery, and accepted legacy quote recovery.
 - Existing quote snapshot, fare benchmark, trip-draft, notification-contract, notification-navigation, booking, and proxy tests remain in the full suite.
+- `tests/driver-availability-holds.test.mjs`: owner-only, date-only quote holds, non-blocking pending requests, expiry without cron, and one deposit hold after conversion. The driver screen distinguishes quote holds from deposits and confirmed trips (issue #8).
 - Independent review found and resolved legacy quote continuation, reached-call gating, missing conversion auditing, and a local-expiry recovery issue.
 
 ## 8. Release and runtime verification
@@ -83,3 +84,9 @@ The initial plan’s separate proposed snapshot/API/conversion test files were c
 - [ ] Update issue evidence and close only the work verified as complete.
 
 No payment-provider contract, legal-policy approval, or payment launch gate was changed by this implementation.
+
+### Latest checkpoint (2026-10-16)
+
+- Full suite: 193 passing, zero failing or skipped. App lint, app typecheck, Worker typecheck, and diff whitespace checks pass.
+- Browser at `http://localhost:8081` shows the owner signed in. The Trips screen loads the new layout but receives HTTP 404 for the new availability API because its proxy uses the production Worker. This is a partial browser check, not a completed booking walkthrough.
+- Production release approval remains pending. No production migration or Worker deployment was performed at this checkpoint.

@@ -932,9 +932,14 @@ vehiclesApp.get('/:vehicleId/availability', async (c) => {
       `SELECT start_date, end_date, status, hold_expires_at FROM bookings
         WHERE vehicle_id = ? AND end_date >= ?
           AND (status = 'confirmed' OR (status = 'deposit_pending' AND hold_expires_at > ?))
+        UNION ALL
+        SELECT start_date, end_date, 'quote_hold' AS status, hold_expires_at
+          FROM availability_requests
+         WHERE vehicle_id = ? AND end_date >= ?
+           AND status = 'confirmed' AND hold_expires_at > ?
         ORDER BY start_date`,
     )
-      .bind(vehicle.id, kampalaToday(), Date.now())
+      .bind(vehicle.id, kampalaToday(), Date.now(), vehicle.id, kampalaToday(), Date.now())
       .all<{ start_date: string; end_date: string; status: string; hold_expires_at: number }>(),
   ])
 

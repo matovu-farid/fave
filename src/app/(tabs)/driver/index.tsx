@@ -504,7 +504,10 @@ function AvailabilityCard({ vehicle, start, end, setStart, setEnd }: { vehicle: 
         }}
       />
     </View>)}
-    {availability?.holdsAndBookings.map((range, index) => <ThemedText key={`${range.start_date}-${index}`} type="small">{range.status === 'confirmed' ? 'Confirmed trip' : 'Deposit hold'} · {range.start_date} to {range.end_date}{range.status === 'deposit_pending' ? ` · expires ${new Date(range.hold_expires_at).toLocaleString()}` : ''}</ThemedText>)}
+    {availability?.holdsAndBookings.map((range, index) => <View key={`${range.start_date}-${index}`} style={styles.correction}>
+      <ThemedText type="small">{range.status === 'confirmed' ? 'Confirmed trip' : range.status === 'quote_hold' ? 'Held while client reviews quote' : 'Deposit hold'} · {range.start_date} to {range.end_date}</ThemedText>
+      {range.status !== 'confirmed' ? <ThemedText type="small">Hold expires {new Date(range.hold_expires_at).toLocaleString()}</ThemedText> : null}
+    </View>)}
     {message ? <Message>{message}</Message> : null}
     <ActionButton title="Mark dates unavailable" disabled={!start || !end} busy={busy} onPress={() => { setBusy(true); setMessage(''); void markUnavailable(vehicle.id, start, end).then(() => { setMessage('Dates marked unavailable.'); return refresh() }).catch((cause) => setMessage(cause instanceof Error ? cause.message : 'Could not update availability.')).finally(() => setBusy(false)) }} />
   </Card>
