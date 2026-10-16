@@ -52,3 +52,36 @@ test('document approval remains restricted to staff and cannot review evidence t
   assert.equal((await f.reviewDriver('POST', path, { body: { decision: 'approve', reason } })).status, 409)
   assert.equal(f.sql.prepare('SELECT COUNT(*) AS count FROM marketplace_audit_events').get().count, 1)
 })
+
+for (const applicationStatus of ['approved', 'rejected', 'suspended', 'needs_correction']) {
+  for (const decision of ['approve', 'reject']) {
+    test(`${decision} conflicts without side effects if application becomes ${applicationStatus} before the write`, async (t) => {
+      const f = pendingReview(t)
+      const batch = f.DB.batch.bind(f.DB)
+      f.DB.batch = async (statements) => {
+        f.sql.prepare("UPDATE driver_applications SET status = ? WHERE id = 'driver-app'").run(applicationStatus)
+        return batch(statements)
+      }
+
+      const result = await f.reviewDriver('POST', path, { body: { decision, reason, applicantMessage: 'Please upload a clear photo.' } })
+      assert.equal(result.status, 409, JSON.stringify(result))
+      assert.equal(f.sql.prepare("SELECT review_status FROM driver_application_documents WHERE id = 'national_id_front'").get().review_status, 'pending')
+      assert.equal(f.sql.prepare("SELECT status FROM driver_applications WHERE id = 'driver-app'").get().status, applicationStatus)
+      assert.equal(f.sql.prepare('SELECT COUNT(*) AS count FROM marketplace_audit_events').get().count, 0)
+    })
+  }
+}
+
+test('a concurrent decision by the same staff member in the same millisecond cannot count as this write', async (t) => {
+  const f = pendingReview(t)
+  const batch = f.DB.batch.bind(f.DB)
+  f.DB.batch = async (statements) => {
+    f.sql.prepare("UPDATE driver_application_documents SET review_status = 'approved', reviewed_by = 'staff', reviewed_at = ?, reviewer_reason = 'First review' WHERE id = 'national_id_front'").run(f.clock.now)
+    f.insert('marketplace_audit_events', { id: 'first-review', actor_user_id: 'staff', action: 'driver_document_reviewed', target_type: 'driver_application_document', target_id: 'national_id_front', reason: 'First review', prior_state: 'pending', new_state: 'approved', created_at: f.clock.now })
+    return batch(statements)
+  }
+  const result = await f.reviewDriver('POST', path, { body: { decision: 'approve', reason } })
+  assert.equal(result.status, 409, JSON.stringify(result))
+  assert.equal(f.sql.prepare('SELECT COUNT(*) AS count FROM marketplace_audit_events').get().count, 1)
+  assert.equal(f.sql.prepare("SELECT reviewer_reason FROM driver_application_documents WHERE id = 'national_id_front'").get().reviewer_reason, 'First review')
+})

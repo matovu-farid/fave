@@ -776,7 +776,7 @@ adminDriversApp.post('/:applicationId/documents/:documentId/decision', async (c)
   const newStatus = decision === 'approve' ? 'approved' : 'rejected'
   const now = Date.now()
   const applicationReason = `A submitted verification document needs correction: ${reason.trim()}`
-  await c.env.DB.batch([
+  const result = await c.env.DB.batch([
     c.env.DB.prepare(
       `UPDATE driver_application_documents
           SET review_status = ?, reviewer_reason = ?, reviewed_by = ?, reviewed_at = ?
@@ -785,20 +785,16 @@ adminDriversApp.post('/:applicationId/documents/:documentId/decision', async (c)
           AND retention_expires_at IS NOT NULL AND retention_expires_at > ?
           AND ${currentChecklistDocumentPredicate('driver_application_documents')}
           AND EXISTS (SELECT 1 FROM driver_applications
-                       WHERE id = ? AND retention_expires_at IS NOT NULL AND retention_expires_at > ?)`,
+                       WHERE id = ? AND status = ?
+                         AND retention_expires_at IS NOT NULL AND retention_expires_at > ?)`,
     ).bind(newStatus, reason.trim(), user.id, now, document.id,
-      c.req.param('applicationId'), c.req.param('applicationId'), now, c.req.param('applicationId'), now),
+      c.req.param('applicationId'), c.req.param('applicationId'), now, c.req.param('applicationId'), application.status, now),
     c.env.DB.prepare(
       `INSERT INTO marketplace_audit_events
         (id, actor_user_id, action, target_type, target_id, reason, prior_state, new_state, created_at)
        SELECT ?, ?, 'driver_document_reviewed', 'driver_application_document', ?, ?, ?, ?, ?
-        WHERE EXISTS (
-          SELECT 1 FROM driver_application_documents
-          WHERE id = ? AND application_id = ? AND review_status = ? AND reviewed_by = ? AND reviewed_at = ?
-            AND submission_version = (SELECT submission_version FROM driver_applications WHERE id = ?)
-        )`,
-    ).bind(crypto.randomUUID(), user.id, document.id, reason.trim(), document.review_status, newStatus, now,
-      document.id, c.req.param('applicationId'), newStatus, user.id, now, c.req.param('applicationId')),
+        WHERE changes() = 1`,
+    ).bind(crypto.randomUUID(), user.id, document.id, reason.trim(), document.review_status, newStatus, now),
     c.env.DB.prepare(
       `UPDATE driver_applications
           SET status = 'needs_correction', reviewer_reason = ?, applicant_message = ?,
@@ -814,13 +810,7 @@ adminDriversApp.post('/:applicationId/documents/:documentId/decision', async (c)
     ).bind(crypto.randomUUID(), user.id, c.req.param('applicationId'), applicationReason, application.status, now),
   ])
 
-  const reviewResult = await c.env.DB.prepare(
-    `SELECT document.review_status FROM driver_application_documents AS document
-       JOIN driver_applications AS application ON application.id = document.application_id
-      WHERE document.id = ? AND document.reviewed_by = ? AND document.reviewed_at = ?
-        AND document.submission_version = application.submission_version LIMIT 1`,
-  ).bind(document.id, user.id, now).first<{ review_status: string }>()
-  if (!reviewResult || reviewResult.review_status !== newStatus) {
+  if ((result[0]?.meta.changes ?? 0) !== 1) {
     return c.json(apiError('INVALID_DOCUMENT_STATE', 'This document changed before the review could be recorded.'), 409)
   }
 
