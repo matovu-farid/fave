@@ -132,3 +132,38 @@ No payment-provider contract, legal-policy approval, or payment launch gate was 
   booking, payment or notification was submitted. Race/approval behavior was
   exercised through production handlers and SQL in isolated integration tests;
   no staff-review browser UI exists yet to test those actions interactively.
+
+### Reached-call guard and approved hold windows — 16 October 2026
+
+- Browser validation exposed that a no-answer call enabled the Unavailable action.
+  Four real-SQLite regression cases reproduced incorrect HTTP 200 transitions for
+  no_answer, busy, voicemail and other outcomes. The conditional unavailable
+  UPDATE now requires a reached call, like confirmation. Failed decisions leave
+  the request awaiting follow-up and write no decision audit or client alert.
+  The staff screen disables both decisions until reached and uses outcome-aware
+  save feedback. A later reached call still permits an unavailable decision.
+- The owner confirmed 24 hours from staff confirmation for the saved-price quote
+  hold and a separate 30 minutes from deposit-checkout start. An integration test
+  starts checkout one millisecond before quote expiry, verifies both the selected
+  car and its driver's other car remain excluded for the full replacement hold,
+  then verifies release exactly at its deadline without waiting for Cron.
+- Isolated browser walkthrough at localhost:8790 used disposable synthetic users,
+  approved test documents, prices, call records and dates. Production handlers and
+  SQL were used; external identity/maps and the test clock were substituted. No
+  actual driver was called: the reached call was simulated through the call API.
+  Confirmed pending/no-payment messaging, unanswered-call disabled decisions, then
+  an explicit car/date confirmation, fixed UGX 484,000 quote, separate transport
+  lines, disclosure/contact consent, deposit-pending recovery after reload, and
+  exactly one booking. Starting checkout one minute before the 24-hour deadline
+  created a full 1,800-second hold. D1 fixture timestamps verified both durations.
+- At 390px, web consent checkbox clicks initially changed the glyph but left
+  aria-checked absent, so the browser's checkbox check failed. Shared CheckRow now
+  supplies flat aria-checked/aria-disabled alongside native accessibilityState.
+  Fresh export/browser verification confirms all seven controls report checked
+  and the deposit continuation becomes enabled. Console: no warnings/errors.
+- Full suite: 296 passed, zero failed/skipped. App lint/typecheck, Worker typecheck,
+  and diff checks passed. Independent review found no material issues. Browser
+  proof: /tmp/fave-unanswered-followup.jpg and /tmp/fave-30-minute-checkout.jpg.
+  The test build was cleared/re-exported with dotenv disabled and its local API
+  target verified; no real policy acceptance, booking, notification or payment was
+  submitted. This evidence does not complete the full live/provider/device gate.

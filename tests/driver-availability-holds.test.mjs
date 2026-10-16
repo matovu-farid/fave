@@ -58,3 +58,28 @@ test('quote holds remain private to the vehicle owner and do not appear on a dif
   }
   assert.deepEqual((await f.vehicle('GET', '/car-2/availability', { user: 'driver' })).body.holdsAndBookings, [])
 })
+
+test('checkout near the 24-hour quote deadline retains a full 30-minute hold for the car and driver', async (t) => {
+  const f = availabilityFixture(t)
+  f.sql.exec('UPDATE fare_policies SET quote_ttl_seconds = 86400, hold_ttl_seconds = 1800')
+  const confirmedAt = f.clock.now
+  const confirmed = await confirmAvailability(f)
+  assert.equal(confirmed.holdExpiresAt, confirmedAt + 86400000)
+  f.clock.now = confirmed.holdExpiresAt - 1
+  const checkoutStartedAt = f.clock.now
+  const booking = await f.trip('POST', '/confirm', { body: {
+    quoteId: confirmed.quoteId, accepted: true, contactSharingConsent: true, acceptedDisclosureIds: disclosureTypes,
+  } })
+  assert.equal(booking.status, 201, JSON.stringify(booking))
+  const search = `/catalog?startDate=${tripInput.startDate}&endDate=${tripInput.endDate}&partySize=2&luggageCount=1`
+  f.clock.now = confirmed.holdExpiresAt
+  assert.equal((await f.vehicle('GET', search)).body.vehicles.length, 0, 'quote expiry cannot release the new deposit hold or the driver’s other car')
+  const holds = (await f.vehicle('GET', '/car-1/availability', { user: 'driver' })).body.holdsAndBookings
+  assert.equal(holds.length, 1)
+  assert.equal(holds[0].status, 'deposit_pending')
+  assert.equal(holds[0].hold_expires_at, checkoutStartedAt + 1800000)
+  f.clock.now = checkoutStartedAt + 1800000 - 1
+  assert.equal((await f.vehicle('GET', search)).body.vehicles.length, 0)
+  f.clock.now += 1
+  assert.equal((await f.vehicle('GET', search)).body.vehicles.length, 2, 'both cars become available when the replacement hold expires, without waiting for cron')
+})
