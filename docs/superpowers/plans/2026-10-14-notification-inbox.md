@@ -109,9 +109,9 @@ Run `git diff --check`, inspect the changed files, and commit with `feat: add ve
 - Modify: `fave-worker/src/notification-store.ts` only if a transaction helper is needed
 - Test: `tests/notification-producers.test.mjs`
 
-- [ ] **Step 1: Add failing tests for existing domain transitions**
+- [x] **Step 1: Add tests for existing domain transitions**
 
-Cover the current quote request created, driver accepted/declined/expired, booking hold created, deposit-pending booking expired, and client withdrawal transitions. Assert authorized client/driver inbox recipients, correct event type/expiry, exactly one inbox event per transition, and rollback when event persistence fails. Do not invent payment completion or safety transitions that do not exist yet.
+Cover retained legacy driver acceptance/quote readiness, decline/expiry and withdrawal, plus current staff confirmation, booking hold creation and scheduled deposit expiry. New legacy offer creation is retired (HTTP 410) under the staff-confirmation design; do not restore it merely to satisfy the original producer list. Assert authorized client/driver inbox recipients, correct event type/expiry, exactly one inbox event per transition, and rollback when event persistence fails. Do not invent payment completion or safety transitions that do not exist yet.
 
 - [x] **Step 2: Run the focused tests and verify the missing-event failures**
 
@@ -121,9 +121,9 @@ Run `node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-ty
 
 Update only current `bookings.ts` state transitions. Build the event statements with `buildNotificationEventStatements` and append them to the exact same D1 `batch()` as the business mutation; gate notification inserts on a successful state transition. Check affected-row counts before returning success. A failed event/outbox write must not leave a committed transition without its durable notification. A later Queue/Expo failure must not roll back an already committed transition.
 
-- [ ] **Step 4: Verify transition, duplicate, expiry, and rollback cases**
+- [x] **Step 4: Verify transition, duplicate, expiry, and rollback cases**
 
-Run `node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test tests/notification-store.test.mjs tests/notification-producers.test.mjs` and `npm run typecheck` from `fave-worker/`.
+Run `node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test tests/notification-store.test.mjs tests/notification-producers.test.mjs tests/notification-deposit-expiry.test.mjs` and `npm run typecheck` from `fave-worker/`.
 Expected: repeated requests do not duplicate inbox rows; declined/expired 15-minute offers cannot remain actionable; transition and outbox commit/rollback together.
 
 - [ ] **Step 5: Commit current producers**
@@ -463,3 +463,37 @@ reset; production owner console retained. No production test event or push sent.
 - Read-only production checks:health/databaseok; signed-out inbox, operations
   notification health and staff security APIs401JSON; console200HTML after its
   trailing-slash redirect; unknown API404JSON. No live push was used as a probe.
+
+
+### Remaining producer integration coverage — 17 October 2026
+
+- Added six legacy acceptance/quote-readiness cases/subcases through production
+  Hono handlers and every database migration. Success creates one acceptance and
+  one quote-ready notice for the owning client only, with no private payload and
+  the quote's expiry. Repeated responses and recovery reads create no duplicates.
+  Acceptance outbox failure rolls the claim back; quote-ready outbox failure rolls
+  back the quote while preserving the earlier committed acceptance. Timeout
+  recovery reports quote_failed without announcing a nonexistent quote. Route
+  provider/no-route failures likewise cannot publish quote readiness or a booking.
+- Added six scheduled deposit-expiry cases in
+  tests/notification-deposit-expiry.test.mjs: just-before/exact deadline, repeated
+  and simultaneous sweeps, full rollback after outbox or audit failure with safe
+  retry, and competing confirmation/hold extension after candidate selection.
+  The expired transition, system audit and one client inbox/outbox event persist
+  together. A losing stale expiry changes none of the winner's artifacts.
+- Corrected the shared test map adapter's success discriminator from route to ok,
+  matching DrivingRouteResult. The new legacy success test first reproduced HTTP
+  422 from the incorrect fixture; it passes after fixture alignment. No production
+  handler or business behavior changed in this checkpoint.
+- Isolated browser walkthrough used actual Worker/static UI, production handlers,
+  all migrations and synthetic identities/booking/disclosures. Advanced only the
+  test clock to the deposit deadline and invoked the production expiry helper.
+  Verified the generic expiry inbox alert, its owning expired booking destination
+  without a payment action, single-read count, mark-all-read and reload persistence
+  at 390px; viewport restored. No browser warnings/errors, registered push tokens,
+  real calls, production records or charges. Proof:
+  /tmp/fave-deposit-expiry-inbox.jpg.
+- Spec and quality reviews found no actionable gaps in this coverage. Full suite
+  318 passed, zero failures/skips; app lint and app/Worker typechecks passed.
+  Test/docs-only change requires no Worker release. Issue 22 remains open for
+  real-device push and payment/trip/safety producers in their owning modules.

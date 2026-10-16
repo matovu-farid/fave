@@ -5,7 +5,9 @@ import { availabilityFixture, disclosureTypes, tripInput } from './helpers/avail
 function legacyOffer(f, { expiresAt = f.clock.now, status = 'pending' } = {}) {
   f.insert('driver_trip_offers', {
     id: 'legacy-offer', client_user_id: 'client-1', driver_application_id: 'driver-app',
-    vehicle_id: 'car-1', origin_json: '{}', destination_json: '{}',
+    vehicle_id: 'car-1',
+    origin_json: JSON.stringify({ input: tripInput.origin, address: tripInput.origin.address, latitude: 0.3, longitude: 32.5 }),
+    destination_json: JSON.stringify({ input: tripInput.destination, address: tripInput.destination.address, latitude: 0.44, longitude: 33.2 }),
     start_date: tripInput.startDate, end_date: tripInput.endDate, party_size: 2,
     luggage_count: 1, status, expires_at: expiresAt, created_at: f.clock.now - 900000,
   })
@@ -147,4 +149,100 @@ test('failed hold notification rolls back booking conversion and the client’s 
   assert.equal(f.sql.prepare("SELECT COUNT(*) AS count FROM policy_acceptances WHERE user_id = 'client-1'").get().count, 0)
   assert.equal(f.sql.prepare('SELECT terms_snapshot_json FROM trip_quotes').get().terms_snapshot_json, null)
   assert.equal(notices(f).length, 1, 'only the earlier availability confirmation remains')
+})
+
+
+test('legacy driver acceptance durably notifies only its client before making one private quote ready', async (t) => {
+  const f = availabilityFixture(t)
+  legacyOffer(f, { expiresAt: f.clock.now + 900000 })
+  const respond = () => f.trip('POST', '/driver-offers/legacy-offer/respond', { user: 'driver', body: { decision: 'accept' } })
+  const accepted = await respond()
+  assert.equal(accepted.status, 200)
+  assert.equal(accepted.body.status, 'quoted')
+  const quote = f.sql.prepare('SELECT * FROM trip_quotes').get()
+  assert.equal(quote.id, accepted.body.quoteId)
+  const storedOffer = f.sql.prepare('SELECT status, quote_id FROM driver_trip_offers').get()
+  assert.equal(storedOffer.status, 'quoted')
+  assert.equal(storedOffer.quote_id, quote.id)
+  const notificationRows = notices(f)
+  assert.equal(notificationRows.length, 2)
+  const acceptance = notificationRows.find(row => row.event_type === 'booking.driver_offer_accepted')
+  const ready = notificationRows.find(row => row.event_type === 'booking.quote_status_changed')
+  assert.ok(acceptance)
+  assert.equal(acceptance.expires_at, null)
+  assert.ok(ready)
+  assert.equal(ready.expires_at, quote.expires_at)
+  for (const row of notificationRows) {
+    assert.equal(row.domain_id, 'legacy-offer')
+    assert.equal(row.recipient_user_id, 'client-1')
+    assert.equal(row.payload_json, '{}')
+  }
+  assert.equal(f.sql.prepare('SELECT COUNT(*) AS count FROM bookings').get().count, 0)
+  assert.equal((await respond()).status, 409)
+  assert.equal((await f.trip('GET', '/quote-requests/current')).body.offer.quote.quoteId, quote.id)
+  assert.equal((await f.trip('GET', '/quote-requests/legacy-offer')).body.quoteId, quote.id)
+  assert.equal(notices(f).length, 2, 'response retries and recovery reads cannot duplicate the notices')
+  assert.equal(f.sql.prepare('SELECT COUNT(*) AS count FROM trip_quotes').get().count, 1)
+})
+
+
+test('an acceptance outbox failure leaves the legacy offer pending and retry creates one quote', async (t) => {
+  const f = availabilityFixture(t)
+  legacyOffer(f, { expiresAt: f.clock.now + 900000 })
+  f.sql.exec(`CREATE TRIGGER reject_legacy_acceptance BEFORE INSERT ON notification_outbox
+    BEGIN SELECT RAISE(ABORT, 'injected acceptance outbox failure'); END`)
+  const respond = () => f.trip('POST', '/driver-offers/legacy-offer/respond', { user: 'driver', body: { decision: 'accept' } })
+  await assert.rejects(respond, /injected acceptance outbox failure/u)
+  const offer = f.sql.prepare('SELECT status, responded_at, quote_id FROM driver_trip_offers').get()
+  assert.equal(offer.status, 'pending')
+  assert.equal(offer.responded_at, null)
+  assert.equal(offer.quote_id, null)
+  for (const table of ['trip_quotes', 'notification_events', 'notifications', 'notification_outbox']) {
+    assert.equal(f.sql.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get().count, 0, table)
+  }
+  f.sql.exec('DROP TRIGGER reject_legacy_acceptance')
+  assert.equal((await respond()).status, 200)
+  assert.equal(notices(f).length, 2)
+  assert.equal(f.sql.prepare('SELECT COUNT(*) AS count FROM trip_quotes').get().count, 1)
+})
+
+test('a quote-ready outbox failure rolls back the quote and preserves the earlier acceptance event', async (t) => {
+  const f = availabilityFixture(t)
+  legacyOffer(f, { expiresAt: f.clock.now + 900000 })
+  f.sql.exec(`CREATE TRIGGER reject_legacy_quote_ready BEFORE INSERT ON notification_outbox
+    WHEN (SELECT event.event_type FROM notifications AS inbox JOIN notification_events AS event ON event.id = inbox.event_id WHERE inbox.id = NEW.notification_id) = 'booking.quote_status_changed'
+    BEGIN SELECT RAISE(ABORT, 'injected quote outbox failure'); END`)
+  const respond = () => f.trip('POST', '/driver-offers/legacy-offer/respond', { user: 'driver', body: { decision: 'accept' } })
+  await assert.rejects(respond, /injected quote outbox failure/u)
+  const offer = f.sql.prepare('SELECT status, quote_id FROM driver_trip_offers').get()
+  assert.equal(offer.status, 'quoting')
+  assert.equal(offer.quote_id, null)
+  assert.equal(f.sql.prepare('SELECT COUNT(*) AS count FROM trip_quotes').get().count, 0)
+  assert.equal(notices(f).length, 1)
+  assert.equal(notices(f)[0].event_type, 'booking.driver_offer_accepted')
+  assert.equal(notices(f)[0].recipient_user_id, 'client-1')
+  assert.equal(f.sql.prepare("SELECT COUNT(*) AS count FROM notification_events WHERE event_type = 'booking.quote_status_changed'").get().count, 0)
+  assert.equal((await respond()).status, 409, 'an accepted offer cannot be claimed twice')
+  f.clock.now += 900000
+  const recovered = await f.trip('GET', '/quote-requests/current')
+  assert.equal(recovered.body.offer.status, 'quote_failed')
+  assert.equal(notices(f).length, 1, 'timeout recovery must not advertise a nonexistent quote')
+  assert.equal(f.sql.prepare('SELECT COUNT(*) AS count FROM trip_quotes').get().count, 0)
+})
+
+test('legacy routing failure does not publish a quote-ready event or create a booking', async (t) => {
+  for (const kind of ['provider_error', 'no_route']) await t.test(kind, async (t) => {
+    const f = availabilityFixture(t)
+    legacyOffer(f, { expiresAt: f.clock.now + 900000 })
+    f.maps.computeDrivingRoute = async () => ({ kind })
+    const response = await f.trip('POST', '/driver-offers/legacy-offer/respond', { user: 'driver', body: { decision: 'accept' } })
+    assert.equal(response.status, kind === 'provider_error' ? 503 : 422)
+    assert.equal(response.body.status, 'quote_failed')
+    assert.equal(f.sql.prepare('SELECT status FROM driver_trip_offers').get().status, 'quote_failed')
+    assert.equal(notices(f).length, 1)
+    assert.equal(notices(f)[0].event_type, 'booking.driver_offer_accepted')
+    for (const table of ['trip_quotes', 'bookings']) {
+      assert.equal(f.sql.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get().count, 0, table)
+    }
+  })
 })

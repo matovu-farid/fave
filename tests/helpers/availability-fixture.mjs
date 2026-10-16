@@ -93,7 +93,7 @@ export function availabilityFixture(t) {
   const maps = {
     parseLocationInput: (value) => value && typeof value === 'object' && (typeof value.address === 'string' && value.address.trim() || Number.isFinite(value.latitude) && Number.isFinite(value.longitude)) ? value : null,
     classifyLocation: async (_env, input) => ({ kind: 'resolved', countryCode: 'UG', pickupArea: 'Kampala', broadArea: 'Kampala', formattedAddress: input.address ?? 'Pinned pickup', latitude: 0.3, longitude: 32.5 }),
-    computeDrivingRoute: async () => ({ kind: 'route', distanceMeters: 80000, durationSeconds: 7200 }),
+    computeDrivingRoute: async () => ({ kind: 'ok', distanceMeters: 80000, durationSeconds: 7200 }),
   }
   function load(path) {
     if (path === `${worker}/src/auth.ts`) return { createAuth: () => ({ api: { getSession: async ({ headers }) => {
