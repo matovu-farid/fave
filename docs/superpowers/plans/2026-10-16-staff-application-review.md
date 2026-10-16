@@ -71,17 +71,17 @@ assert.equal(f.sql.prepare("SELECT review_status FROM driver_application_documen
 
 ## Task 5: Hosting, independent review and browser validation
 
-- [ ] Add Worker assets for Expo static output, with Worker-first `/api/*` and `/health`; unknown API paths must return JSON404. No private data in export. Production `apiBaseUrl` uses canonical same-origin for the hosted console; retain localhost proxy behavior.
-- [ ] Add packaging tests for API precedence, health and asset fallback. Run full tests, lint, app/Worker typecheck, Expo export and Worker dry-run.
-- [ ] Request independent security and implementation review through requesting-code-review. Assign read-only focused review, main only, no branch/worktree, no real private data. Fix every material finding and rerun affected checks.
-- [ ] Manually test isolated synthetic queues, both security choices, detail, navigation, correction/conflict/loading, evidence cleanup and relock at desktop and390px widths. Do not open genuine IDs or approve actual applicants for testing. Record what requires the owner’s real device ceremony.
+- [x] Add Worker assets for Expo static output, with Worker-first `/api/*` and `/health`; unknown API paths must return JSON404. No private data in export. Production `apiBaseUrl` uses canonical same-origin for the hosted console; retain localhost proxy behavior.
+- [x] Add packaging tests for API precedence, health and asset fallback. Run full tests, lint, app/Worker typecheck, Expo export and Worker dry-run.
+- [x] Request independent security and implementation review through requesting-code-review. Assign read-only focused review, main only, no branch/worktree, no real private data. Fix every material finding and rerun affected checks.
+- [x] Manually test isolated synthetic queues, both security choices, detail, navigation, correction/conflict/loading, evidence cleanup and relock at desktop and390px widths. Do not open genuine IDs or approve actual applicants for testing. Record what requires the owner’s real device ceremony.
 
 ## Task 6: Provisioning and release
 
-- [ ] Document a stable-user-ID, audited operator provisioning/recovery procedure. Recovery revokes sessions, proof and old methods only after identity check. No self-promotion endpoint or email matching grants permission.
-- [ ] Update #7/#8/#17 with tested scope, remaining owner enrollment and deployment steps. Leave issues open until acceptance is established.
-- [ ] Commit main, push under existing authorization and check CI. Apply reviewed migration and publish verified Worker/static assets under existing production authorization, preserving previous version/config/bindings and rollback. Never activate fares or policies.
-- [ ] Open the canonical security screen for owner enrollment when deployed and provisioned. Report genuine remaining user action as one simple question. A synthetic assertion is not proof of owner browser enrollment.
+- [x] Document a stable-user-ID, audited operator provisioning/recovery procedure. Recovery revokes sessions, proof and old methods only after identity check. No self-promotion endpoint or email matching grants permission.
+- [x] Update #7/#8/#17 with tested scope, remaining owner enrollment and deployment steps. Leave issues open until acceptance is established.
+- [x] Commit main, push under existing authorization and check CI. Apply reviewed migration and publish verified Worker/static assets under existing production authorization, preserving previous version/config/bindings and rollback. Never activate fares or policies.
+- [x] Open the canonical security screen for owner enrollment when deployed and provisioned. Report genuine remaining user action as one simple question. A synthetic assertion is not proof of owner browser enrollment.
 
 ## Coverage review
 
@@ -116,3 +116,36 @@ an audit before returning409; six positive/conflict regressions pass.
 - Generated bundle contains public application code only. No fare or legal-policy
   publication is part of this release. Existing development-tool dependency
   advisories were inspected and documented separately from auth runtime changes.
+
+
+## Production release evidence
+
+- Main implementation commit:a07c4f576053e42a76b2eb8a39c0a1411a298649.
+- CI38904373016 completed successfully for that exact commit.
+- Applied additive migration0020_staff_review_security.sql successfully; no
+  pre-existing data tables removed. Provisioned the owner-confirmed stable user ID
+  through the audited operator procedure:one active reviewer, one grant audit.
+- Worker version:e53416a8-1d01-4666-b26f-6e97fb56e654, tagmain-a07c4f5.
+- Deployment:1a789099-5db5-4f7f-ab6a-4e90f887c5b9, created2026-10-16T13:15:22.15871Z,
+  serving100% of traffic. Existing bindings and runtime date/flags/usage preserved;
+  only the approved ASSETS binding and static routing configuration added.
+- Rollback version:7cc8058b-5450-485d-bdcc-800eb8b6acd1. Retain additive schema;
+  do not drop credential tables/triggers during rollback. Reassess access gates
+  before restoring older code which did not enforce reviewer verification.
+- Production health200/databaseok. Unknown API and auth routes404JSON.
+  Unauthenticated review security, driver pending and vehicle pending APIs401JSON
+  withprivate/no-store. All three static review pages200HTML withprivate/no-store.
+- Production data gates remain0 active approved fares and0 approved client terms/
+  privacy documents. No applicant evidence was accessed and no real application
+  decision was made in production.
+- Opened https://api.fave.fidexa.org/admin/review-security for the owner. The page
+  currently shows Google/Apple sign-in; requested the owner to sign in as the next
+  single step. Production credential enrollment and actual owner verification are
+  still pending, so related issues remainInprogress and the broader goal is open.
+
+### Remaining owner acceptance
+
+- [ ] Owner signs into the canonical staff console with the provisioned identity.
+- [ ] Owner enrolls/uses a real passkey and/or authenticator app, then verifies the
+  ten-minute unlock and explicit lock. Both enrollment paths are available;
+  enrolling both is optional. Automated synthetic credentials are not acceptance.
