@@ -37,4 +37,6 @@
 ### Task 4: Verify the migration
 
 - [x] Run the focused account and route-dependent tests, then `npm test`, `npx tsc --noEmit`, and `npx expo lint`.
-- [ ] After the owner chooses one of the two Google accounts in the browser, manually verify signed-in Home → Account (`/account`) and Back to Home. Direct `/account` while signed out correctly presents sign-in.
+- [x] Manually verify signed-in Home → Account (`/account`) and Back to Home. Direct `/account` while signed out correctly presents sign-in.
+
+**Browser evidence — 2026-10-16:** Signed in with the Google account selected by the owner, opened Account from Home, loaded the client/driver profile response, returned using Back to home, and confirmed the session survived a full browser reload. Account correctly disables profile saving while current approved client terms/privacy are missing. No profile, policy acceptance, or driver application was submitted.

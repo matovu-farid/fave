@@ -40,8 +40,7 @@ export default function AppTabs() {
   }, [session?.user.id]);
 
   return (
-    <Tabs>
-      <TabSlot style={{ height: '100%' }} />
+    <Tabs style={styles.tabs}>
       <TabList asChild>
         <CustomTabList>
           <TabTrigger name="home" href="/" asChild>
@@ -66,6 +65,7 @@ export default function AppTabs() {
           ) : null}
         </CustomTabList>
       </TabList>
+      <TabSlot style={styles.tabSlot} />
     </Tabs>
   );
 }
@@ -100,8 +100,15 @@ export function CustomTabList(props: TabListProps) {
 }
 
 const styles = StyleSheet.create({
+  tabs: {
+    flex: 1,
+    minHeight: 0,
+  },
+  tabSlot: {
+    flex: 1,
+    minHeight: 0,
+  },
   tabListContainer: {
-    position: 'absolute',
     width: '100%',
     padding: Spacing.three,
     justifyContent: 'center',
@@ -109,10 +116,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
   },
   innerContainer: {
+    width: '100%',
+    minWidth: 0,
     paddingVertical: Spacing.two,
-    paddingHorizontal: Spacing.five,
+    paddingHorizontal: Spacing.three,
     borderRadius: Spacing.five,
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     flexGrow: 1,
     gap: Spacing.two,
@@ -125,6 +135,8 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   tabButtonView: {
+    minHeight: 44,
+    justifyContent: 'center',
     paddingVertical: Spacing.one,
     paddingHorizontal: Spacing.three,
     borderRadius: Spacing.three,

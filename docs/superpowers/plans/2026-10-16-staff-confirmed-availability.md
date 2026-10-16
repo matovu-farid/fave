@@ -88,5 +88,6 @@ No payment-provider contract, legal-policy approval, or payment launch gate was 
 ### Latest checkpoint (2026-10-16)
 
 - Full suite: 193 passing, zero failing or skipped. App lint, app typecheck, Worker typecheck, and diff whitespace checks pass.
-- Browser at `http://localhost:8081` initially showed the owner's cached account state. Trips received HTTP 404 for the new availability API because its proxy uses the production Worker. Alerts then reported unauthorized, and a full page reload showed the sign-in page. Authentication is not yet verified; this is a partial browser check, not a completed booking walkthrough.
+- The initial browser session was stale. A fresh Google sign-in with the owner-selected account now survives a full reload; Home → Account → Back to home and the authenticated empty notification inbox work. Trips still receives HTTP 404 for the new availability API because its proxy uses the production Worker. Account independently confirms that approved client terms/privacy are unavailable. Full booking verification therefore remains blocked on the backend release and approved prerequisites; no profile, policy acceptance, booking, or payment was submitted.
+- Read-only Cloudflare checks confirm production Worker version `e6c5cd34-f131-4f93-838c-03c844d91aca` from `cc5e732` at 100% traffic, healthy API/D1, and only migration `0019` pending.
 - Production release approval remains pending. No production migration or Worker deployment was performed at this checkpoint.
