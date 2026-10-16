@@ -163,7 +163,22 @@ No payment-provider contract, legal-policy approval, or payment launch gate was 
   and the deposit continuation becomes enabled. Console: no warnings/errors.
 - Full suite: 296 passed, zero failed/skipped. App lint/typecheck, Worker typecheck,
   and diff checks passed. Independent review found no material issues. Browser
-  proof: /tmp/fave-unanswered-followup.jpg and /tmp/fave-30-minute-checkout.jpg.
+  proof: /tmp/fave-30-minute-checkout.jpg.
   The test build was cleared/re-exported with dotenv disabled and its local API
   target verified; no real policy acceptance, booking, notification or payment was
   submitted. This evidence does not complete the full live/provider/device gate.
+
+### Reached-call/accessibility release checkpoint
+
+- Released main implementation 23bfc7f28b7a54fe368367d21d1dbb3b8687f962 after
+  CI38942580757 passed for that exact commit. The production web export and Worker
+  packaging dry-run also passed. No migration was required.
+- Worker version5255a7e9-cbbf-4eb3-a5ae-0bd191972e92, tagmain-23bfc7f,
+  deployment9e59093e-5985-464b-8443-2d474442287e, created
+  2026-10-16T17:51:16.50235Z, serves100% traffic. Runtime and all17 bindings match
+  preceding version50a039e2-8b93-4a17-b317-2c47add038ec. Queue/Cron triggers,
+  fare-policy records, legal publication and payment activation were unchanged.
+- Read-only production smoke checks: health/database200ok; signed-out staff
+  availability, client request and review-security APIs401JSON; console200HTML.
+  The isolated test server/tab were stopped and the390px override was reset.
+  No production client consent, request, booking, driver call or charge was made.
