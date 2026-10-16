@@ -398,3 +398,51 @@ consumer duplicate-send risk remain; this is not an exactly-once push guarantee.
 - Remaining:consumer concurrency/lease behavior, delivery-time quiet-hour and
   expiry checks across slow sends, remaining producer integration coverage,
   real-device push and future domain/policy gates. The broader issue is open.
+
+### Delivery reliability implementation checkpoint
+
+Continue the approved duplicate/out-of-order/quiet-hours/expiry requirements in
+Task4. Reproduce overlapping consumers and delayed sends against real SQLite.
+Use an additive outbox dispatch-generation marker plus a renewable consumer lease
+so a stale Queue/DLQ message or expired worker cannot overwrite a newer attempt.
+New Queue envelopes carry only opaque delivery and generation IDs; legacy one-ID
+messages remain valid only for rows not yet assigned a generation. This refines
+the original one-ID implementation without adding personal data to Queues.
+
+Recheck Kampala quiet hours and expiry immediately before each device send and
+advance the clock across slow sends/batch messages. Bound upstream request time;
+retain accepted tickets and the documented upstream-acceptance/persistence crash
+window. Deferred ordinary alerts return to D1 for the next morning; urgent and
+time-sensitive alerts still bypass quiet hours. Operator retry creates a fresh
+generation; old DLQ outcomes cannot cancel that retry. Verify with meaningful
+concurrency, expiry, quiet-hour and stale-generation tests, then review, browser
+check, required repository checks and authorized production release.
+
+### Delivery reliability verification — 16 October 2026
+
+Six real-SQLite reproductions failed before implementation:parallel device sends,
+quiet-hour retry bypass, expiry crossed between devices, missing upstream expiry,
+stale DLQ overwriting complete, and old DLQ cancelling a newer operator retry.
+Two further reproductions found stale operator suppression overwriting a newer
+attempt and an unsuccessful queued retry writing a false success audit; both now
+use conditional generation/status/lease guards and transaction-linked audits.
+
+The reliability suite has14 tests, including abandoned lease recovery, stale
+sender completion after takeover, consumer completion before dispatcher commit,
+legacy message invalidation after fresh generation, quiet-hour crossing/resume,
+and failed-device-only retry. Busy/unknown persistence outcomes wait121seconds;
+normal transient send failure retains60seconds. The15-second upstream abort and
+absolute Expo expiration reduce requests continuing past the lease/domain window.
+The accepted-upstream-before-ticket-persistence crash window remains documented.
+
+Full suite291 passed with zero failures/skips. Expo lint, app TypeScript, Worker
+TypeScript and Worker packaging dry-run passed. Independent review of the lease/
+generation flow and operator follow-up found no remaining material issues; an
+additional adversarial takeover probe also preserved the replacement ticket.
+
+Browser:actual Worker/static app with an isolated synthetic database and simulated
+night clock. Operations renders one pending/deferred and one expired delivery;
+neither attempted a push. At390px, both original inbox records remain with two
+unread items. No console errors/warnings. Screenshot:
+/tmp/fave-notification-timing-status.jpg. Test server/tab stopped and viewport
+reset; production owner console retained. No production test event or push sent.

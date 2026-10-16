@@ -35,6 +35,7 @@ function createDatabase() {
   db.exec(readFileSync(authMigrationPath, 'utf8'))
   db.exec(readFileSync(tokenMigrationPath, 'utf8'))
   db.exec(readFileSync(notificationMigrationPath, 'utf8'))
+  db.exec(readFileSync(new URL('../fave-worker/migrations/0021_notification_delivery_leases.sql', import.meta.url), 'utf8'))
   db.prepare('INSERT INTO user (id, name, email, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?)')
     .run('user-1', 'One', 'one@example.test', 1, 1)
   db.prepare('INSERT INTO user (id, name, email, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?)')

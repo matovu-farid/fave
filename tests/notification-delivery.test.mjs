@@ -11,13 +11,18 @@ const source = fileURLToPath(new URL('../fave-worker/src/notification-delivery.t
 function loadDelivery({ due = [], fetcher = async () => Response.json({ data: [{ status: 'ok', id: 'ticket-1' }] }) } = {}) {
   const exports = {}
   const statements = []
+  const sendState = {}
+  vm.runInNewContext(ts.transpileModule(readFileSync(new URL('../fave-worker/src/notification-send-state.ts', import.meta.url), 'utf8'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS },
+  }).outputText, { exports: sendState, crypto: webcrypto })
   const code = ts.transpileModule(readFileSync(source, 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, esModuleInterop: true },
   }).outputText
   vm.runInNewContext(code, {
     exports,
     require: name => {
-      if (name === './notification-store') return { claimDueNotificationDeliveries: async () => due }
+      if (name === './notification-store') return { claimDueNotificationDeliveries: async () => due, pushNotBefore: (_priority, now) => now }
+      if (name === './notification-send-state') return sendState
       if (name === './notification-audience') return {
         loadNotificationDelivery: async (db) => db.delivery,
         isNotificationRecipientEligible: async () => true,
@@ -31,6 +36,7 @@ function loadDelivery({ due = [], fetcher = async () => Response.json({ data: [{
     Promise,
     crypto: webcrypto,
     fetch,
+    AbortSignal,
   })
   return { ...exports, statements, fetcher }
 }
@@ -38,7 +44,7 @@ function loadDelivery({ due = [], fetcher = async () => Response.json({ data: [{
 function fakeDb({ delivery = null, devices = [] } = {}) {
   const queries = []
   return {
-    delivery,
+    delivery: delivery ? { queueGeneration: null, notBefore: 0, ...delivery } : null,
     queries,
     prepare(sql) {
       const query = { sql, args: [] }
@@ -91,7 +97,8 @@ test('outbox dispatcher enqueues only delivery IDs and returns enqueue failures 
   const queued = await dispatchDueNotificationDeliveries(env, 1000)
 
   assert.equal(queued, 1)
-  assert.deepEqual(JSON.parse(JSON.stringify(sent)), [{ deliveryId: 'delivery-1' }, { deliveryId: 'delivery-2' }])
+  assert.deepEqual(sent.map((message) => message.deliveryId), ['delivery-1', 'delivery-2'])
+  assert.ok(sent.every((message) => Object.keys(message).sort().join(',') === 'deliveryId,generation' && typeof message.generation === 'string'))
   assert.equal(db.queries.some(query => /SET status = 'queued'/u.test(query.sql)), true)
   assert.equal(db.queries.some(query => /SET status = 'pending'/u.test(query.sql) && /queue_enqueue_failed/u.test(query.sql)), true)
 })
@@ -137,13 +144,13 @@ test('expired and unregistered notifications are acknowledged without sending ne
   await handleNotificationQueue({ queue: 'fave-notification-delivery', messages: [expiredMessage] }, { DB: expiredDb }, fetcher, 1000)
   assert.equal(expiredMessage.calls.ack, 1)
   assert.equal(sends, 0)
-  assert.equal(expiredDb.queries.some(query => /status = 'expired'/u.test(query.sql)), true)
+  assert.equal(expiredDb.queries.some(query => query.args.includes('expired')), true)
 
   const noDevicesDb = fakeDb({ delivery: { ...expired, expiresAt: null } })
   const noDevicesMessage = queueMessage({ deliveryId: expired.deliveryId })
   await handleNotificationQueue({ queue: 'fave-notification-delivery', messages: [noDevicesMessage] }, { DB: noDevicesDb }, fetcher, 1000)
   assert.equal(noDevicesMessage.calls.ack, 1)
-  assert.equal(noDevicesDb.queries.some(query => /status = 'suppressed'/u.test(query.sql)), true)
+  assert.equal(noDevicesDb.queries.some(query => query.args.includes('suppressed')), true)
   assert.equal(sends, 0)
 })
 

@@ -77,14 +77,17 @@ adminNotificationsApp.post('/:deliveryId/retry', async (c) => {
   }
   const now = Date.now()
   if (current.expiresAt !== null && current.expiresAt <= now) {
-    await c.env.DB.batch([
-      c.env.DB.prepare("UPDATE notification_outbox SET status = 'expired', lease_until = NULL WHERE delivery_id = ?")
-        .bind(deliveryId),
+    const expired = await c.env.DB.batch([
+      c.env.DB.prepare(`UPDATE notification_outbox SET status = 'expired', lease_until = NULL
+        WHERE delivery_id = ? AND queue_generation IS ? AND status IN ('failed', 'dead_lettered', 'complete')
+          AND (send_lease_until IS NULL OR send_lease_until <= ?)`)
+        .bind(deliveryId, current.queueGeneration, now),
       c.env.DB.prepare(
         `INSERT INTO notification_retry_audit (id, delivery_id, actor_user_id, reason, result, created_at)
-         VALUES (?, ?, ?, 'operator_retry', 'expired', ?)`,
+         SELECT ?, ?, ?, 'operator_retry', 'expired', ? WHERE changes() = 1`,
       ).bind(crypto.randomUUID(), deliveryId, access.user.id, now),
     ])
+    if (expired[0]?.meta.changes !== 1) return c.json(apiError('NOTIFICATION_DELIVERY_NOT_FOUND', 'This failed notification delivery was not found.'), 404)
     await writeMarketplaceAudit(c.env, {
       actorUserId: access.user.id, action: 'notification_retry_expired',
       targetType: 'notification_delivery', targetId: deliveryId,
@@ -96,14 +99,17 @@ adminNotificationsApp.post('/:deliveryId/retry', async (c) => {
     'SELECT 1 AS available FROM notification_push_tokens WHERE user_id = ? LIMIT 1',
   ).bind(current.recipientUserId).first<{ available: number }>() : null
   if (!device) {
-    await c.env.DB.batch([
-      c.env.DB.prepare("UPDATE notification_outbox SET status = 'suppressed', lease_until = NULL, last_error_category = ? WHERE delivery_id = ?")
-        .bind(eligible ? 'push_disabled' : 'recipient_ineligible', deliveryId),
+    const suppressed = await c.env.DB.batch([
+      c.env.DB.prepare(`UPDATE notification_outbox SET status = 'suppressed', lease_until = NULL, last_error_category = ?
+        WHERE delivery_id = ? AND queue_generation IS ? AND status IN ('failed', 'dead_lettered', 'complete')
+          AND (send_lease_until IS NULL OR send_lease_until <= ?)`)
+        .bind(eligible ? 'push_disabled' : 'recipient_ineligible', deliveryId, current.queueGeneration, now),
       c.env.DB.prepare(
         `INSERT INTO notification_retry_audit (id, delivery_id, actor_user_id, reason, result, created_at)
-         VALUES (?, ?, ?, 'operator_retry', 'suppressed', ?)`,
+         SELECT ?, ?, ?, 'operator_retry', 'suppressed', ? WHERE changes() = 1`,
       ).bind(crypto.randomUUID(), deliveryId, access.user.id, now),
     ])
+    if (suppressed[0]?.meta.changes !== 1) return c.json(apiError('NOTIFICATION_DELIVERY_NOT_FOUND', 'This failed notification delivery was not found.'), 404)
     await writeMarketplaceAudit(c.env, {
       actorUserId: access.user.id, action: 'notification_retry_suppressed',
       targetType: 'notification_delivery', targetId: deliveryId,
@@ -111,31 +117,36 @@ adminNotificationsApp.post('/:deliveryId/retry', async (c) => {
     return c.json({ result: 'suppressed' })
   }
 
+  const generation = crypto.randomUUID()
   const queued = await c.env.DB.batch([
     c.env.DB.prepare(
       `UPDATE notification_outbox SET status = 'queued', queued_at = ?, lease_until = NULL,
-           last_error_category = NULL WHERE delivery_id = ? AND status IN ('failed', 'dead_lettered', 'complete')`,
-    ).bind(now, deliveryId),
+           last_error_category = NULL, queue_generation = ?, send_lease_token = NULL, send_lease_until = NULL
+        WHERE delivery_id = ? AND queue_generation IS ? AND status IN ('failed', 'dead_lettered', 'complete')
+          AND (send_lease_until IS NULL OR send_lease_until <= ?)`,
+    ).bind(now, generation, deliveryId, current.queueGeneration, now),
     c.env.DB.prepare(
       `UPDATE notification_deliveries SET status = 'queued', last_error_category = NULL, updated_at = ?
-        WHERE delivery_id = ? AND status IN ('failed', 'dead_lettered', 'retrying')`,
+        WHERE delivery_id = ? AND status IN ('failed', 'dead_lettered', 'retrying') AND changes() = 1`,
     ).bind(now, deliveryId),
     c.env.DB.prepare(
       `INSERT INTO notification_retry_audit (id, delivery_id, actor_user_id, reason, result, created_at)
-       VALUES (?, ?, ?, 'operator_retry', 'queued', ?)`,
-    ).bind(crypto.randomUUID(), deliveryId, access.user.id, now),
+       SELECT ?, ?, ?, 'operator_retry', 'queued', ? WHERE EXISTS (
+         SELECT 1 FROM notification_outbox WHERE delivery_id = ? AND queue_generation = ? AND status = 'queued')`,
+    ).bind(crypto.randomUUID(), deliveryId, access.user.id, now, deliveryId, generation),
   ])
   if (queued[0]?.meta.changes !== 1) {
     return c.json(apiError('NOTIFICATION_DELIVERY_NOT_FOUND', 'This failed notification delivery was not found.'), 404)
   }
   try {
-    await c.env.NOTIFICATION_QUEUE.send({ deliveryId })
+    await c.env.NOTIFICATION_QUEUE.send({ deliveryId, generation })
   } catch {
     await c.env.DB.batch([
       c.env.DB.prepare(
         `UPDATE notification_outbox SET status = 'failed', last_error_category = 'queue_enqueue_failed'
-          WHERE delivery_id = ? AND status = 'queued'`,
-      ).bind(deliveryId),
+          WHERE delivery_id = ? AND queue_generation = ? AND status = 'queued'
+            AND (send_lease_until IS NULL OR send_lease_until <= ?)`,
+      ).bind(deliveryId, generation, now),
       c.env.DB.prepare(
         `INSERT INTO notification_retry_audit (id, delivery_id, actor_user_id, reason, result, created_at)
          VALUES (?, ?, ?, 'operator_retry', 'failed', ?)`,

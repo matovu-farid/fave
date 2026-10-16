@@ -28,7 +28,7 @@ Cloudflare Queues provides at-least-once delivery, so consumers must tolerate du
 
 Each domain event has a stable ID, a versioned event type, an occurrence time, an optional expiry time, a domain reference, and an explicit recipient list resolved by server-side role and ownership checks. Event payloads contain only the fields required to create a notification; presentation text is rendered from versioned server templates rather than arbitrary client input.
 
-Within the same D1 transaction that commits a supported business-state change, the producer records the domain event, one inbox item per eligible recipient, and one outbox entry per push delivery. Unique constraints on `(event_id, recipient_user_id)` and the outbox delivery ID prevent duplicate inbox records and ordinary duplicate enqueue work. Queue messages contain only the opaque delivery ID; notification copy, recipient identity, target route, preferences, expiry, and device tokens remain in D1.
+Within the same D1 transaction that commits a supported business-state change, the producer records the domain event, one inbox item per eligible recipient, and one outbox entry per push delivery. Unique constraints on `(event_id, recipient_user_id)` and the outbox delivery ID prevent duplicate inbox records and ordinary duplicate enqueue work. Queue messages contain only opaque delivery and dispatch-generation IDs; notification copy, recipient identity, target route, preferences, expiry, and device tokens remain in D1.
 
 The V1 contract catalog covers:
 
@@ -106,3 +106,19 @@ Business requests must succeed or fail independently of push delivery. A failure
 - Do not add automatic notification-history deletion until retention is selected.
 - Do not claim that Expo acceptance proves device delivery or user visibility.
 - Do not expand issue #17's admin workflows beyond notification health and audited delivery retry.
+
+
+## Delivery implementation refinement — 16 October 2026
+
+Migration0021 adds nullable dispatch generation and consumer lease columns. Fresh
+Queue messages carry `{ deliveryId, generation }`, both opaque IDs. Old one-ID
+messages are accepted only while that outbox row has no generation. A120-second
+renewable consumer lease serializes normal device sends; token/generation-guarded
+updates prevent stale completion, DLQ or operator work from changing a newer
+attempt. Transient sends keep the60-second retry; contention waits121seconds for
+lease expiry. Each upstream request has a15-second abort signal. Delivery-time
+quiet-hour and expiry checks repeat before every device; expiring events also
+supply Expo's absolute expiration. These measures limit duplicate/stale sends but
+do not remove the documented upstream-acceptance/persistence crash window. See
+[delivery operations](../../runbooks/notification-delivery.md) for compatible
+rollout/rollback and diagnostics.

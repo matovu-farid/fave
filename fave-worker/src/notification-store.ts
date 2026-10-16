@@ -24,7 +24,7 @@ function changedRows(result: D1Result<unknown>): number {
   return result.meta.changes ?? 0
 }
 
-function pushNotBefore(priority: 'ordinary' | 'urgent' | 'time_sensitive', now: number): number {
+export function pushNotBefore(priority: string, now: number): number {
   if (priority !== 'ordinary') return now
   const kampala = new Date(now + 3 * 60 * 60 * 1000)
   const hour = kampala.getUTCHours()
@@ -276,13 +276,14 @@ export async function claimDueNotificationDeliveries(
          WHERE status IN ('pending', 'processing') AND not_before <= ?
            AND (expires_at IS NULL OR expires_at > ?)
            AND (lease_until IS NULL OR lease_until <= ?)
+           AND (send_lease_until IS NULL OR send_lease_until <= ?)
          ORDER BY not_before ASC, created_at ASC
          LIMIT ?
       )
       RETURNING delivery_id AS deliveryId, notification_id AS notificationId,
                 event_id AS eventId, recipient_user_id AS recipientUserId,
                 expires_at AS expiresAt, attempt_count AS attemptCount`,
-  ).bind(leaseUntil, now, now, now, now, safeLimit).all<{
+  ).bind(leaseUntil, now, now, now, now, now, safeLimit).all<{
     deliveryId: string
     notificationId: string
     eventId: string

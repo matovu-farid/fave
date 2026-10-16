@@ -168,7 +168,11 @@ function loadAdminRoutes({ user = { id: 'admin-1' }, admin = true, current = nul
 
 function adminContext(DB, deliveryId = 'delivery-1') {
   return {
-    env: { DB, NOTIFICATION_QUEUE: { async send(message) { assert.deepEqual(JSON.parse(JSON.stringify(message)), { deliveryId }) } } },
+    env: { DB, NOTIFICATION_QUEUE: { async send(message) {
+      assert.equal(message.deliveryId, deliveryId)
+      assert.equal(typeof message.generation, 'string')
+      assert.equal(Object.keys(message).sort().join(','), 'deliveryId,generation')
+    } } },
     req: { raw: new Request('https://fave.test/api/admin/notifications/health'), param: () => deliveryId },
     json: (payload, status = 200) => ({ payload, status }),
   }

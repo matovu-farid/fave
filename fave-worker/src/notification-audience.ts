@@ -5,6 +5,7 @@ export type NotificationDelivery = {
   eventType: string; eventVersion: number; domainType: string; targetId: string
   templateKey: string; routeKey: string; priority: string; expiresAt: number | null
   status: string
+  queueGeneration: string | null; notBefore: number; sendLeaseUntil: number | null
 }
 
 type Database = Pick<D1Database, 'prepare'>
@@ -14,6 +15,8 @@ export async function loadNotificationDelivery(db: Database, deliveryId: string)
     `SELECT outbox.delivery_id AS deliveryId, notification.id AS notificationId,
             outbox.recipient_user_id AS recipientUserId, notification.template_key AS templateKey,
             notification.route_key AS routeKey, notification.priority, outbox.status,
+            outbox.queue_generation AS queueGeneration, outbox.not_before AS notBefore,
+            outbox.send_lease_until AS sendLeaseUntil,
             event.event_type AS eventType, event.event_version AS eventVersion,
             event.domain_type AS domainType, event.domain_id AS targetId, event.expires_at AS expiresAt
        FROM notification_outbox AS outbox
