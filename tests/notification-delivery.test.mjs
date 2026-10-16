@@ -16,9 +16,14 @@ function loadDelivery({ due = [], fetcher = async () => Response.json({ data: [{
   }).outputText
   vm.runInNewContext(code, {
     exports,
-    require: name => name === './notification-store'
-      ? { claimDueNotificationDeliveries: async () => due }
-      : (() => { throw new Error(`Unexpected module: ${name}`) })(),
+    require: name => {
+      if (name === './notification-store') return { claimDueNotificationDeliveries: async () => due }
+      if (name === './notification-audience') return {
+        loadNotificationDelivery: async (db) => db.delivery,
+        isNotificationRecipientEligible: async () => true,
+      }
+      throw new Error(`Unexpected module: ${name}`)
+    },
     JSON,
     Date,
     Number,
@@ -33,6 +38,7 @@ function loadDelivery({ due = [], fetcher = async () => Response.json({ data: [{
 function fakeDb({ delivery = null, devices = [] } = {}) {
   const queries = []
   return {
+    delivery,
     queries,
     prepare(sql) {
       const query = { sql, args: [] }
@@ -42,6 +48,7 @@ function fakeDb({ delivery = null, devices = [] } = {}) {
         async first() {
           if (sql.includes('FROM notification_outbox AS outbox')) return delivery
           if (sql.includes('FROM notification_deliveries WHERE')) return null
+          if (sql.includes('FROM notification_push_tokens')) return devices.find((device) => device.id === query.args[0]) ?? null
           return null
         },
         async all() {

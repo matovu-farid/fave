@@ -148,6 +148,7 @@ export function availabilityFixture(t) {
     }
     insert('review_session_proofs', { session_id: `${user}-session`, source_session_id: `${user}-session`, user_id: user, origin: 'https://fave.test', method, credential_id: `${user}-key`, verified_at: clock.now, expires_at: clock.now + 600000 })
   }
-  return { sql, DB, clock, maps, insert, trip, staff, vehicle, reviewDriver, estimateAndRequest, logCall, grantReview, reviewVehicle, reviewSecurity }
+  const loadWorkerModule = (name) => load(resolve(worker, 'src', `${name}.ts`))
+  return { sql, DB, clock, maps, insert, trip, staff, vehicle, reviewDriver, estimateAndRequest, logCall, grantReview, reviewVehicle, reviewSecurity, loadWorkerModule }
 
 }

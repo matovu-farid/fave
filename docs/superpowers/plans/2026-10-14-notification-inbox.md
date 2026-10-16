@@ -342,3 +342,43 @@ all of them. Independent review confirmed the direct expiry rollback coverage.
   security APIs401JSON. Staff security API/static page retainprivate/no-store;
   static page200HTML. Unknown API404JSON. These are read-only smoke checks, not
   production end-to-end notification delivery or real-device push acceptance.
+
+### Recipient and device delivery checks — 16 October 2026
+
+Issue22 remains In progress. Investigation reproduced five failures against real
+production SQL: an unrelated recipient could receive an availability push; a
+second device still received a push after switching accounts or opting out while
+the first device was sending; sign-out during an in-flight request lost the
+accepted ticket and retried; and a delayed invalid-token receipt removed the new
+owner's registration.
+
+Implemented the existing delivery/retry requirements with one shared audience
+loader. It validates the event/inbox/outbox relationship and catalog fields, then
+resolves current availability-request, legacy-offer and booking ownership/roles.
+Booking driver membership uses the saved quote's driver, not a later vehicle
+owner. Revoked driver/admin roles fail closed. Future trip/payment/incident/support
+owners must supply their authoritative audience lookups when those modules ship;
+a catalog role string alone does not grant delivery access.
+
+The consumer rechecks audience and token ownership before each device send.
+Accepted tickets survive token removal/reassignment with a nullable token link;
+invalid-token response/receipt cleanup is ownership guarded. Completed and other
+terminal delivery replays cannot send old alerts to newly registered devices.
+Manual retry shares the audience checks and audits a terminal suppression.
+Completed expiry/suppression checks return HTTP200 with their existing typed
+result; actual enqueue remains202. Health excludes terminal suppressed/expired
+outboxes from retryable failures while preserving attempt history.
+
+Validation:13 new real-SQLite integration tests; full suite277 passed with zero
+failures/skips. Expo lint and app/Worker TypeScript passed. Independent review of
+both the access fixes and retry-result follow-up found no material issues.
+Browser:isolated actual Worker/static console with synthetic failed delivery;
+Retry rendered “Delivery was suppressed; no push was sent”, refreshed delivery
+counts and removed the Retry control. Checked at390px width; no browser errors or
+warnings. Screenshot:/tmp/fave-notification-safe-retry.jpg. Test tab/server closed;
+owner's production console retained. No real push or production record created.
+
+Limits:delivery cannot recall a request already sent to Expo. Registration/domain
+checks and the external send cannot share an atomic transaction. The existing
+upstream-acceptance-before-ticket-persistence crash window and concurrent Queue
+consumer duplicate-send risk remain; this is not an exactly-once push guarantee.

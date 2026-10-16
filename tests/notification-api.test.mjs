@@ -122,6 +122,10 @@ function loadAdminRoutes({ user = { id: 'admin-1' }, admin = true, current = nul
         isMarketplaceAdmin: async () => admin,
         writeMarketplaceAudit: async (_env, event) => { audits.push(event) },
       }
+      if (name === './notification-audience') return {
+        loadNotificationDelivery: async () => current,
+        isNotificationRecipientEligible: async () => true,
+      }
       throw new Error(`Unexpected module: ${name}`)
     },
     JSON,
@@ -145,7 +149,7 @@ function loadAdminRoutes({ user = { id: 'admin-1' }, admin = true, current = nul
         },
         async all() {
           if (sql.includes('GROUP BY status')) return { results: [{ status: 'failed', count: 1 }] }
-          if (sql.includes('WHERE delivery.status IN')) return { results: current ? [{
+          if (sql.includes('FROM notification_deliveries AS delivery')) return { results: current ? [{
             deliveryId: current.deliveryId, eventType: 'booking.driver_offer_created', status: current.status,
             attemptCount: 5, errorCategory: 'expo_temporary_failure', createdAt: 10,
           }] : [] }
@@ -191,7 +195,7 @@ test('admin retry refuses an expired delivery and audits the terminal outcome', 
   } })
   const ctx = adminContext(expired.DB)
   const response = await expired.routes.get('POST /:deliveryId/retry')(ctx)
-  assert.equal(response.status, 409)
+  assert.equal(response.status, 200)
   assert.deepEqual(JSON.parse(JSON.stringify(response.payload)), { result: 'expired' })
   assert.equal(expired.audits[0].action, 'notification_retry_expired')
   assert.equal(expired.statements.some(statement => statement.sql.includes('NOTIFICATION_QUEUE')), false)

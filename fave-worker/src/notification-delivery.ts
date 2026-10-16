@@ -1,18 +1,9 @@
 import type { AuthBindings } from './auth'
 import { claimDueNotificationDeliveries } from './notification-store'
+import { isNotificationRecipientEligible, loadNotificationDelivery } from './notification-audience'
 
 type NotificationQueueMessage = { deliveryId: string }
 type PushDevice = { id: string; token: string; platform: 'ios' | 'android' }
-type DeliveryRecord = {
-  deliveryId: string
-  notificationId: string
-  recipientUserId: string
-  templateKey: string
-  routeKey: string
-  targetId: string
-  priority: string
-  expiresAt: number | null
-}
 
 const pushCopy: Record<string, { title: string; body: string }> = {
   availability_confirmed: { title: 'Your car is available', body: 'Fave confirmed your dates. Review your saved-price quote before the hold expires.' },
@@ -69,23 +60,10 @@ export async function dispatchDueNotificationDeliveries(env: AuthBindings, now =
   return queued
 }
 
-async function loadDelivery(env: AuthBindings, deliveryId: string): Promise<DeliveryRecord | null> {
-  return env.DB.prepare(
-    `SELECT outbox.delivery_id AS deliveryId, outbox.notification_id AS notificationId,
-            outbox.recipient_user_id AS recipientUserId, notification.template_key AS templateKey,
-            notification.route_key AS routeKey, event.domain_id AS targetId,
-            notification.priority, outbox.expires_at AS expiresAt
-       FROM notification_outbox AS outbox
-       JOIN notifications AS notification ON notification.id = outbox.notification_id
-       JOIN notification_events AS event ON event.id = outbox.event_id
-      WHERE outbox.delivery_id = ? AND notification.recipient_user_id = outbox.recipient_user_id
-      LIMIT 1`,
-  ).bind(deliveryId).first<DeliveryRecord>()
-}
-
 async function recordDeviceDelivery(
   env: AuthBindings,
   deliveryId: string,
+  recipientUserId: string,
   device: PushDevice,
   status: string,
   now: number,
@@ -96,13 +74,15 @@ async function recordDeviceDelivery(
     `INSERT INTO notification_deliveries
        (id, delivery_id, push_token_id, platform, status, expo_ticket_id, attempt_count,
         last_error_category, last_attempt_at, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?)
+     VALUES (?, ?, (SELECT id FROM notification_push_tokens WHERE id = ? AND user_id = ? AND token = ?),
+       ?, ?, ?, 1, ?, ?, ?, ?)
      ON CONFLICT(delivery_id, push_token_id) DO UPDATE SET
        status = excluded.status, expo_ticket_id = excluded.expo_ticket_id,
        attempt_count = notification_deliveries.attempt_count + 1,
        last_error_category = excluded.last_error_category,
        last_attempt_at = excluded.last_attempt_at, updated_at = excluded.updated_at`,
-  ).bind(crypto.randomUUID(), deliveryId, device.id, device.platform, status, ticketId, errorCategory, now, now, now).run()
+  ).bind(crypto.randomUUID(), deliveryId, device.id, recipientUserId, device.token,
+    device.platform, status, ticketId, errorCategory, now, now, now).run()
 }
 
 async function sendToExpo(
@@ -144,17 +124,23 @@ async function consumeDelivery(
   fetcher: typeof fetch,
   now: number,
 ) {
-  const delivery = await loadDelivery(env, deliveryId)
+  const delivery = await loadNotificationDelivery(env.DB, deliveryId)
   if (!delivery) return 'ignored'
+  if (['complete', 'failed', 'dead_lettered', 'expired', 'suppressed'].includes(delivery.status)) return 'ignored'
   if (delivery.expiresAt !== null && delivery.expiresAt <= now) {
     await env.DB.prepare("UPDATE notification_outbox SET status = 'expired', lease_until = NULL WHERE delivery_id = ?")
       .bind(deliveryId).run()
     return 'expired'
   }
+  if (!(await isNotificationRecipientEligible(env.DB, delivery))) {
+    await env.DB.prepare("UPDATE notification_outbox SET status = 'suppressed', lease_until = NULL, last_error_category = 'recipient_ineligible' WHERE delivery_id = ?")
+      .bind(deliveryId).run()
+    return 'suppressed'
+  }
   const copy = safeNotificationCopy(delivery.templateKey)
   const devices = await env.DB.prepare(
-    `SELECT id, token, platform FROM notification_push_tokens WHERE user_id = ? ORDER BY last_registered_at DESC`,
-  ).bind(delivery.recipientUserId).all<PushDevice>()
+    `SELECT id FROM notification_push_tokens WHERE user_id = ? ORDER BY last_registered_at DESC`,
+  ).bind(delivery.recipientUserId).all<{ id: string }>()
   if (devices.results.length === 0) {
     await env.DB.prepare("UPDATE notification_outbox SET status = 'suppressed', lease_until = NULL WHERE delivery_id = ?")
       .bind(deliveryId).run()
@@ -162,20 +148,30 @@ async function consumeDelivery(
   }
 
   let retryableFailure = false
-  for (const device of devices.results) {
+  for (const candidate of devices.results) {
     const previous = await env.DB.prepare(
       `SELECT status FROM notification_deliveries WHERE delivery_id = ? AND push_token_id = ? LIMIT 1`,
-    ).bind(deliveryId, device.id).first<{ status: string }>()
+    ).bind(deliveryId, candidate.id).first<{ status: string }>()
     if (previous?.status === 'expo_accepted' || previous?.status === 'receipt_ok' || previous?.status === 'device_unregistered') continue
+    if (!(await isNotificationRecipientEligible(env.DB, delivery))) {
+      await env.DB.prepare("UPDATE notification_outbox SET status = 'suppressed', lease_until = NULL, last_error_category = 'recipient_ineligible' WHERE delivery_id = ?")
+        .bind(deliveryId).run()
+      return 'suppressed'
+    }
+    const device = await env.DB.prepare(
+      'SELECT id, token, platform FROM notification_push_tokens WHERE id = ? AND user_id = ? LIMIT 1',
+    ).bind(candidate.id, delivery.recipientUserId).first<PushDevice>()
+    if (!device) continue
     try {
       const result = await sendToExpo(fetcher, device.token, copy.title, copy.body, delivery.notificationId, delivery.routeKey, delivery.targetId)
       if ('deviceUnregistered' in result) {
-        await recordDeviceDelivery(env, deliveryId, device, 'device_unregistered', now, null, 'device_not_registered')
-        await env.DB.prepare('DELETE FROM notification_push_tokens WHERE id = ?').bind(device.id).run()
+        await recordDeviceDelivery(env, deliveryId, delivery.recipientUserId, device, 'device_unregistered', now, null, 'device_not_registered')
+        await env.DB.prepare('DELETE FROM notification_push_tokens WHERE id = ? AND user_id = ? AND token = ?')
+          .bind(device.id, delivery.recipientUserId, device.token).run()
       } else if ('permanentFailure' in result) {
-        await recordDeviceDelivery(env, deliveryId, device, 'failed', now, null, result.category)
+        await recordDeviceDelivery(env, deliveryId, delivery.recipientUserId, device, 'failed', now, null, result.category)
       } else {
-        await recordDeviceDelivery(env, deliveryId, device, 'expo_accepted', now, result.ticketId)
+        await recordDeviceDelivery(env, deliveryId, delivery.recipientUserId, device, 'expo_accepted', now, result.ticketId)
       }
     } catch (error) {
       const category = typeof error === 'object' && error !== null && 'category' in error
@@ -184,7 +180,7 @@ async function consumeDelivery(
       const retryable = typeof error === 'object' && error !== null && 'retryable' in error
         ? error.retryable === true
         : true
-      await recordDeviceDelivery(env, deliveryId, device, retryable ? 'retrying' : 'failed', now, null, category)
+      await recordDeviceDelivery(env, deliveryId, delivery.recipientUserId, device, retryable ? 'retrying' : 'failed', now, null, category)
       retryableFailure ||= retryable
     }
   }
@@ -273,7 +269,9 @@ export async function sweepExpoReceipts(env: AuthBindings, fetcher: typeof fetch
       }
       if (receipt.details?.error === 'DeviceNotRegistered' && item.tokenId) {
         await env.DB.batch([
-          env.DB.prepare('DELETE FROM notification_push_tokens WHERE id = ?').bind(item.tokenId),
+          env.DB.prepare(`DELETE FROM notification_push_tokens WHERE id = ? AND user_id =
+            (SELECT recipient_user_id FROM notification_outbox WHERE delivery_id = ?)`)
+            .bind(item.tokenId, item.deliveryId),
           env.DB.prepare(
             `UPDATE notification_deliveries SET status = 'device_unregistered', receipt_status = 'error',
                  last_error_category = 'device_not_registered', receipt_checked_at = ?, updated_at = ? WHERE id = ?`,

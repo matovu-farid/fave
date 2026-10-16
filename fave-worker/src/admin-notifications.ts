@@ -1,6 +1,7 @@
 import { Hono, type Context } from 'hono'
 import type { AuthBindings } from './auth'
 import { apiError, getSignedInUser, isMarketplaceAdmin, writeMarketplaceAudit } from './marketplace-auth'
+import { isNotificationRecipientEligible, loadNotificationDelivery } from './notification-audience'
 
 const adminNotificationsApp = new Hono<{ Bindings: AuthBindings }>()
 
@@ -31,8 +32,8 @@ adminNotificationsApp.get('/health', async (c) => {
          FROM notification_deliveries AS delivery
          JOIN notification_outbox AS outbox ON outbox.delivery_id = delivery.delivery_id
          JOIN notification_events AS event ON event.id = outbox.event_id
-        WHERE delivery.status IN ('failed', 'dead_lettered')
-           OR (outbox.status = 'complete' AND delivery.status = 'failed')
+        WHERE outbox.status IN ('failed', 'dead_lettered', 'complete')
+          AND delivery.status IN ('failed', 'dead_lettered')
         ORDER BY delivery.last_attempt_at DESC LIMIT 20`,
     ).all<{
       deliveryId: string; eventType: string; status: string; attemptCount: number
@@ -62,13 +63,7 @@ adminNotificationsApp.post('/:deliveryId/retry', async (c) => {
   if ('error' in access) return access.error
 
   const deliveryId = c.req.param('deliveryId')
-  const current = await c.env.DB.prepare(
-    `SELECT outbox.delivery_id AS deliveryId, outbox.status, outbox.expires_at AS expiresAt,
-            outbox.recipient_user_id AS recipientUserId
-       FROM notification_outbox AS outbox WHERE outbox.delivery_id = ? LIMIT 1`,
-  ).bind(deliveryId).first<{
-    deliveryId: string; status: string; expiresAt: number | null; recipientUserId: string
-  }>()
+  const current = await loadNotificationDelivery(c.env.DB, deliveryId)
   if (!current || !['failed', 'dead_lettered', 'complete'].includes(current.status)) {
     return c.json(apiError('NOTIFICATION_DELIVERY_NOT_FOUND', 'This failed notification delivery was not found.'), 404)
   }
@@ -94,15 +89,16 @@ adminNotificationsApp.post('/:deliveryId/retry', async (c) => {
       actorUserId: access.user.id, action: 'notification_retry_expired',
       targetType: 'notification_delivery', targetId: deliveryId,
     })
-    return c.json({ result: 'expired' }, 409)
+    return c.json({ result: 'expired' })
   }
-  const device = await c.env.DB.prepare(
+  const eligible = await isNotificationRecipientEligible(c.env.DB, current)
+  const device = eligible ? await c.env.DB.prepare(
     'SELECT 1 AS available FROM notification_push_tokens WHERE user_id = ? LIMIT 1',
-  ).bind(current.recipientUserId).first<{ available: number }>()
+  ).bind(current.recipientUserId).first<{ available: number }>() : null
   if (!device) {
     await c.env.DB.batch([
-      c.env.DB.prepare("UPDATE notification_outbox SET status = 'suppressed', lease_until = NULL WHERE delivery_id = ?")
-        .bind(deliveryId),
+      c.env.DB.prepare("UPDATE notification_outbox SET status = 'suppressed', lease_until = NULL, last_error_category = ? WHERE delivery_id = ?")
+        .bind(eligible ? 'push_disabled' : 'recipient_ineligible', deliveryId),
       c.env.DB.prepare(
         `INSERT INTO notification_retry_audit (id, delivery_id, actor_user_id, reason, result, created_at)
          VALUES (?, ?, ?, 'operator_retry', 'suppressed', ?)`,
@@ -112,7 +108,7 @@ adminNotificationsApp.post('/:deliveryId/retry', async (c) => {
       actorUserId: access.user.id, action: 'notification_retry_suppressed',
       targetType: 'notification_delivery', targetId: deliveryId,
     })
-    return c.json({ result: 'suppressed' }, 409)
+    return c.json({ result: 'suppressed' })
   }
 
   const queued = await c.env.DB.batch([
