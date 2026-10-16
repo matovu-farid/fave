@@ -12,7 +12,7 @@ test('client quote renders directional vehicle costs using server route snapshot
   assert.match(source, /quote\.quote\.returnRoute/u)
   assert.match(source, /component\.key === 'outbound_transport'/u)
   assert.match(source, /component\.key === 'return_transport'/u)
-  assert.match(source, /component\.unitRate\.toLocaleString\(\)/u)
+  assert.match(source, /component\.unitRate\.toLocaleString\(/u)
   assert.match(source, /\{quote\.quote\.currency\}\/km/u)
   assert.match(source, /getDriverAccommodationNotice\(quote\.quote\.components\)/u)
   assert.match(source, /!quote\.quote\.outboundRoute \|\| !quote\.quote\.returnRoute/u)

@@ -12,7 +12,7 @@ import { approvedVehicleEvidencePredicate } from './vehicles'
 import { availabilityAuditStatement, expireAvailabilityRequests, requestNeedsReviewPredicate, requestReviewBindings } from './availability-requests'
 import { buildNotificationEventStatements } from './notification-store'
 import type { NotificationEventInput } from './notification-contracts'
-import { calculateVehicleFareLeg, validateVehicleFareBenchmark } from './vehicle-fares'
+import { calculateVehicleFareLeg, parseVehicleFareBenchmarkBasis, validateVehicleFareBenchmark } from './vehicle-fares'
 import type { VehicleFareBenchmark } from './vehicle-fares'
 
 type FareComponent = {
@@ -173,6 +173,12 @@ tripsApp.post('/estimates', async (c) => {
   } catch { benchmark = null }
   if (!benchmark || !validateVehicleFareBenchmark(benchmark)) {
     return c.json(apiError('VEHICLE_FARE_UNAVAILABLE', 'This vehicle does not have an approved fare benchmark yet. Choose another car or try again later.'), 409)
+  }
+  const activeBasis = parseVehicleFareBenchmarkBasis(farePolicy.rules_json)
+  if (!activeBasis) return c.json(apiError('FARE_POLICY_UNAVAILABLE', 'The approved fare policy must include a valid vehicle pricing and rounding basis.'), 409)
+  if (activeBasis?.rounding === 'nearest_per_leg') {
+    // Apply the approved rule to new estimates, preserving this car's submitted route/amount ratio.
+    benchmark = { ...benchmark, basis: { ...benchmark.basis, rounding: 'nearest_per_leg' } }
   }
 
   const now = Date.now()
@@ -516,7 +522,7 @@ export function buildVehicleQuoteSnapshot(
   vehicleFareBenchmark: VehicleFareBenchmark,
   selectedVehicle?: { vehicleId: string; driverApplicationId: string },
 ): QuoteSnapshot | null {
-  if (!validateVehicleFareBenchmark(vehicleFareBenchmark)) return null
+  if (!validateVehicleFareBenchmark(vehicleFareBenchmark) || policy.currency !== vehicleFareBenchmark.currency) return null
   const parsedRules = parseFareRules(policy)
   if (!parsedRules) return null
   const nonDistancePolicy = {
@@ -547,11 +553,15 @@ export function buildVehicleQuoteSnapshot(
   ]
   const totalAmount = components.reduce((sum, component) => sum + component.amount, 0)
   if (!Number.isSafeInteger(totalAmount) || totalAmount > 10_000_000_000) return null
+  const depositAmount = vehicleFareBenchmark.basis.rounding === 'nearest_per_leg'
+    ? Number((BigInt(totalAmount) * BigInt(base.depositBasisPoints) + 5000n) / 10000n)
+    : Math.ceil(totalAmount * base.depositBasisPoints / 10_000)
+  if (depositAmount < 1) return null
   return {
     ...base,
     components,
     totalAmount,
-    depositAmount: Math.ceil(totalAmount * base.depositBasisPoints / 10_000),
+    depositAmount,
     outboundRoute,
     returnRoute,
     vehicleFareBenchmark,

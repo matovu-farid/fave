@@ -58,3 +58,25 @@ test('pricing basis is unavailable unless the approved fare policy supplies a va
   assert.equal(parseVehicleFareBenchmarkBasis(JSON.stringify({ vehicleBenchmark: { ...benchmark.basis, rounding: 'unknown' } })), null)
   assert.equal(parseVehicleFareBenchmarkBasis('{'), null)
 })
+
+const nearestBenchmark = { ...benchmark, basis: { ...benchmark.basis, rounding: 'nearest_per_leg' } }
+
+test('nearest whole-shilling pricing retains the precise benchmark ratio until each leg is rounded', () => {
+  assert.equal(validateVehicleFareBenchmark(nearestBenchmark), true)
+  assert.deepEqual(parseVehicleFareBenchmarkBasis(JSON.stringify({ vehicleBenchmark: nearestBenchmark.basis })), nearestBenchmark.basis)
+  const fractionalRate = { ...nearestBenchmark, amountUgx: 400001 }
+  const leg = calculateVehicleFareLeg(fractionalRate, 80001)
+  assert.equal(leg.amountUgx, 200003)
+  assert.equal(leg.rateUgxPerKm, 2500.00625)
+  assert.equal(calculateVehicleFareLeg({ ...nearestBenchmark, amountUgx: 100 }, 1666).amountUgx, 1)
+})
+
+test('nearest whole-shilling rounding resolves either side of a half shilling exactly', () => {
+  const small = { ...nearestBenchmark, amountUgx: 1, basis: { ...nearestBenchmark.basis, roundTripDistanceMeters: 1000 } }
+  assert.ok(calculateVehicleFareLeg(small, 1499))
+  assert.equal(calculateVehicleFareLeg(small, 1499).amountUgx, 1)
+  assert.equal(calculateVehicleFareLeg(small, 1500).amountUgx, 2)
+  assert.equal(calculateVehicleFareLeg(small, 1501).amountUgx, 2)
+  const huge = { ...small, amountUgx: 999999999 }
+  assert.equal(calculateVehicleFareLeg(huge, 9007199255).amountUgx, 9007199245992801)
+})

@@ -78,6 +78,22 @@ Manually test the web booking flow at `http://localhost:8081` and the physical-d
 ## Decisions still required before activation
 
 - Configure the exact fixed Kampala and Jinja reference endpoints and approve the corresponding Google Maps round-trip distance.
-- Confirm whole-shilling component rounding and fare/deposit behavior in #15.
+- Whole-shilling nearest rounding is owner-confirmed on 2026-10-16; finalize the remaining fee/deposit/provider decisions in #15.
 - Validate the driver-entered benchmark rates against actual operating costs and approved provider fees before enabling customer-facing quotes.
 - Complete counsel, provider, and launch approvals. This design is not legal approval or authorization to activate rates or charge customers.
+
+## Owner-confirmed currency and rounding update — 16 October 2026
+
+All client prices are UGX rounded to the nearest whole shilling. Retain the exact
+benchmark ratio during calculation; round each transport leg once using positive
+half-up ties. Sum rounded component amounts, round the deposit the same way, and
+subtract it from the total for the balance. Display fractional derived per-km
+rates as approximate whole-shilling figures; snapshots retain precise rates.
+
+The future approved policy explicitly selects vehicleBenchmark.rounding:
+nearest_per_leg. Its new estimates use that rule even for existing vehicles,
+without changing their original amount/route/distance ratio or rewriting stored
+vehicle submissions. Earlier saved estimates/quotes and their accepted extensions
+retain their own ceiling_per_leg or nearest_per_leg rule and price. Reject
+currency mismatches, unsafe amounts and zero-rounded deposits. This update does
+not approve provider-fee inclusion, activate a fare policy, or enable payments.

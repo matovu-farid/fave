@@ -6,7 +6,7 @@ export type VehicleBenchmarkBasis = {
   origin: { label: string; latitude: number; longitude: number }
   destination: { label: string; latitude: number; longitude: number }
   roundTripDistanceMeters: number
-  rounding: 'ceiling_per_leg'
+  rounding: 'nearest_per_leg' | 'ceiling_per_leg'
 }
 
 export type VehicleFareBenchmark = {
@@ -36,7 +36,7 @@ function isValidBasis(value: unknown): value is VehicleBenchmarkBasis {
     isValidPoint(basis.destination) &&
     Number.isSafeInteger(basis.roundTripDistanceMeters) &&
     Number(basis.roundTripDistanceMeters) > 0 &&
-    basis.rounding === 'ceiling_per_leg'
+    (basis.rounding === 'nearest_per_leg' || basis.rounding === 'ceiling_per_leg')
 }
 
 export function parseVehicleFareBenchmarkBasis(rulesJson: string): VehicleBenchmarkBasis | null {
@@ -70,7 +70,10 @@ export function calculateVehicleFareLeg(
 
   const numerator = BigInt(benchmark.amountUgx) * BigInt(legDistanceMeters)
   const denominator = BigInt(benchmark.basis.roundTripDistanceMeters)
-  const amount = (numerator + denominator - 1n) / denominator
+  // Preserve the saved rule for existing quotes; new approved policies select nearest_per_leg.
+  const amount = benchmark.basis.rounding === 'nearest_per_leg'
+    ? (numerator * 2n + denominator) / (denominator * 2n)
+    : (numerator + denominator - 1n) / denominator
   if (amount < 1n || amount > BigInt(Number.MAX_SAFE_INTEGER)) return null
 
   const rateUgxPerKm = benchmark.amountUgx * 1000 / benchmark.basis.roundTripDistanceMeters

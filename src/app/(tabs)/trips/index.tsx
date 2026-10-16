@@ -559,16 +559,16 @@ export default function TripsScreen() {
             component.unit === 'per_kilometer' ? 'km' :
               component.unit === 'per_passenger' ? 'passengers' : 'flat'
           return <View key={component.key} style={styles.quoteLine}>
-            <View>
+            <View style={styles.quoteDetails}>
               <ThemedText>{component.label}</ThemedText>
-              {routeLeg ? <ThemedText>{(routeLeg.distanceMeters / 1000).toFixed(1)} km · approx. {Math.ceil(routeLeg.durationSeconds / 60)} min · {component.unitRate.toLocaleString()} {quote.quote.currency}/km</ThemedText> : null}
+              {routeLeg ? <ThemedText>{(routeLeg.distanceMeters / 1000).toFixed(1)} km · approx. {Math.ceil(routeLeg.durationSeconds / 60)} min · approx. {component.unitRate.toLocaleString(undefined, { maximumFractionDigits: 0 })} {quote.quote.currency}/km</ThemedText> : null}
               {!routeLeg ? <ThemedText>{component.unitRate.toLocaleString()} {quote.quote.currency}{component.unit === 'fixed' ? ' flat' : ` × ${component.quantity} ${unitLabel}`}</ThemedText> : null}
             </View>
-            <ThemedText>{component.amount.toLocaleString()} {quote.quote.currency}</ThemedText>
+            <ThemedText style={styles.quoteAmount}>{component.amount.toLocaleString()} {quote.quote.currency}</ThemedText>
           </View>
         })}
         {getDriverAccommodationNotice(quote.quote.components) ? <ThemedText type="small">{getDriverAccommodationNotice(quote.quote.components)}</ThemedText> : null}
-        <View style={styles.quoteLine}><ThemedText type="smallBold">{availabilityRequest?.status === 'confirmed' ? 'Final trip total · same as your estimate' : isFinalQuote ? 'Trip total' : 'Estimated trip total'}</ThemedText><ThemedText type="smallBold">{quote.quote.totalAmount.toLocaleString()} {quote.quote.currency}</ThemedText></View>
+        <View style={styles.quoteLine}><ThemedText type="smallBold" style={styles.quoteDetails}>{availabilityRequest?.status === 'confirmed' ? 'Final trip total · same as your estimate' : isFinalQuote ? 'Trip total' : 'Estimated trip total'}</ThemedText><ThemedText type="smallBold" style={styles.quoteAmount}>{quote.quote.totalAmount.toLocaleString()} {quote.quote.currency}</ThemedText></View>
         {isFinalQuote ? <>
         <ThemedText>{availabilityRequest?.status === 'confirmed' ? 'Fave confirmed the car for your dates at your saved estimate price. The car is held until' : 'The driver accepted this earlier request. Review the quote before'} {new Date(quote.expiresAt).toLocaleString()}.</ThemedText>
         <ThemedText>Deposit to place a time-limited vehicle hold: {quote.quote.depositAmount.toLocaleString()} {quote.quote.currency}.</ThemedText>
@@ -609,6 +609,8 @@ const styles = StyleSheet.create({
   vehiclePhotos: { gap: Spacing.two },
   vehiclePhoto: { width: 280, height: 190, borderRadius: 14, backgroundColor: '#ddd' },
   quoteLine: { flexDirection: 'row', justifyContent: 'space-between', gap: Spacing.two },
+  quoteDetails: { flex: 1, minWidth: 0 },
+  quoteAmount: { flexShrink: 0, maxWidth: '45%', textAlign: 'right' },
   booking: { gap: Spacing.one, paddingVertical: Spacing.two, borderBottomWidth: 1, borderBottomColor: '#b8bbc2' },
   progressRow: { flexDirection: 'row', alignItems: 'flex-start' },
   progressStep: { flex: 1, alignItems: 'center', gap: Spacing.one },

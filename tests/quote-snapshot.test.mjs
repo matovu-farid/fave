@@ -251,7 +251,7 @@ test('client estimate is priced before intent and saved without creating a drive
   const route = { kind: 'route', distanceMeters: 80_000, durationSeconds: 7_200 }
   const farePolicy = {
     id: 'fare-v1', version: '1', currency: 'UGX',
-    rules_json: JSON.stringify({ components: [
+    rules_json: JSON.stringify({ vehicleBenchmark: testVehicleBenchmark.basis, components: [
       { key: 'driver_lodging', label: 'Driver accommodation', amount: 1, unit: 'per_night' },
       { key: 'distance', label: 'Old shared distance price', amount: 1_500, unit: 'per_kilometer' },
     ], depositBasisPoints: 5_000 }), quote_ttl_seconds: 3600, hold_ttl_seconds: 1800,
@@ -967,4 +967,39 @@ test('staff-confirmed quote preserves its saved price and converts its date hold
   assert.equal(response.payload.quote.components.find((component) => component.key === 'driver_lodging').unitRate, 42_000)
   assert.equal(response.payload.quote.components.find((component) => component.key === 'driver_lodging').amount, 84_000)
   assert.equal(queries.some((query) => /lodging_rate_ugx/u.test(query.sql)), false, 'confirmation must use the accepted snapshot, not the driver profile rate')
+})
+
+test('nearest-UGX vehicle quotes round each line and deposit without repricing historical snapshots', () => {
+  const { buildVehicleQuoteSnapshot } = loadBookings()
+  const policy = {
+    id: 'fare-nearest', version: 'nearest-v1', currency: 'UGX', quote_ttl_seconds: 86400, hold_ttl_seconds: 1800,
+    rules_json: JSON.stringify({ components: [{ key: 'driver_lodging', label: 'Driver lodging', amount: 1, unit: 'per_night' }], depositBasisPoints: 3333 }),
+  }
+  const benchmark = { ...testVehicleBenchmark, amountUgx: 400001, basis: { ...testVehicleBenchmark.basis, rounding: 'nearest_per_leg' } }
+  const route = { distanceMeters: 80001, durationSeconds: 7200 }
+  const quote = buildVehicleQuoteSnapshot(policy, route, route, 1, 1, 42000, benchmark)
+  assert.ok(quote)
+  assert.equal(quote.components.find((item) => item.key === 'outbound_transport').amount, 200003)
+  assert.equal(quote.totalAmount, 442006)
+  assert.equal(quote.depositAmount, 147321)
+  assert.equal(quote.vehicleFareBenchmark.basis.rounding, 'nearest_per_leg')
+  const historical = buildVehicleQuoteSnapshot(policy, route, route, 1, 1, 42000, { ...benchmark, basis: { ...benchmark.basis, rounding: 'ceiling_per_leg' } })
+  assert.equal(historical.totalAmount, 442008)
+  assert.equal(historical.depositAmount, 147322)
+  assert.equal(buildVehicleQuoteSnapshot({ ...policy, currency: 'USD' }, route, route, 1, 1, 42000, benchmark), null)
+})
+
+test('a UGX vehicle benchmark cannot produce a quote labeled with a different currency', () => {
+  const { buildVehicleQuoteSnapshot } = loadBookings()
+  const policy = { id: 'invalid-currency', version: 'v1', currency: 'USD', rules_json: JSON.stringify({ components: [{ key: 'driver_lodging', label: 'Driver lodging', amount: 1, unit: 'per_night' }], depositBasisPoints: 5000 }) }
+  const route = { distanceMeters: 80000, durationSeconds: 7200 }
+  assert.equal(buildVehicleQuoteSnapshot(policy, route, route, 1, 1, 42000, testVehicleBenchmark), null)
+})
+
+test('nearest-UGX pricing cannot open a checkout with a deposit rounded to zero', () => {
+  const { buildVehicleQuoteSnapshot } = loadBookings()
+  const policy = { id: 'tiny-fare', version: 'v1', currency: 'UGX', rules_json: JSON.stringify({ components: [{ key: 'driver_lodging', label: 'Driver lodging', amount: 1, unit: 'per_night' }], depositBasisPoints: 100 }) }
+  const benchmark = { ...testVehicleBenchmark, amountUgx: 1, basis: { ...testVehicleBenchmark.basis, rounding: 'nearest_per_leg' } }
+  const route = { distanceMeters: 160000, durationSeconds: 7200 }
+  assert.equal(buildVehicleQuoteSnapshot(policy, route, route, 1, 1, 1, benchmark), null)
 })

@@ -317,3 +317,38 @@ test('unavailable cars, rates, policies, dates, and either route leg cannot prod
     assert.equal(f.sql.prepare('SELECT COUNT(*) AS count FROM trip_estimates').get().count, 0)
   })
 })
+
+test('a nearest-rounding policy applies to new estimates for existing cars without rebasing or changing saved estimates', async (t) => {
+  const f = availabilityFixture(t)
+  f.sql.exec('UPDATE vehicles SET benchmark_amount_ugx = 400001')
+  f.maps.computeDrivingRoute = async () => ({ kind: 'route', distanceMeters: 80001, durationSeconds: 7200 })
+  const earlier = await f.estimateAndRequest()
+  assert.equal(earlier.estimate.quote.totalAmount, 484008)
+  const savedBasis = JSON.parse(f.sql.prepare("SELECT benchmark_basis_json FROM vehicles WHERE id='car-1'").get().benchmark_basis_json)
+  f.sql.exec('UPDATE fare_policies SET active=0')
+  f.insert('fare_policies', { id: 'fare-nearest', version: 'nearest-1', currency: 'UGX', active: 1, approved_at: 2, effective_at: 2, quote_ttl_seconds: 86400, hold_ttl_seconds: 1800, rules_json: JSON.stringify({
+    vehicleBenchmark: { ...savedBasis, routeVersion: 'new-reference', roundTripDistanceMeters: 190000, rounding: 'nearest_per_leg' },
+    components: [{ key: 'driver_lodging', label: 'Driver accommodation', amount: 1, unit: 'per_night' }], depositBasisPoints: 5000,
+  }) })
+  const next = await f.estimateAndRequest({ user: 'client-2' })
+  assert.equal(next.estimate.quote.totalAmount, 484006)
+  assert.equal(next.estimate.quote.vehicleFareBenchmark.basis.rounding, 'nearest_per_leg')
+  assert.equal(next.estimate.quote.vehicleFareBenchmark.basis.roundTripDistanceMeters, 160000, 'new reference distance cannot silently change the existing car’s agreed benchmark ratio')
+  assert.equal(next.estimate.quote.components.find((item) => item.key === 'outbound_transport').unitRate, 2500.00625)
+  assert.equal(JSON.parse(f.sql.prepare("SELECT benchmark_basis_json FROM vehicles WHERE id='car-1'").get().benchmark_basis_json).rounding, 'ceiling_per_leg')
+  const recovered = await f.trip('GET', `/estimates/${earlier.estimate.estimateId}`)
+  assert.equal(recovered.status, 200)
+  assert.equal(recovered.body.quote.totalAmount, 484008)
+  assert.equal(recovered.body.quote.vehicleFareBenchmark.basis.rounding, 'ceiling_per_leg')
+})
+
+test('a malformed current rounding basis cannot silently fall back to an older car rule', async (t) => {
+  const f = availabilityFixture(t)
+  const basis = JSON.parse(f.sql.prepare("SELECT benchmark_basis_json FROM vehicles WHERE id='car-1'").get().benchmark_basis_json)
+  const rules = JSON.parse(f.sql.prepare('SELECT rules_json FROM fare_policies WHERE active=1').get().rules_json)
+  f.sql.prepare('UPDATE fare_policies SET rules_json=?').run(JSON.stringify({ ...rules, vehicleBenchmark: { ...basis, rounding: 'nearest_per_leg', roundTripDistanceMeters: 0 } }))
+  const result = await f.trip('POST', '/estimates', { body: tripInput })
+  assert.equal(result.status, 409)
+  assert.equal(result.body.error.code, 'FARE_POLICY_UNAVAILABLE')
+  assert.equal(f.sql.prepare('SELECT COUNT(*) AS count FROM trip_estimates').get().count, 0)
+})

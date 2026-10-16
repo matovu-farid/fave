@@ -261,3 +261,49 @@ The user has authorized pushing `main`. Push only after the implementation tests
 - Immutable quote, policy/deposit/expiry, and extension behavior: Tasks 4–5.
 - Privacy, missing-rate behavior, activation/legal/provider gates, browser validation, and no production test data: Tasks 2–6.
 - Placeholder scan: no TODO/TBD implementation decisions are deferred to an engineer; unresolved activation inputs are explicitly owner/provider/counsel decisions and the implementation remains fail-closed until they are approved.
+
+### Owner-confirmed UGX/nearest rounding — 16 October 2026
+
+- Owner confirmed all client prices in Uganda shillings, rounded to the nearest
+  whole shilling. Provider-fee inclusion is a separate pending question. Updated
+  the business policy, finished client copy, counsel brief and research record;
+  this is no fare/legal activation or legal sign-off.
+- Added explicit nearest_per_leg to the saved calculation basis. BigInt ratio
+  arithmetic rounds each leg half-up only after multiplying the original
+  benchmark amount and exact metres; the displayed per-km figure is approximate
+  and does not feed the calculation. The total sums rounded components; nearest
+  deposits use integer arithmetic. Reject zero-rounded deposits, unsafe amounts
+  and non-UGX policies for a UGX car benchmark.
+- New estimates select the active approved policy's explicit nearest rule while
+  retaining the existing car's original amount/route/distance ratio. They do not
+  rewrite the car or any saved estimate/quote. An absent/malformed active basis
+  fails closed rather than silently using a different rounding rule. Old saved
+  ceiling calculations, fixed-price staff confirmation and accepted extensions
+  retain their saved rule and amounts.
+- Reproduced missing-mode/currency behavior, zero deposit, existing-car rollover,
+  and malformed-policy fallback failures before their fixes. Coverage includes
+  exact half-shilling boundaries, a large safe integer amount, retained fractional
+  unit rate, nearest and historical extension snapshots, and immutable old
+  estimates after policy/reference changes.
+- Full suite: 304 passed, zero failures/skips, using --test-concurrency=2. An earlier
+  concurrent build/full-suite run hit the existing decoder subprocess timeout;
+  its timeout and security expectations were not relaxed. The lower-concurrency
+  rerun passed that test. Lint, app TypeScript and Worker TypeScript also passed.
+- Review found an existing-car rollout gap; fixed by applying only the active
+  policy's rounding field to the new estimate snapshot, not rebasing its distance.
+  Independent follow-up review found no remaining material findings.
+- Manual browser: fresh exported app plus an isolated, disposable synthetic
+  database/identity/maps fixture. The exact saved rate was2500.00625UGX/km for a
+  400001UGX/160000m benchmark and80001m legs. The UI displays approximate2500UGX/km,
+  two200003UGX transport lines,84000UGX lodging, total484006UGX and deposit242003UGX.
+  No test consent, checkout, phone call, notification or payment was submitted to
+  production. Approved fare-policy count remained zero on the read-only check.
+- At390px the old row put both amount boxes at x412–476, outside the viewport.
+  Bounded wrapping details and a right-aligned amount column corrected this to
+  x257–358 at390px and x187–288 at320px. Both transport amounts and the total are
+  visible; screenshot:/tmp/fave-nearest-ugx-quote.jpg. No console warnings/errors.
+  Test server/tab stopped and viewport reset after verification.
+- Rollback compatibility: before nearest pricing is activated, retain a rollback
+  build that understands nearest_per_leg. An older ceiling-only build cannot
+  validate new nearest snapshots/extensions. Do not rewrite accepted snapshots to
+  make a rollback appear compatible; retain the original rounding and price.

@@ -88,7 +88,7 @@ export function availabilityFixture(t) {
       insert('vehicle_media', { id: mediaId, vehicle_id: id, media_kind, object_key: mediaId, content_type: 'image/jpeg', byte_size: 1, review_status: 'approved', requirement_version: 'v1', retention_expires_at: retentionExpiry, created_at: 1 })
     }
   }
-  insert('fare_policies', { id: 'fare-v1', version: 'v1', currency: 'UGX', active: 1, approved_at: 1, effective_at: 1, quote_ttl_seconds: 3600, hold_ttl_seconds: 1800, rules_json: JSON.stringify({ components: [{ key: 'driver_lodging', label: 'Driver accommodation', amount: 1, unit: 'per_night' }], depositBasisPoints: 5000 }) })
+  insert('fare_policies', { id: 'fare-v1', version: 'v1', currency: 'UGX', active: 1, approved_at: 1, effective_at: 1, quote_ttl_seconds: 3600, hold_ttl_seconds: 1800, rules_json: JSON.stringify({ vehicleBenchmark: basis, components: [{ key: 'driver_lodging', label: 'Driver accommodation', amount: 1, unit: 'per_night' }], depositBasisPoints: 5000 }) })
   const cache = new Map()
   const maps = {
     parseLocationInput: (value) => value && typeof value === 'object' && (typeof value.address === 'string' && value.address.trim() || Number.isFinite(value.latitude) && Number.isFinite(value.longitude)) ? value : null,

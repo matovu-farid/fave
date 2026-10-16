@@ -57,7 +57,7 @@ export type VehicleBenchmarkBasis = {
   origin: { label: string; latitude: number; longitude: number }
   destination: { label: string; latitude: number; longitude: number }
   roundTripDistanceMeters: number
-  rounding: 'ceiling_per_leg'
+  rounding: 'nearest_per_leg' | 'ceiling_per_leg'
 }
 export type VehicleFareBenchmark = {
   amountUgx: number

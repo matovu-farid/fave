@@ -133,3 +133,26 @@ test('extension preserves the accepted vehicle rate basis and adds only lodging 
   }
   assert.equal(buildAccommodationExtensionSnapshot('quote-vehicle', wrongRouteDistance, 1), null)
 })
+
+test('an extension retains nearest-rounded transport and the accepted precise rate', () => {
+  const buildAccommodationExtensionSnapshot = loadExtensionQuoteBuilder()
+  const benchmark = { amountUgx: 400001, currency: 'UGX', derivationVersion: 1, basis: {
+    routeId: 'kampala-jinja', routeVersion: 'nearest-1', roundTripDistanceMeters: 160000, rounding: 'nearest_per_leg',
+    origin: { label: 'Kampala', latitude: 0.3476, longitude: 32.5825 }, destination: { label: 'Jinja', latitude: 0.4479, longitude: 33.2026 },
+  } }
+  const quote = { currency: 'UGX', totalAmount: 442006, nights: 1, farePolicyVersion: 'nearest-1',
+    vehicleId: 'car-1', driverApplicationId: 'driver-1', vehicleFareBenchmark: benchmark,
+    outboundRoute: { distanceMeters: 80001, durationSeconds: 7200 }, returnRoute: { distanceMeters: 80001, durationSeconds: 7200 },
+    components: [
+      { key: 'driver_lodging', label: 'Driver lodging', unit: 'per_night', unitRate: 42000, quantity: 1, amount: 42000 },
+      { key: 'outbound_transport', label: 'Outbound transport', unit: 'per_kilometer', unitRate: 2500.00625, quantity: 80.001, amount: 200003 },
+      { key: 'return_transport', label: 'Return transport', unit: 'per_kilometer', unitRate: 2500.00625, quantity: 80.001, amount: 200003 },
+    ],
+  }
+  const extension = buildAccommodationExtensionSnapshot('accepted-nearest', quote, 1)
+  assert.ok(extension)
+  assert.equal(extension.extensionAmountDueNow, 42000)
+  assert.equal(extension.revisedTotalAmount, 484006)
+  assert.deepEqual(JSON.parse(JSON.stringify(extension.vehicleFareBenchmark)), benchmark)
+  assert.deepEqual(extension.components.map((component) => component.key), ['driver_lodging'])
+})
