@@ -1,6 +1,6 @@
 # Uganda Marketplace Legal Research and Decisions
 
-> **DRAFT FOR UGANDAN COUNSEL REVIEW — NOT EFFECTIVE.** Prepared 2–3 October 2026 for product planning. Status update 17 October 2026: the verified supplier is FIDEXA ENTERPRISES - SMC LIMITED; the earlier Fidexa LLC assumption is superseded. Finished [client](../legal/booking-policy-research-and-review.md) and [driver](../legal/driver-policy-research-and-review.md) sources replace historical user-facing templates. This is an internal source-based research summary, not legal advice. It does not establish that Fave or Fave is licensed, that a particular party is the transport supplier, or that a proposed term is enforceable. Counsel must verify the current Gazette and applicable law before launch.
+> **DRAFT FOR UGANDAN COUNSEL REVIEW — NOT EFFECTIVE.** Prepared 2–3 October 2026 for product planning. Status update 17 October 2026: the verified supplier is FIDEXA ENTERPRISES - SMC LIMITED; the earlier Fidexa LLC assumption is superseded. Finished [client](../legal/booking-policy-research-and-review.md) and [driver](../legal/driver-policy-research-and-review.md) sources replace historical user-facing templates. This is an internal source-based research summary, not legal advice. Fave's principal trip promise is recorded in those terms; this record does not certify licensing, regulatory classification or enforceability. Counsel must verify the current Gazette and applicable law before launch.
 
 ## Purpose and scope
 
