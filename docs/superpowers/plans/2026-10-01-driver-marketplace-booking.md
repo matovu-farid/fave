@@ -105,3 +105,33 @@ Historical static verification on 2026-10-03: `npx expo lint`, `npx tsc --noEmit
 - In the signed-in browser session at `http://localhost:8081/`, `/driver` loaded the current prerequisite and application screens after a fresh reload; it no longer showed the stale 404 state. `/trips` loaded client setup and trip details. The server-backed flows remain correctly gated: driver submission requires approved driver terms, privacy notice, checklist, and retention rules; client setup and vehicle search require approved client terms and booking disclosures. No application or booking was submitted.
 - Verification: `npm run lint`, `npm run typecheck`, `npx tsc --noEmit -p fave-worker/tsconfig.json`, and a full `npm test` run with loopback access passed (42 tests).
 - Remaining end-to-end gates include approved policy documents and retention/checklists from #14, finalized fare and hold values from #15, client profile/contact-sharing decisions from #21, and provider/account review before any live payment in #11/#16. The app remains intentionally unable to create a client booking while those prerequisites are absent.
+
+### Driver availability refresh — 17 October 2026
+
+- Browser reproduction: after Driver mounted with no holds, staff confirmed a
+  synthetic quote hold. Home → Driver still displayed no held dates because the
+  availability card loaded only on mount and the tab stayed mounted. The API and
+  SQL already held the correct dates; no backend booking-rule change was needed.
+- Availability now reloads on route focus and when the focused app becomes active,
+  provides Refresh availability, and distinguishes loading, failed and empty
+  reads. Failed reads hide stale dates and disable date changes until a successful
+  retry. Request generations prevent old/blurred results from replacing newer
+  state, and focus cleanup removes the AppState subscription.
+- Five behavior regressions execute the real AvailabilityCard with controlled
+  hook/service/focus boundaries. The first four failed before the fix; they cover
+  returning focus, failed load/retry and mutation-disable state, foreground expiry,
+  superseded reads, and a rejected read after blur. These tests do not claim native
+  physical-device execution or coverage of the mutation handlers themselves.
+- Fresh isolated browser export: initial empty state, staff-confirmed hold after
+  Home → Driver, successful unavailable-block creation/removal outside held dates,
+  injected read failure with disabled date changes, successful retry, and expiry
+  disappearing after refresh without Cron. Checked at390px, viewport restored;
+  no browser warnings/errors. Fixture uses production handlers/all migrations and
+  synthetic identity/maps/clock/disclosures, without real driver calls, production
+  writes, booking payments or push sends. Proof:
+  /tmp/fave-driver-availability-refresh.jpg.
+- Focused behavior/hold suite:10 passed. Full suite:327 passed, zero failed/skipped;
+  app lint, app/Worker typechecks and diff checks passed. Independent review found
+  no actionable issue. Existing owner-only date/status response fields and
+  backend hold/conflict rules are unchanged. Broad issues8/20 remain open for
+  remaining review, policy, provider and physical-device acceptance requirements.

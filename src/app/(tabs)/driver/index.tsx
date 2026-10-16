@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Image, ScrollView, StyleSheet, View } from 'react-native'
-import { useLocalSearchParams } from 'expo-router'
+import { AppState, Image, ScrollView, StyleSheet, View } from 'react-native'
+import { useFocusEffect, useLocalSearchParams } from 'expo-router'
 import * as ImagePicker from 'expo-image-picker'
 import * as DocumentPicker from 'expo-document-picker'
 
@@ -482,11 +482,44 @@ function AvailabilityCard({ vehicle, start, end, setStart, setEnd }: { vehicle: 
   const [message, setMessage] = useState(''); const [busy, setBusy] = useState(false)
   const [removingBlockId, setRemovingBlockId] = useState<string | null>(null)
   const [availability, setAvailability] = useState<VehicleAvailability | null>(null)
-  const refresh = useCallback(() => getVehicleAvailability(vehicle.id).then(setAvailability).catch((cause) => setMessage(cause instanceof Error ? cause.message : 'Could not load availability.')), [vehicle.id])
-  useEffect(() => { void Promise.resolve().then(refresh) }, [refresh])
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
+  const readGeneration = useRef(0)
+  const focused = useRef(false)
+  const refresh = useCallback(async () => {
+    if (!focused.current) return
+    const generation = ++readGeneration.current
+    setLoading(true)
+    setLoadError('')
+    setAvailability(null)
+    try {
+      const current = await getVehicleAvailability(vehicle.id)
+      if (readGeneration.current === generation) setAvailability(current)
+    } catch {
+      if (readGeneration.current === generation) setLoadError('Could not refresh availability. Please try again.')
+    } finally {
+      if (readGeneration.current === generation) setLoading(false)
+    }
+  }, [vehicle.id])
+  useFocusEffect(useCallback(() => {
+    focused.current = true
+    void refresh()
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void refresh()
+    })
+    return () => {
+      focused.current = false
+      readGeneration.current += 1
+      subscription.remove()
+    }
+  }, [refresh]))
   return <Card>
     <ThemedText type="subtitle">Availability · {vehicle.make} {vehicle.model}</ThemedText>
     <ThemedText>Current holds and confirmed booking dates stay visible only to you.</ThemedText>
+    <ActionButton title="Refresh availability" onPress={() => void refresh()} disabled={busy} busy={loading} />
+    {loading ? <ThemedText>Loading availability…</ThemedText> : null}
+    {loadError ? <Message error>{loadError}</Message> : null}
+    {availability && availability.unavailable.length === 0 && availability.holdsAndBookings.length === 0 ? <ThemedText>No upcoming holds or unavailable dates.</ThemedText> : null}
     <Field label="Unavailable from (YYYY-MM-DD)" value={start} onChangeText={setStart} placeholder="YYYY-MM-DD" />
     <Field label="Available again (YYYY-MM-DD)" value={end} onChangeText={setEnd} placeholder="YYYY-MM-DD" />
     {availability?.unavailable.map((range) => <View key={range.id} style={styles.availabilityRow}>
@@ -509,7 +542,7 @@ function AvailabilityCard({ vehicle, start, end, setStart, setEnd }: { vehicle: 
       {range.status !== 'confirmed' ? <ThemedText type="small">Hold expires {new Date(range.hold_expires_at).toLocaleString()}</ThemedText> : null}
     </View>)}
     {message ? <Message>{message}</Message> : null}
-    <ActionButton title="Mark dates unavailable" disabled={!start || !end} busy={busy} onPress={() => { setBusy(true); setMessage(''); void markUnavailable(vehicle.id, start, end).then(() => { setMessage('Dates marked unavailable.'); return refresh() }).catch((cause) => setMessage(cause instanceof Error ? cause.message : 'Could not update availability.')).finally(() => setBusy(false)) }} />
+    <ActionButton title="Mark dates unavailable" disabled={!start || !end || !availability || loading || Boolean(loadError)} busy={busy} onPress={() => { setBusy(true); setMessage(''); void markUnavailable(vehicle.id, start, end).then(() => { setMessage('Dates marked unavailable.'); return refresh() }).catch((cause) => setMessage(cause instanceof Error ? cause.message : 'Could not update availability.')).finally(() => setBusy(false)) }} />
   </Card>
 }
 
