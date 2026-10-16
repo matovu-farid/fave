@@ -182,3 +182,33 @@ No payment-provider contract, legal-policy approval, or payment launch gate was 
   availability, client request and review-security APIs401JSON; console200HTML.
   The isolated test server/tab were stopped and the390px override was reset.
   No production client consent, request, booking, driver call or charge was made.
+
+### Blank-start booking walkthrough — 17 October 2026
+
+- Fixed estimate review progress: it remains in step 2, Car and estimate, until
+  the client explicitly requests the staff availability check. Added regression
+  coverage for estimate, final quote and deposit precedence.
+- Fresh estimate responses now include the selected car's public make/model/year,
+  consistent with recovered estimates. Added real-SQLite coverage for car-2 before
+  client intent and after its linked request; no private driver fields are added.
+- Staff can record a call made on another phone through Record call attempt after
+  audited contact reveal. No answer leaves both decisions disabled; a reached call
+  enables the separate explicit car/date decision. Call-outcome radios now expose
+  aria-checked on web, preserving native accessibility state and visual selection.
+- Manually tested from blank trip details through car-2 estimate, client intent,
+  staff contact reveal, no-answer/reached call recording, explicit confirmation,
+  fixed-price quote, seven synthetic disclosure/contact controls, deposit hold and
+  reload recovery. The local fixture uses production handlers and real SQLite;
+  identity/maps, time and non-binding disclosures are substituted. No real driver
+  was called, no production record was written and no payment was attempted.
+- Fixture evidence: zero requests/bookings before intent; confirmation produced a
+  full 86,400-second quote hold with no booking; checkout produced exactly one
+  deposit_pending booking with a full 1,800-second replacement hold. Both estimate
+  and quote total UGX 484,006; selected car remains visible. Checked at 390px,
+  reset viewport afterward. Browser console had no warnings/errors. Proof:
+  /tmp/fave-complete-booking-checkout.jpg.
+- Independent review found no code issues. Reconciled stale fee-proposal wording
+  identified during review with the owner's separate all-in processing-fee choice.
+  Full suite: 306 passed, zero failed/skipped with loopback available; app lint,
+  app/Worker typechecks, cleared production web export and Worker dry-run passed.
+  This checkpoint does not activate legal/fare policies or live payments.

@@ -352,3 +352,17 @@ test('a malformed current rounding basis cannot silently fall back to an older c
   assert.equal(result.body.error.code, 'FARE_POLICY_UNAVAILABLE')
   assert.equal(f.sql.prepare('SELECT COUNT(*) AS count FROM trip_estimates').get().count, 0)
 })
+
+test('a fresh estimate names the chosen car consistently before and after creating the staff request', async (t) => {
+  const f = availabilityFixture(t)
+  const estimated = await f.trip('POST', '/estimates', { body: { ...tripInput, vehicleId: 'car-2' } })
+  assert.equal(estimated.status, 201)
+  assert.equal(estimated.body.vehicleId, 'car-2')
+  assert.deepEqual(estimated.body.vehicle, { make: 'Toyota', model: 'car-2', year: 2022 })
+  assert.equal(f.sql.prepare('SELECT COUNT(*) AS count FROM availability_requests').get().count, 0)
+  const request = await f.trip('POST', `/estimates/${estimated.body.estimateId}/availability-request`)
+  assert.equal(request.status, 201)
+  const recovered = await f.trip('GET', '/availability-requests/current')
+  assert.deepEqual(recovered.body.request.estimate.vehicle, estimated.body.vehicle)
+  assert.equal(recovered.body.request.estimate.vehicleId, 'car-2')
+})

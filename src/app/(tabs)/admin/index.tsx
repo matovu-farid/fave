@@ -261,6 +261,7 @@ export default function AdminScreen() {
                     <ThemedText type="smallBold">{contact.name}</ThemedText>
                     <ThemedText selectable>{contact.phone}</ThemedText>
                     <ActionButton title="Call driver" onPress={() => void callAvailabilityDriver(request.requestId)} />
+                    {loggingOfferId !== request.requestId ? <ActionButton title="Record call attempt" disabled={busy} onPress={() => setLoggingOfferId(request.requestId)} /> : null}
                     {loggingOfferId === request.requestId ? (
                       <View style={styles.followUpForm}>
                         <ThemedText type="smallBold">Log call outcome</ThemedText>
@@ -271,6 +272,7 @@ export default function AdminScreen() {
                               <Pressable
                                 key={outcome.value}
                                 accessibilityRole="radio"
+                                aria-checked={selected}
                                 accessibilityState={{ checked: selected }}
                                 onPress={() => setOutcomes((current) => ({ ...current, [request.requestId]: outcome.value }))}
                                 style={[styles.outcome, selected && styles.outcomeSelected]}
@@ -371,6 +373,7 @@ export default function AdminScreen() {
                               <Pressable
                                 key={outcome.value}
                                 accessibilityRole="radio"
+                                aria-checked={selected}
                                 accessibilityState={{ checked: selected }}
                                 onPress={() => setOutcomes((current) => ({ ...current, [offer.offerId]: outcome.value }))}
                                 style={[styles.outcome, selected && styles.outcomeSelected]}

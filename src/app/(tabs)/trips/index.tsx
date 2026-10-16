@@ -380,9 +380,10 @@ export default function TripsScreen() {
     hasQuote: Boolean(quote),
     hasDepositHold: bookingSubmitted,
   })
-  const bookingProgress = getBookingProgress(currentBookingStage)
-  const currentProgressStep = bookingProgress.findIndex((step) => step.state === 'current')
   const isFinalQuote = Boolean(quote && quote.expiresAt > 0)
+  const bookingProgress = getBookingProgress(currentBookingStage, Boolean(quote && !isFinalQuote))
+  const currentProgressStep = bookingProgress.findIndex((step) => step.state === 'current')
+  const quoteVehicle = estimate?.vehicle ?? availabilityRequest?.estimate.vehicle ?? vehicles.find((vehicle) => vehicle.id === quote?.vehicleId)
 
   const confirm = async () => {
     if (!quote) return
@@ -547,6 +548,7 @@ export default function TripsScreen() {
       </Card> : null}
       {currentBookingStage === 'quote' && quote ? <Card>
         <ThemedText type="subtitle">{isFinalQuote ? 'Your final trip quote' : 'Your trip estimate'} · {quote.quote.currency}</ThemedText>
+        {quoteVehicle ? <ThemedText>{quoteVehicle.year} {quoteVehicle.make} {quoteVehicle.model}</ThemedText> : null}
         <ThemedText>Pickup · {quote.pickup.formattedAddress ?? quote.pickup.address} ({quote.pickup.latitude.toFixed(5)}, {quote.pickup.longitude.toFixed(5)})</ThemedText>
         <ThemedText>Destination · {quote.destination.formattedAddress ?? quote.destination.address} ({quote.destination.latitude.toFixed(5)}, {quote.destination.longitude.toFixed(5)})</ThemedText>
         <ThemedText>Dates · {startDate} to {endDate} · {partySize} passengers · {luggageCount} luggage pieces</ThemedText>

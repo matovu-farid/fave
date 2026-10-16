@@ -79,7 +79,7 @@ test('trip draft is meaningful only after the client enters trip information', (
 test('booking progress marks earlier stages complete and the current stage clearly', () => {
   assert.deepEqual(getBookingProgress('driver'), [
     { id: 'trip', label: 'Trip details', state: 'complete' },
-    { id: 'vehicle', label: 'Choose a car', state: 'complete' },
+    { id: 'vehicle', label: 'Car and estimate', state: 'complete' },
     { id: 'driver', label: 'Availability check', state: 'current' },
     { id: 'quote', label: 'Quote and terms', state: 'upcoming' },
     { id: 'deposit', label: 'Deposit', state: 'upcoming' },
@@ -114,4 +114,14 @@ test('booking flow advances through vehicle selection, driver response, quote, a
     })),
     ['trip', 'vehicle', 'driver', 'quote', 'deposit'],
   )
+})
+
+test('reviewing an estimate does not mark the staff availability check complete', () => {
+  const progress = getBookingProgress('quote', true)
+  assert.equal(progress.find((step) => step.id === 'vehicle').state, 'current')
+  assert.equal(progress.find((step) => step.id === 'vehicle').label, 'Car and estimate')
+  assert.equal(progress.find((step) => step.id === 'driver').state, 'upcoming')
+  assert.equal(progress.find((step) => step.id === 'quote').state, 'upcoming')
+  assert.equal(getBookingProgress('quote').find((step) => step.id === 'quote').state, 'current', 'final and legacy accepted quotes still use the quote/terms step')
+  assert.equal(getBookingProgress('deposit', true).find((step) => step.id === 'deposit').state, 'current')
 })

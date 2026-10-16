@@ -29,7 +29,7 @@ export interface AsyncKeyValueStorage {
 const tripDraftVersion = 1
 const bookingStages: { id: BookingProgressStage; label: string }[] = [
   { id: 'trip', label: 'Trip details' },
-  { id: 'vehicle', label: 'Choose a car' },
+  { id: 'vehicle', label: 'Car and estimate' },
   { id: 'driver', label: 'Availability check' },
   { id: 'quote', label: 'Quote and terms' },
   { id: 'deposit', label: 'Deposit' },
@@ -76,8 +76,9 @@ export function hasTripDraftContent(draft: TripDraft) {
   )
 }
 
-export function getBookingProgress(currentStage: BookingProgressStage): BookingProgressStep[] {
-  const currentIndex = bookingStages.findIndex((stage) => stage.id === currentStage)
+export function getBookingProgress(currentStage: BookingProgressStage, reviewingEstimate = false): BookingProgressStep[] {
+  const progressStage = currentStage === 'quote' && reviewingEstimate ? 'vehicle' : currentStage
+  const currentIndex = bookingStages.findIndex((stage) => stage.id === progressStage)
   return bookingStages.map((stage, index) => ({
     ...stage,
     state: index < currentIndex ? 'complete' : index === currentIndex ? 'current' : 'upcoming',

@@ -134,7 +134,8 @@ tripsApp.post('/estimates', async (c) => {
 
   const [vehicle, farePolicy] = await Promise.all([
     c.env.DB.prepare(
-      `SELECT vehicle.id, vehicle.driver_application_id, vehicle.passenger_capacity, vehicle.luggage_capacity,
+      `SELECT vehicle.id, vehicle.driver_application_id, vehicle.make, vehicle.model, vehicle.model_year,
+              vehicle.passenger_capacity, vehicle.luggage_capacity,
               driver.lodging_rate_ugx AS driver_lodging_rate_ugx,
               vehicle.benchmark_amount_ugx, vehicle.benchmark_basis_json,
               vehicle.benchmark_derivation_version
@@ -145,7 +146,7 @@ tripsApp.post('/estimates', async (c) => {
         LIMIT 1`,
     ).bind(vehicleId, Date.now(), Date.now(), Date.now(), Date.now(), Date.now(), Date.now())
       .first<{
-        id: string; driver_application_id: string; passenger_capacity: number; luggage_capacity: number;
+        id: string; driver_application_id: string; make: string; model: string; model_year: number; passenger_capacity: number; luggage_capacity: number;
         driver_lodging_rate_ugx: number | null; benchmark_amount_ugx: number | null;
         benchmark_basis_json: string | null; benchmark_derivation_version: number | null
       }>(),
@@ -260,6 +261,7 @@ tripsApp.post('/estimates', async (c) => {
     estimateId, vehicleId: vehicle.id, pickup: validation.originSnapshot, destination: validation.destinationSnapshot,
     startDate: validation.startDate, endDate: validation.endDate, partySize: validation.partySize,
     luggageCount: validation.luggageCount,
+    vehicle: { make: vehicle.make, model: vehicle.model, year: vehicle.model_year },
     route: { distanceMeters: outboundRoute.distanceMeters, durationSeconds: outboundRoute.durationSeconds },
     quote: snapshot, createdAt: now,
   }, 201)
