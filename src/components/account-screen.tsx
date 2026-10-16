@@ -45,7 +45,7 @@ export default function AccountScreen({ onClose }: { onClose: () => void }) {
   useFocusEffect(useCallback(() => { void refresh() }, [refresh]))
 
   const saveClientProfile = async () => {
-    if (!client || client.documents.length === 0) return
+    if (!client || client.documents.length !== 2) return
     setSaving(true)
     setMessage('')
     setClientError('')
@@ -70,7 +70,7 @@ export default function AccountScreen({ onClose }: { onClose: () => void }) {
     router.replace('/')
   }
 
-  const hasCurrentClientDocuments = Boolean(client?.documents.length)
+  const hasCurrentClientDocuments = client?.documents.length === 2
   const clientProfileReady = Boolean(legalName.trim() && phoneNumber.trim())
 
   return <ThemedView style={styles.page}>
