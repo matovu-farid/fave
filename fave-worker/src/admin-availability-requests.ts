@@ -248,7 +248,7 @@ adminAvailabilityApp.post('/:requestId/unavailable', async (c) => {
   const results = await c.env.DB.batch([c.env.DB.prepare(
     `UPDATE availability_requests SET status = 'unavailable', decision_actor_user_id = ?, decision_at = ?, updated_at = ?
       WHERE id = ? AND (status = 'requested' OR (status = 'confirmed' AND ${requestNeedsReviewPredicate('availability_requests')}))
-        AND EXISTS (SELECT 1 FROM availability_request_calls WHERE request_id = availability_requests.id)`,
+        AND EXISTS (SELECT 1 FROM availability_request_calls WHERE request_id = availability_requests.id AND outcome = 'reached')`,
   ).bind(access.user.id, now, now, requestId, ...requestReviewBindings(now)),
   availabilityAuditStatement(c.env, { requestId, actorUserId: access.user.id, action: 'availability_marked_unavailable', priorState: request.status, newState: 'unavailable', now }),
   ...buildNotificationEventStatements(c.env.DB, {
@@ -256,7 +256,7 @@ adminAvailabilityApp.post('/:requestId/unavailable', async (c) => {
     domainType: 'availability_request', domainId: requestId, occurredAt: now,
     recipients: [{ userId: request.client_user_id, role: 'client' }],
   }, now, { requirePriorChange: true })])
-  if (results[0]?.meta.changes !== 1) return c.json(apiError('REQUEST_NOT_PENDING', 'Record a driver call while this request is pending before marking it unavailable.'), 409)
+  if (results[0]?.meta.changes !== 1) return c.json(apiError('REQUEST_NOT_PENDING', 'Speak with the driver and record a reached call while this request is pending before marking it unavailable.'), 409)
   return c.json({ requestId, status: 'unavailable' })
 })
 

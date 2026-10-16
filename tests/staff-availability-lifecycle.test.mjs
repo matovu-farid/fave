@@ -108,6 +108,22 @@ test('an unanswered call leaves the request awaiting follow-up and cannot unlock
   assert.equal(f.sql.prepare('SELECT COUNT(*) AS count FROM trip_quotes').get().count, 0)
 })
 
+for (const outcome of ['no_answer', 'busy', 'voicemail', 'other']) {
+  test(`a ${outcome} call cannot mark the client’s selected car unavailable`, async (t) => {
+    const f = availabilityFixture(t)
+    const { request } = await f.estimateAndRequest()
+    await f.logCall(request.requestId, outcome)
+    const result = await f.staff('POST', `/${request.requestId}/unavailable`)
+    assert.equal(result.status, 409, JSON.stringify(result))
+    assert.equal(f.sql.prepare('SELECT status FROM availability_requests').get().status, 'requested')
+    assert.equal(f.sql.prepare("SELECT COUNT(*) AS count FROM marketplace_audit_events WHERE action = 'availability_marked_unavailable'").get().count, 0)
+    assert.equal(f.sql.prepare('SELECT COUNT(*) AS count FROM notification_events').get().count, 0)
+    await f.logCall(request.requestId, 'reached')
+    assert.equal((await f.staff('POST', `/${request.requestId}/unavailable`)).status, 200)
+    assert.equal(f.sql.prepare('SELECT status FROM availability_requests').get().status, 'unavailable')
+  })
+}
+
 test('staff decisions and client records stay restricted to their owners and roles', async (t) => {
   const f = availabilityFixture(t)
   const { estimate, request } = await f.estimateAndRequest()

@@ -120,7 +120,9 @@ export default function AdminScreen() {
       await recordAvailabilityCall(requestId, outcomes[requestId] ?? 'no_answer', notes[requestId] ?? '')
       setNotes((current) => ({ ...current, [requestId]: '' }))
       setLoggingOfferId('')
-      setMessage('Call attempt saved. You can now confirm or decline availability for the requested dates.')
+      setMessage(outcomes[requestId] === 'reached'
+        ? 'Call attempt saved. You can now confirm or decline availability for the requested dates.'
+        : 'Call attempt saved. The driver has not been reached; leave this request awaiting follow-up.')
       await refresh()
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'The call attempt could not be saved.') }
     finally { setBusyOfferId('') }
@@ -234,7 +236,7 @@ export default function AdminScreen() {
           {[...availabilityRequests, ...confirmedRequests.filter((request) => request.needsReview)].map((request) => {
             const contact = contacts[request.requestId]
             const busy = busyOfferId === request.requestId
-            const canDecide = request.callCount > 0
+            const canDecide = request.driverReached
             return (
               <Card key={request.requestId}>
                 <View style={styles.offerHeader}>
@@ -298,8 +300,8 @@ export default function AdminScreen() {
                     <ActionButton title="Unavailable" busy={busy} disabled={!canDecide} onPress={() => void decideAvailability(request.requestId, false)} />
                   </View>
                 </View>
-                {!canDecide ? <ThemedText type="small" themeColor="textSecondary">Log at least one call attempt before confirming or declining these dates.</ThemedText> : null}
-                {canDecide && !request.driverReached ? <ThemedText type="small" themeColor="textSecondary">The driver hasn’t been reached yet. Leave this request awaiting follow-up until they confirm availability.</ThemedText> : null}
+                {request.callCount === 0 ? <ThemedText type="small" themeColor="textSecondary">Speak with the driver and log a reached call before confirming or declining these dates.</ThemedText> : null}
+                {request.callCount > 0 && !request.driverReached ? <ThemedText type="small" themeColor="textSecondary">The driver hasn’t been reached yet. Leave this request awaiting follow-up until they confirm availability.</ThemedText> : null}
                 {decisionRequestId === request.requestId ? <View style={styles.confirmPanel}>
                   <ThemedText type="smallBold">Confirm {request.vehicle.year} {request.vehicle.make} {request.vehicle.model} for {request.startDate} to {request.endDate}?</ThemedText>
                   <ThemedText>This sends the final quote at UGX {request.estimate.totalAmount.toLocaleString()} and holds these dates for this client during the quote window.</ThemedText>
