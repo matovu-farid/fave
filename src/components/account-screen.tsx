@@ -23,6 +23,7 @@ export default function AccountScreen({ onClose }: { onClose: () => void }) {
   const [accepted, setAccepted] = useState(false)
   const [message, setMessage] = useState('')
   const [signingOut, setSigningOut] = useState(false)
+  const [signOutError, setSignOutError] = useState('')
 
   const refresh = useCallback(async () => {
     setLoading(true)
@@ -65,9 +66,20 @@ export default function AccountScreen({ onClose }: { onClose: () => void }) {
 
   const signOut = async () => {
     setSigningOut(true)
-    try { await unregisterPushNotifications() } catch { /* Sign-out must remain available offline. */ }
-    await authClient.signOut()
-    router.replace('/')
+    setSignOutError('')
+    try {
+      try { await unregisterPushNotifications() } catch { /* Sign-out must remain available when push cleanup fails. */ }
+      const result = await authClient.signOut()
+      if (result.error) {
+        setSignOutError('Could not sign out. Please try again.')
+        return
+      }
+      router.replace('/')
+    } catch {
+      setSignOutError('Could not sign out. Please try again.')
+    } finally {
+      setSigningOut(false)
+    }
   }
 
   const hasCurrentClientDocuments = client?.documents.length === 2
@@ -115,6 +127,7 @@ export default function AccountScreen({ onClose }: { onClose: () => void }) {
       <Card>
         <ThemedText type="subtitle">Account access</ThemedText>
         <ThemedText themeColor="textSecondary">Your Fave account is signed in. Data export and deletion requests will be added when the approved retention rules are available.</ThemedText>
+        {signOutError ? <Message error>{signOutError}</Message> : null}
         <ActionButton title="Sign out" onPress={() => void signOut()} busy={signingOut} />
         <ActionButton title="Back to home" onPress={onClose} />
       </Card>

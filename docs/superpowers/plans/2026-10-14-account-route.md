@@ -40,3 +40,27 @@
 - [x] Manually verify signed-in Home → Account (`/account`) and Back to Home. Direct `/account` while signed out correctly presents sign-in.
 
 **Browser evidence — 2026-10-16:** Signed in with the Google account selected by the owner, opened Account from Home, loaded the client/driver profile response, returned using Back to home, and confirmed the session survived a full browser reload. Account correctly disables profile saving while current approved client terms/privacy are missing. No profile, policy acceptance, or driver application was submitted.
+
+### Sign-out failure recovery — 17 October 2026
+
+- Regression coverage reproduced the real Account handler navigating home after
+  Better Auth returned a structured error. A thrown request could also leave the
+  button busy indefinitely. Account now handles returned and thrown failures with
+  a generic retryable inline error, resets busy in finally, and navigates only
+  after successful sign-out. Push-token cleanup failure still does not block the
+  authentication request; no authentication configuration or privilege changed.
+- Added four behavior tests rendering the actual Account component with controlled
+  hooks and service boundaries: returned error plus retry, rejected request,
+  push-cleanup failure with successful sign-out, and pending-request busy state.
+  The returned-error test failed before the fix with an unexpected Home navigation.
+- Isolated browser test used the actual static app and Better Auth Worker with a
+  synthetic session and a temporary 503 sign-out endpoint. Failure stayed on
+  Account, showed the generic error and re-enabled Sign out. Restoring the local
+  endpoint and retrying displayed the signed-out Google/Apple screen. Checked the
+  error at 390px and restored viewport. Proof: /tmp/fave-account-signout-retry.jpg.
+  No real account, policy acceptance, booking, driver call or charge was changed.
+- Focused eight Account tests passed; full suite 322 passed with zero failures or
+  skips. App lint and app/Worker typechecks passed. Independent security/correctness
+  review found no actionable issue. Export/deletion workflow remains separate:
+  direct deletion of the identity currently cascades to trip/consent records, so
+  it cannot implement the required retention-aware lifecycle.
