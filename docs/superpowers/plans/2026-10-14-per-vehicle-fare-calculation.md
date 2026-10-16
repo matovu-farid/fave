@@ -307,3 +307,20 @@ The user has authorized pushing `main`. Push only after the implementation tests
   build that understands nearest_per_leg. An older ceiling-only build cannot
   validate new nearest snapshots/extensions. Do not rewrite accepted snapshots to
   make a rollback appear compatible; retain the original rounding and price.
+
+
+### Nearest-UGX release checkpoint
+
+- Main implementation9497de5be02da3d0cb3b293fba295c5e840ea1fe passed exact-commit
+  CI38945587084. Production web export and Worker packaging dry run passed.
+- Versione9a7194a-5f71-4fe5-a2cc-963fbb20f473, tagmain-9497de5, serves100% traffic
+  in deployment16db8cb4-7cca-4beb-9936-af3f593df30c, created
+  2026-10-16T18:17:38.437912Z. Runtime and all17 bindings match the preceding
+  version5255a7e9-cbbf-4eb3-a5ae-0bd191972e92. No migration or trigger changes.
+- Read-only production checks passed: health/database200ok; signed-out request,
+  catalog and review-security APIs401JSON; console200HTML. The active approved
+  fare-policy count remained zero after release. No fare/legal registry activation,
+  provider enablement or live charge was performed.
+- Updated issue#15 with the owner-confirmed currency/rounding decision; fee
+  inclusion remains the next pending owner question. Canonical benchmark endpoints,
+  road distance, provider terms and remaining launch decisions are still open.
