@@ -135,3 +135,16 @@ Historical static verification on 2026-10-03: `npx expo lint`, `npx tsc --noEmit
   no actionable issue. Existing owner-only date/status response fields and
   backend hold/conflict rules are unchanged. Broad issues8/20 remain open for
   remaining review, policy, provider and physical-device acceptance requirements.
+
+### Driver availability release checkpoint
+
+- CI38972292634 passed for main5669df83635ce5222134baeec2f1a2dd7387d9a1.
+  Worker/web version6d556b96-9f17-4df4-866f-84ed8be68e07 (main-5669df8)
+  serves100% traffic in deployment06407224-f0bb-4d6e-8fa2-39bc15df2a74, created
+  2026-10-16T21:55:38.780202Z (17 October in Kampala). Runtime and all17
+  bindings match predecessor227f0078-596d-4a54-842f-f06241fe2915. No migration,
+  trigger, fare/legal activation or backend booking-rule change was required.
+- Production checks:health/database200ok; /driver307redirects to /driver/200HTML;
+  signed-out vehicle availability, catalog and review-security APIs401JSON. The
+  temporary fixture/tab were closed and viewport reset; owner security retained.
+  No EAS binary/OTA release or physical-device foreground acceptance is claimed.
