@@ -88,5 +88,5 @@ No payment-provider contract, legal-policy approval, or payment launch gate was 
 ### Latest checkpoint (2026-10-16)
 
 - Full suite: 193 passing, zero failing or skipped. App lint, app typecheck, Worker typecheck, and diff whitespace checks pass.
-- Browser at `http://localhost:8081` shows the owner signed in. The Trips screen loads the new layout but receives HTTP 404 for the new availability API because its proxy uses the production Worker. This is a partial browser check, not a completed booking walkthrough.
+- Browser at `http://localhost:8081` initially showed the owner's cached account state. Trips received HTTP 404 for the new availability API because its proxy uses the production Worker. Alerts then reported unauthorized, and a full page reload showed the sign-in page. Authentication is not yet verified; this is a partial browser check, not a completed booking walkthrough.
 - Production release approval remains pending. No production migration or Worker deployment was performed at this checkpoint.
