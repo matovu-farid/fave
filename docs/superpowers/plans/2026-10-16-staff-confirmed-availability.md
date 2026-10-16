@@ -18,7 +18,7 @@
 - [x] Reuse the existing fare builder instead of creating a second fare formula. Save both route legs, the car benchmark and its version, the assigned driver and overnight rate, night count, quantities, unit rates, totals, policy version, and deposit calculation.
 - [x] Verify immutable estimates and exact estimate → quote → booking prices even after live vehicle/driver rates and the active fare policy change.
 - [x] Verify pending requests create no hold. Active confirmed holds and deposit holds block overlapping cars and the same driver’s other cars; adjacent dates remain available.
-- [x] Apply the new migrations to local D1. Production migration is a release step, still pending.
+- [x] Apply the new migrations to local D1 and production D1 (production migration `0019` applied 2026-10-16).
 
 ## 3. Client APIs
 
@@ -78,16 +78,25 @@ The initial plan’s separate proposed snapshot/API/conversion test files were c
 - [x] Worker TypeScript check passes.
 - [x] Local D1 migrations apply successfully.
 - [x] Worker deployment dry run bundles successfully; this did not publish a release.
-- [ ] Apply the production D1 migration and deploy the Worker update before testing the browser’s production-backed API.
+- [x] Apply the production D1 migration and deploy the Worker update before testing the browser’s production-backed API.
 - [ ] Authenticated browser walkthrough at `http://localhost:8081`: estimate/edit, request/withdrawal, staff call/confirmation, unchanged price, hold conflict, expiry/retry, unavailable state, disclosures, and deposit-hold conversion.
 - [ ] Physical-device confirmation by the owner after the runtime update.
 - [ ] Update issue evidence and close only the work verified as complete.
 
 No payment-provider contract, legal-policy approval, or payment launch gate was changed by this implementation.
 
-### Latest checkpoint (2026-10-16)
+### Pre-release checkpoint (2026-10-16)
 
 - Full suite: 193 passing, zero failing or skipped. App lint, app typecheck, Worker typecheck, and diff whitespace checks pass.
 - The initial browser session was stale. A fresh Google sign-in with the owner-selected account now survives a full reload; Home → Account → Back to home and the authenticated empty notification inbox work. Trips still receives HTTP 404 for the new availability API because its proxy uses the production Worker. Account independently confirms that approved client terms/privacy are unavailable. Full booking verification therefore remains blocked on the backend release and approved prerequisites; no profile, policy acceptance, booking, or payment was submitted.
 - Read-only Cloudflare checks confirm production Worker version `e6c5cd34-f131-4f93-838c-03c844d91aca` from `cc5e732` at 100% traffic, healthy API/D1, and only migration `0019` pending.
 - Production release approval remains pending. No production migration or Worker deployment was performed at this checkpoint.
+
+### Approved production release (2026-10-16)
+
+- The owner approved putting the booking update live with payments remaining disabled. Pushed `main` through `afd80e53d89e530a103fe1332b95c8225ebf8a85`; [GitHub CI passed](https://github.com/matovu-farid/fave/actions/runs/38866637513). Fresh local verification: 193 passing tests, zero failures/skips, app lint/typecheck, Worker typecheck, packaging dry run, and diff checks passed.
+- Captured the pre-migration D1 recovery bookmark, then applied `0019_trip_estimates_availability_requests.sql` to production `fave-db`. The migration is recorded in `d1_migrations`, and the remote migration list is empty.
+- Uploaded version `53a015ef-82c7-4b7b-8d42-65eacf06615a` with tag `main-afd80e5`, then deployed it at 100% in deployment `49577290-3a7c-4c67-b19f-f57925d6cbc3`. Compared all 16 bindings and runtime settings against the previous version: unchanged. Used `wrangler versions upload --minify --keep-vars` and `wrangler versions deploy <version>@100 --yes`; existing domain, cron, and Queue triggers were preserved. This release completed without the earlier custom-domain lookup error.
+- Public hostname checks: `/health` returns HTTP 200 with API/D1 healthy; `/api/trips/availability-requests/current` and `/api/admin/availability-requests` return the expected HTTP 401 signed out. The availability endpoint returned HTTP 404 before this release. Cloudflare rejected the Python HTTP client's probe with 1010; standard curl checks above succeeded.
+- Restarted the stopped localhost Expo preview and manually loaded `/trips` with the existing signed-in session at 390px. The new five-step booking screen loads without the previous HTTP 404 alert. Client setup/search remain disabled with the missing-approved-terms explanation. No profile, policy acceptance, estimate, booking, payment, or test notification was created.
+- Production aggregate gate check: zero active approved fare policies and zero approved client terms/privacy documents. No policy was activated and no payment capability was enabled. Complete client/staff booking, admin-session review, and physical-device verification remain open, along with the separate legal, pricing, and provider launch decisions.
