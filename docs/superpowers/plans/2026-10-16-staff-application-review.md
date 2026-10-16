@@ -138,14 +138,19 @@ an audit before returning409; six positive/conflict regressions pass.
 - Production data gates remain0 active approved fares and0 approved client terms/
   privacy documents. No applicant evidence was accessed and no real application
   decision was made in production.
-- Opened https://api.fave.fidexa.org/admin/review-security for the owner. The page
-  currently shows Google/Apple sign-in; requested the owner to sign in as the next
-  single step. Production credential enrollment and actual owner verification are
-  still pending, so related issues remainInprogress and the broader goal is open.
+- Opened https://api.fave.fidexa.org/admin/review-security for the owner. At the
+  release checkpoint the page showed Google/Apple sign-in and owner enrollment was
+  pending. The acceptance record below supersedes that pending setup status.
+  Related broader issues remainInprogress and the overall goal is open.
 
-### Remaining owner acceptance
+### Owner acceptance — 16 October 2026
 
-- [ ] Owner signs into the canonical staff console with the provisioned identity.
-- [ ] Owner enrolls/uses a real passkey and/or authenticator app, then verifies the
-  ten-minute unlock and explicit lock. Both enrollment paths are available;
-  enrolling both is optional. Automated synthetic credentials are not acceptance.
+- [x] Owner signed into the canonical production staff console with the provisioned identity.
+- [x] Owner enrolled a real authenticator app and confirmed successful verification
+  and “Reviews unlocked.” Explicit “Lock reviews now” was exercised in the
+  production browser; the page returned to “Unlock private reviews” and “Reviews
+  are locked.” The owner also confirmed the locked state with a screenshot.
+- The ten-minute expiry is covered by automated tests; this owner ceremony checked
+  enrollment, unlock and explicit lock rather than waiting for automatic expiry.
+  Real owner passkey enrollment remains untested and optional. No real applicant
+  evidence was opened or application decision made during this check.
