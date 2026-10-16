@@ -392,7 +392,7 @@ export function respondToDriverTripOffer(offerId: string, decision: 'accept' | '
   )
 }
 export function getAdminAccess() {
-  return authenticatedFetch<{ authorized: true }>('/api/admin/trip-offers/access')
+  return authenticatedFetch<{ authorized: true; operations:boolean; reviews:boolean }>('/api/admin/review-security/access',{cache:'no-store'})
 }
 export function getAdminTripOffers() {
   return authenticatedFetch<AdminTripOffers>('/api/admin/trip-offers')

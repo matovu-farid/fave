@@ -19,8 +19,10 @@ function loadModule(sourcePath, imports = {}) {
     exports,
     require: (name) => {
       if (name in imports) return imports[name]
+      if (name === './review-access') return {reviewAccess(){},isReviewMember(){}}
       if (name === 'hono') {
         return { Hono: class {
+          use() { return this }
           get() { return this }
           post() { return this }
           patch() { return this }
@@ -56,6 +58,7 @@ function loadVehicleCatalog(user = { id: 'client-1', name: 'Client', email: 'cli
   })
   const routes = new Map()
   class CapturingHono {
+    use() { return this }
     get(path, handler) { routes.set(path, handler); return this }
     post(path, handler) { routes.set(path, handler); return this }
     patch() { return this }

@@ -1,9 +1,11 @@
+import { createReviewAuth } from './review-auth'
 import { expo } from '@better-auth/expo'
 import { betterAuth } from 'better-auth'
 import { oAuthProxy } from 'better-auth/plugins/oauth-proxy'
 import { importPKCS8, SignJWT } from 'jose'
 
 export type AuthBindings = Omit<CloudflareBindings, 'BETTER_AUTH_URL' | 'ENVIRONMENT'> & {
+  ASSETS?: Fetcher
   BETTER_AUTH_SECRET?: string
   BETTER_AUTH_URL?: string
   GOOGLE_CLIENT_ID?: string
@@ -81,16 +83,18 @@ export function createAuth(env: AuthBindings, headers?: Headers) {
       : {}),
   }
 
+  const review = createReviewAuth(env, localOrigin ?? env.BETTER_AUTH_URL ?? 'https://api.fave.fidexa.org')
   return betterAuth({
     appName: 'Fave',
     baseURL: localOrigin ?? env.BETTER_AUTH_URL,
     secret: env.BETTER_AUTH_SECRET,
     database: env.DB,
-    plugins: [expo(), oAuthProxy({
+    plugins: [...review.plugins, expo(), oAuthProxy({
       productionURL: env.BETTER_AUTH_URL,
       currentURL: localOrigin ?? env.BETTER_AUTH_URL,
     })],
     ...(localOrigin ? { advanced: { useSecureCookies: false } } : {}),
+    hooks: review.hooks,
     socialProviders,
     trustedOrigins: [
       'fave://',

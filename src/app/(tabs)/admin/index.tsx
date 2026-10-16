@@ -1,3 +1,4 @@
+import { Link, type Href } from 'expo-router'
 import { useCallback, useEffect, useState } from 'react'
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native'
 import * as Linking from 'expo-linking'
@@ -9,6 +10,7 @@ import { ThemedView } from '@/components/themed-view'
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme'
 import { AdminNotificationHealth } from '@/components/admin-notification-health'
 import {
+  getAdminAccess,
   AdminDriverTripOffer,
   AdminAvailabilityRequest,
   DriverCallOutcome,
@@ -48,6 +50,7 @@ function statusLabel(status: string) {
 }
 
 export default function AdminScreen() {
+  const [operations,setOperations]=useState(false)
   const [pendingOffers, setPendingOffers] = useState<AdminDriverTripOffer[]>([])
   const [processingOffers, setProcessingOffers] = useState<AdminDriverTripOffer[]>([])
   const [recentOffers, setRecentOffers] = useState<AdminDriverTripOffer[]>([])
@@ -69,6 +72,9 @@ export default function AdminScreen() {
     if (showLoading) setLoading(true)
     setError('')
     try {
+      const access=await getAdminAccess()
+      setOperations(access.operations)
+      if(!access.operations)return
       const [result, availability] = await Promise.all([getAdminTripOffers(), getAdminAvailabilityRequests()])
       setPendingOffers(result.pendingOffers)
       setProcessingOffers(result.processingOffers)
@@ -211,6 +217,13 @@ export default function AdminScreen() {
 
           {error ? <Message error>{error}</Message> : null}
           {message ? <Message>{message}</Message> : null}
+          <Card>
+            <SectionTitle title="Application reviews" detail="Review driver and vehicle applications separately. Private evidence requires your staff verification."/>
+            <Link href={'/admin/drivers' as Href}><ThemedText type="link">Driver applications</ThemedText></Link>
+            <Link href={'/admin/vehicles' as Href}><ThemedText type="link">Vehicle applications</ThemedText></Link>
+            <Link href={'/admin/review-security' as Href}><ThemedText type="link">Staff security</ThemedText></Link>
+          </Card>
+          {operations?<>
           <AdminNotificationHealth />
 
           <SectionTitle title="Needs availability check" detail="The client has already seen the saved estimate. Call the driver before confirming the car for these dates." />
@@ -406,6 +419,7 @@ export default function AdminScreen() {
             </Card>
           ))}
           <ThemedText type="small" themeColor="textSecondary">Follow-up never accepts, declines, or extends a driver offer. Client contact details are not shown here.</ThemedText>
+          </>:null}
         </ScrollView>
       </SafeAreaView>
     </ThemedView>

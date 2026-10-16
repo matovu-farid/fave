@@ -29,7 +29,7 @@ export default function AppTabs() {
         if (active) setAdminAccessUserId(session.user.id);
       }).catch(() => undefined);
     }
-    return () => { active = false; };
+  return () => { active = false; };
   }, [session?.user.id]);
 
   useEffect(() => {
@@ -58,11 +58,11 @@ export default function AppTabs() {
           <TabTrigger name="notifications" href={'/notifications' as Href} asChild>
             <TabButton>Alerts</TabButton>
           </TabTrigger>
-          {session?.user.id && adminAccessUserId === session.user.id ? (
+          {
             <TabTrigger name="admin" href={'/admin' as Href} asChild>
-              <TabButton>Operations</TabButton>
+              <TabButton hidden={!session?.user.id || adminAccessUserId !== session.user.id}>Operations</TabButton>
             </TabTrigger>
-          ) : null}
+          }
         </CustomTabList>
       </TabList>
       <TabSlot style={styles.tabSlot} />
@@ -70,9 +70,9 @@ export default function AppTabs() {
   );
 }
 
-export function TabButton({ children, isFocused, ...props }: TabTriggerSlotProps) {
+export function TabButton({ children, isFocused, hidden, ...props }: TabTriggerSlotProps & {hidden?:boolean}) {
   return (
-    <Pressable {...props} style={({ pressed }) => pressed && styles.pressed}>
+    <Pressable {...props} style={({ pressed }) => [hidden && styles.hidden, pressed && styles.pressed]}>
       <ThemedView
         type={isFocused ? 'backgroundSelected' : 'backgroundElement'}
         style={styles.tabButtonView}>
@@ -100,6 +100,7 @@ export function CustomTabList(props: TabListProps) {
 }
 
 const styles = StyleSheet.create({
+  hidden: { display: 'none' },
   tabs: {
     flex: 1,
     minHeight: 0,

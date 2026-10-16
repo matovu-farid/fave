@@ -3,9 +3,11 @@
   "main": "expo-router/entry",
   "version": "1.0.0",
   "dependencies": {
-    "@better-auth/expo": "^1.7.5",
+    "@better-auth/core": "1.7.5",
+    "@better-auth/expo": "1.7.5",
+    "@better-auth/passkey": "1.7.5",
     "@expo/ui": "~57.0.22",
-    "better-auth": "^1.7.5",
+    "better-auth": "1.7.5",
     "decode-uri-component": "file:vendor/decode-uri-component",
     "expo": "~57.0.27",
     "expo-build-properties": "~57.0.22",
@@ -36,7 +38,8 @@
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "~4.26.0",
     "react-native-web": "~0.21.0",
-    "react-native-worklets": "0.10.1"
+    "react-native-worklets": "0.10.1",
+    "react-qr-code": "^2.2.0"
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
@@ -55,7 +58,8 @@
     "web": "expo start --web",
     "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test tests/*.test.mjs",
     "lint": "expo lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build:staff-web": "expo export --platform web"
   },
   "private": true
 }

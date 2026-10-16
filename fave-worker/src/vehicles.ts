@@ -1,10 +1,10 @@
+import { reviewAccess, isReviewMember } from './review-access'
 import { Hono } from 'hono'
 import type { AuthBindings } from './auth'
 import { approvedDriverEvidencePredicate } from './drivers'
 import {
   apiError,
   getSignedInUser,
-  isMarketplaceAdmin,
   writeMarketplaceAudit,
 } from './marketplace-auth'
 import { readPrivateEvidence, readPublicVehiclePhoto, storePrivateEvidence, storePublicVehiclePhoto } from './private-files'
@@ -25,6 +25,7 @@ type VehicleRecord = {
   registration_number: string
   status: VehicleStatus
   reviewer_reason: string | null
+  created_at?: number
   applicant_message?: string | null
   benchmark_amount_ugx?: number | null
   benchmark_basis_json?: string | null
@@ -51,6 +52,7 @@ function currentVehicleRequirementPredicate(mediaAlias: string): string {
 
 const vehiclesApp = new Hono<{ Bindings: AuthBindings }>()
 const adminVehiclesApp = new Hono<{ Bindings: AuthBindings }>()
+adminVehiclesApp.use('*', reviewAccess)
 
 export function approvedVehicleEvidencePredicate(vehicleAlias: string): string {
   return `${approvedDriverEvidencePredicate(`${vehicleAlias}.driver_application_id`)}
@@ -1028,7 +1030,7 @@ vehiclesApp.delete('/:vehicleId/unavailability/:blockId', async (c) => {
 adminVehiclesApp.get('/pending', async (c) => {
   const user = await getSignedInUser(c.env, c.req.raw)
   if (!user) return c.json(apiError('UNAUTHORIZED', 'Sign in to continue.'), 401)
-  if (!(await isMarketplaceAdmin(c.env, user.id))) {
+  if (!(await isReviewMember(c.env, user.id))) {
     return c.json(apiError('FORBIDDEN', 'You are not authorized to review vehicle listings.'), 403)
   }
 
@@ -1036,10 +1038,10 @@ adminVehiclesApp.get('/pending', async (c) => {
     `SELECT vehicle.id, vehicle.make, vehicle.model, vehicle.model_year,
             vehicle.passenger_capacity, vehicle.luggage_capacity,
             vehicle.comfort_details, vehicle.accessibility_details,
-            vehicle.status, vehicle.reviewer_reason, vehicle.benchmark_amount_ugx,
+            vehicle.status, vehicle.created_at, vehicle.reviewer_reason, vehicle.benchmark_amount_ugx,
             vehicle.benchmark_basis_json, vehicle.benchmark_derivation_version
        FROM vehicles AS vehicle WHERE vehicle.status IN ('pending_review', 'needs_correction')
-      ORDER BY vehicle.created_at ASC`,
+      ORDER BY vehicle.created_at ASC LIMIT 100`,
   ).all<VehicleRecord>()
 
   const pending = await Promise.all(vehicles.results.map(async (vehicle) => {
@@ -1055,26 +1057,41 @@ adminVehiclesApp.get('/pending', async (c) => {
       .bind(vehicle.id, Date.now())
       .all<{ id: string; media_kind: string; review_status: string; reviewer_reason: string | null }>()
     return {
-      ...safeVehicle(vehicle),
-      benchmark: privateVehicleFareBenchmark(vehicle),
-      status: vehicle.status,
-      reason: vehicle.reviewer_reason,
-      media: media.results.map((item) => ({
-        id: item.id,
-        type: item.media_kind,
-        status: item.review_status,
-        reason: item.reviewer_reason,
-      })),
+      id:vehicle.id,label:`${vehicle.model_year} ${vehicle.make} ${vehicle.model}`,
+      status:vehicle.status,submittedAt:vehicle.created_at,
+      progress:{approved:media.results.filter(m=>m.review_status==='approved').length,total:media.results.length},
     }
   }))
 
   return c.json({ vehicles: pending })
 })
 
+adminVehiclesApp.get('/:vehicleId/review', async c => {
+  const vehicle = await getVehicle(c.env,c.req.param('vehicleId'))
+  if (!vehicle) return c.json(apiError('NOT_FOUND','Vehicle was not found.'),404)
+  const [media,checklist,driver,retention,approved] = await Promise.all([
+    c.env.DB.prepare(`SELECT id,media_kind AS type,review_status AS status,reviewer_reason AS reason,
+      content_type AS contentType,requirement_version AS requirementVersion FROM vehicle_media AS media
+      WHERE vehicle_id=? AND ${currentVehicleRequirementPredicate('media')}
+      AND (media_kind='client_photo' OR retention_expires_at > ?) ORDER BY media_kind,created_at`)
+      .bind(vehicle.id,Date.now()).all(),
+    c.env.DB.prepare('SELECT evidence_type AS type,version FROM vehicle_verification_requirements WHERE active=1 AND required=1 AND approved_at IS NOT NULL').all(),
+    c.env.DB.prepare(`SELECT 1 FROM driver_applications WHERE id=? AND ${approvedDriverEvidencePredicate('driver_applications.id')}`)
+      .bind(vehicle.driver_application_id,Date.now(),Date.now(),Date.now(),Date.now(),Date.now()).first(),
+    c.env.DB.prepare("SELECT 1 FROM retention_policies WHERE record_type='vehicle_evidence' AND active=1 AND approved_at IS NOT NULL").first(),
+    getVehicleEvidenceReady(c.env,vehicle.id),
+  ])
+  return c.json({id:vehicle.id,label:`${vehicle.model_year} ${vehicle.make} ${vehicle.model}`,status:vehicle.status,
+    vehicle:safeVehicle(vehicle),benchmark:privateVehicleFareBenchmark(vehicle),reason:vehicle.reviewer_reason,
+    applicantMessage:vehicle.applicant_message,checklist:checklist.results,documents:media.results,
+    blockers:[...(!driver?['Driver approval and current evidence required.']:[]),...(!retention?['Approved retention policy required.']:[]),
+      ...(!checklist.results.length?['Active verification checklist required.']:[]),...(!approved?['Required evidence or two approved photos missing.']:[])]})
+})
+
 adminVehiclesApp.post('/:vehicleId/identity-review', async (c) => {
   const user = await getSignedInUser(c.env, c.req.raw)
   if (!user) return c.json(apiError('UNAUTHORIZED', 'Sign in to continue.'), 401)
-  if (!(await isMarketplaceAdmin(c.env, user.id))) {
+  if (!(await isReviewMember(c.env, user.id))) {
     return c.json(apiError('FORBIDDEN', 'You are not authorized to review vehicle identity details.'), 403)
   }
   const body: unknown = await c.req.json().catch(() => null)
@@ -1098,7 +1115,7 @@ adminVehiclesApp.post('/:vehicleId/identity-review', async (c) => {
 adminVehiclesApp.post('/:vehicleId/media/:mediaId/access', async (c) => {
   const user = await getSignedInUser(c.env, c.req.raw)
   if (!user) return c.json(apiError('UNAUTHORIZED', 'Sign in to continue.'), 401)
-  if (!(await isMarketplaceAdmin(c.env, user.id))) {
+  if (!(await isReviewMember(c.env, user.id))) {
     return c.json(apiError('FORBIDDEN', 'You are not authorized to access vehicle evidence.'), 403)
   }
   const body: unknown = await c.req.json().catch(() => null)
@@ -1130,7 +1147,7 @@ adminVehiclesApp.post('/:vehicleId/media/:mediaId/access', async (c) => {
 adminVehiclesApp.post('/:vehicleId/media/:mediaId/decision', async (c) => {
   const user = await getSignedInUser(c.env, c.req.raw)
   if (!user) return c.json(apiError('UNAUTHORIZED', 'Sign in to continue.'), 401)
-  if (!(await isMarketplaceAdmin(c.env, user.id))) {
+  if (!(await isReviewMember(c.env, user.id))) {
     return c.json(apiError('FORBIDDEN', 'You are not authorized to review vehicle media.'), 403)
   }
   const body: unknown = await c.req.json().catch(() => null)
@@ -1154,7 +1171,7 @@ adminVehiclesApp.post('/:vehicleId/media/:mediaId/decision', async (c) => {
   )
     .bind(c.req.param('mediaId'), c.req.param('vehicleId'))
     .first<{ id: string; review_status: string; vehicle_status: string }>()
-  if (!media || media.review_status !== 'pending') {
+  if (!media || media.review_status !== 'pending' || !['pending_review','needs_correction','approved'].includes(media.vehicle_status)) {
     return c.json(apiError('INVALID_MEDIA_STATE', 'This vehicle evidence is no longer awaiting review.'), 409)
   }
 
@@ -1164,11 +1181,12 @@ adminVehiclesApp.post('/:vehicleId/media/:mediaId/decision', async (c) => {
     c.env.DB.prepare(
       `UPDATE vehicle_media SET review_status = ?, reviewer_reason = ?, applicant_message = ?, reviewed_by = ?, reviewed_at = ?
         WHERE id = ? AND vehicle_id = ? AND review_status = 'pending'
+          AND EXISTS (SELECT 1 FROM vehicles WHERE vehicles.id=vehicle_media.vehicle_id AND vehicles.status=?)
           AND ${currentVehicleRequirementPredicate('vehicle_media')}
           AND (media_kind = 'client_photo' OR
                (retention_expires_at IS NOT NULL AND retention_expires_at > ?))`,
     ).bind(nextState, input.reason.trim(), input.decision === 'reject' ? (input.applicantMessage as string).trim() : null,
-      user.id, now, media.id, c.req.param('vehicleId'), now),
+      user.id, now, media.id, c.req.param('vehicleId'), media.vehicle_status, now),
     c.env.DB.prepare(
       `INSERT INTO marketplace_audit_events
         (id, actor_user_id, action, target_type, target_id, reason, prior_state, new_state, created_at)
@@ -1178,7 +1196,7 @@ adminVehiclesApp.post('/:vehicleId/media/:mediaId/decision', async (c) => {
     ...(input.decision === 'reject' ? [
       c.env.DB.prepare(
         `UPDATE vehicles SET status = 'needs_correction', reviewer_reason = ?, applicant_message = ?, updated_at = ?
-          WHERE id = ? AND status IN ('pending_review', 'approved')`,
+          WHERE id = ? AND status IN ('pending_review', 'approved') AND changes()=1`,
       ).bind(input.reason.trim(), (input.applicantMessage as string).trim(), now, c.req.param('vehicleId')),
       c.env.DB.prepare(
         `INSERT INTO marketplace_audit_events
@@ -1198,7 +1216,7 @@ adminVehiclesApp.post('/:vehicleId/media/:mediaId/decision', async (c) => {
 adminVehiclesApp.post('/:vehicleId/decision', async (c) => {
   const user = await getSignedInUser(c.env, c.req.raw)
   if (!user) return c.json(apiError('UNAUTHORIZED', 'Sign in to continue.'), 401)
-  if (!(await isMarketplaceAdmin(c.env, user.id))) {
+  if (!(await isReviewMember(c.env, user.id))) {
     return c.json(apiError('FORBIDDEN', 'You are not authorized to review vehicle listings.'), 403)
   }
   const body: unknown = await c.req.json().catch(() => null)

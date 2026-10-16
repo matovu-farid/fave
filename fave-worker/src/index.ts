@@ -1,3 +1,4 @@
+import adminReviewSecurity from './admin-review-security'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { createAuth, getWebAppOrigins, type AuthBindings } from './auth'
@@ -34,9 +35,16 @@ app.use(
   }),
 )
 
-app.all('/api/auth/*', (c) => createAuth(c.env, c.req.raw.headers).handler(c.req.raw))
+app.all('/api/auth/*', async c => {
+  const response=await createAuth(c.env,c.req.raw.headers).handler(c.req.raw)
+  if(response.status===404&&!response.headers.get('Content-Type')?.includes('application/json')) {
+    return c.json({error:{code:'NOT_FOUND',message:'Authentication route was not found.'}},404)
+  }
+  return response
+})
 app.route('/api/marketplace', policiesApp)
 app.route('/api/drivers', driversApp)
+app.route('/api/admin/review-security', adminReviewSecurity)
 app.route('/api/admin/drivers', adminDriversApp)
 app.route('/api/vehicles', vehiclesApp)
 app.route('/api/admin/vehicles', adminVehiclesApp)
@@ -46,8 +54,20 @@ app.route('/api/notifications', notificationsApp)
 app.route('/api/admin/notifications', adminNotificationsApp)
 app.route('/api/trips', tripsApp)
 
-app.get('/', (c) => {
-  return c.text('Hello Hono!')
+app.notFound(async c => {
+  const path=new URL(c.req.url).pathname
+  if(path==='/api'||path.startsWith('/api/')) return c.json({error:{code:'NOT_FOUND',message:'API route was not found.'}},404)
+  if(!c.env.ASSETS) return c.text('Not found',404)
+  const asset=await c.env.ASSETS.fetch(c.req.raw)
+  const response=new Response(asset.body,asset)
+  if(path==='/admin'||path.startsWith('/admin/')) {
+    response.headers.set('Cache-Control','private, no-store')
+    response.headers.set('Referrer-Policy','same-origin')
+    response.headers.set('X-Frame-Options','DENY')
+    response.headers.set('Permissions-Policy','publickey-credentials-get=(self), publickey-credentials-create=(self)')
+    response.headers.set('Content-Security-Policy',"default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; font-src 'self' data:; connect-src 'self'; frame-src blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'")
+  }
+  return response
 })
 
 app.get('/health', async (c) => {

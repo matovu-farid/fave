@@ -1,7 +1,8 @@
-# Staff application review with owner passkey access
+# Staff application review with owner verification
 
-Status: Proposed final design for owner review. Layout, initial reviewer scope and
-passkey choice were confirmed on 16 October 2026. Implementation has not started.
+Status: Approved by the owner on 16 October 2026, including the ten-minute
+unlock. The owner subsequently requested both passkeys and authenticator-app
+codes; either verified method may unlock reviews.
 
 Related: #7 driver verification, #8 vehicle review, #17 operations console.
 This implements their application-review workflow; payment, incident and policy
@@ -12,8 +13,8 @@ management remain separate work under their owning issues.
 - Separate driver and vehicle review screens, with one application detail shown
   at a time.
 - Only the owner may review driver identity documents initially.
-- Use a passkey rather than an authenticator-app code for sensitive review and
-  approval.
+- Offer both a passkey and an authenticator-app code for sensitive review and
+  approval. Either configured method works; enrolling both is optional.
 - Work inline on `main`, without branches or worktrees. Test in the browser.
 
 ## Experience
@@ -29,12 +30,13 @@ remain available on Admin. Use the existing mobile-first cards, typography,
 spacing, field and button components; preserve keyboard focus and readable
 single-column review on small screens.
 
-The owner chooses **Unlock reviews with passkey**. The browser performs user
-verification using a device PIN, biometric or security key. The server grants
+The owner chooses **Use passkey** or **Use authenticator code**. A passkey requires
+browser user verification using a device PIN, biometric or security key; a code
+is cryptographically checked against the enrolled authenticator secret. The server grants
 that session ten minutes of review access. The UI shows when it expires and
 clears private fields/images on lock, expiry, sign-out or leaving the application.
 The owner can lock it immediately. Unsupported or cancelled passkey prompts show
-a clear retry/support path and never fall back to a weaker review method.
+a clear retry/support path. The other enrolled method remains available.
 
 Private evidence starts hidden. Opening it requires an entered review purpose;
 the API records access before returning the content. Documents are viewed inside
@@ -60,18 +62,27 @@ review endpoints so vehicle evidence does not become an alternate private path.
 
 Safe review queues require the reviewer membership. Private detail/evidence and
 document/application decisions additionally require a recent server-verified
-passkey assertion. Proof is bound to the actual authenticated session, user,
-credential and origin, expires after ten minutes and is invalidated by sign-out,
+passkey assertion or authenticator code. Proof is bound to the actual authenticated
+session, user, verified method/credential and origin, expires after ten minutes and is invalidated by sign-out,
 session revocation, reviewer revocation, credential removal or an explicit lock.
 An email address, UI flag, fresh OAuth login or registered-passkey count alone is
 not proof of passkey verification.
 
-First registration requires the provisioned owner and a recent authenticated
-session, with browser user verification required. Existing passkeys must be
-verified before adding/removing credentials; prevent removing the final usable
-key through the ordinary interface. Offer an additional recovery passkey. Lost
-key recovery requires a documented operator identity check, audit and revocation
-of old review access; do not add email/SMS or password fallback for ID review.
+First security-method registration requires the provisioned owner and a recent authenticated
+session, with browser user verification required. An enrolled method must be
+verified before adding/removing another method; prevent removing the final usable
+method through the ordinary interface. Offer a backup passkey or authenticator. Lost
+method recovery requires a documented operator identity check, audit and revocation
+of old review access; do not add email/SMS, backup-code or password fallback for ID review.
+
+Use Better Auth’s two-factor plugin with passwordless enrollment for the owner’s
+existing social account. Confirm a setup code before treating an authenticator as
+usable. Never grant review access from the `twoFactorEnabled` flag, trusted-device
+cookie, backup code or a normal social login. Add durable per-owner throttling to
+signed-in code verification and single-use code protection across sessions; the
+plugin’s sign-in challenge limits alone do not protect this signed-in unlock.
+Authenticator secrets/QR contents are only shown during protected enrollment,
+rendered locally, held in memory and cleared when leaving. No external QR service.
 The owner performs actual credential enrollment and device approval.
 
 WebAuthn challenge validation must enforce the expected RP/origin, ownership,
@@ -84,7 +95,8 @@ errors must not contain identity contents, credentials or assertion payloads.
 
 Use the official `@better-auth/passkey` plugin version 1.7.5, matching installed
 Better Auth 1.7.5; no incidental authentication upgrade. Keep Google and Apple
-sign-in for clients/drivers. Passkey review is a distinct privileged step.
+sign-in for clients/drivers. Staff verification is a distinct privileged step. Use the matching built-in
+`twoFactor` plugin alongside passkeys; do not change ordinary social sign-in.
 
 The matching published package was inspected without installing it. Its
 registration/authentication verification defaults do not require the signed
@@ -150,7 +162,7 @@ lookup/action support; do not present controls that their APIs cannot execute.
   its Better Auth peer range includes the installed version.
 - [Better Auth two-factor behavior](https://better-auth.com/docs/plugins/2fa):
   default social sign-in is not a substitute for an explicit strong-review check;
-  an authenticator-code design was not selected by the owner.
+  the owner selected authenticator codes as a second available review method.
 - [Expo SDK 57](https://docs.expo.dev/versions/v57.0.0/) and
   [static rendering](https://docs.expo.dev/router/web/static-rendering/) for the
   existing Expo Router/static web build constraints.

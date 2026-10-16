@@ -1,9 +1,9 @@
+import { reviewAccess, isReviewMember } from './review-access'
 import { Hono } from 'hono'
 import type { AuthBindings } from './auth'
 import {
   apiError,
   getSignedInUser,
-  isMarketplaceAdmin,
   writeMarketplaceAudit,
 } from './marketplace-auth'
 import { getCurrentPolicies, hasCurrentPolicyAcceptance } from './marketplace-policies'
@@ -197,6 +197,7 @@ async function hasAllRequiredDocumentsApproved(
 
 const driversApp = new Hono<{ Bindings: AuthBindings }>()
 const adminDriversApp = new Hono<{ Bindings: AuthBindings }>()
+adminDriversApp.use('*', reviewAccess)
 
 driversApp.get('/application', async (c) => {
   const user = await getSignedInUser(c.env, c.req.raw)
@@ -574,7 +575,7 @@ driversApp.post('/application/lodging-rate', async (c) => {
 adminDriversApp.get('/pending', async (c) => {
   const user = await getSignedInUser(c.env, c.req.raw)
   if (!user) return c.json(apiError('UNAUTHORIZED', 'Sign in to continue.'), 401)
-  if (!(await isMarketplaceAdmin(c.env, user.id))) {
+  if (!(await isReviewMember(c.env, user.id))) {
     return c.json(apiError('FORBIDDEN', 'You are not authorized to review driver applications.'), 403)
   }
 
@@ -583,7 +584,7 @@ adminDriversApp.get('/pending', async (c) => {
        FROM driver_applications
       WHERE status IN ('pending_verification', 'needs_correction')
         AND retention_expires_at IS NOT NULL AND retention_expires_at > ?
-      ORDER BY submitted_at ASC`,
+      ORDER BY submitted_at ASC LIMIT 100`,
   ).bind(Date.now()).all<{
     id: string
     legal_name: string
@@ -613,29 +614,53 @@ adminDriversApp.get('/pending', async (c) => {
       }>()
 
     return {
-      id: application.id,
-      legal_name: application.legal_name,
-      phone_e164: application.phone_e164,
-      citizenship_confirmed: application.citizenship_attested_at !== null,
-      status: application.status,
-      submitted_at: application.submitted_at,
-      documents: documents.results.map((document) => ({
-        id: document.id,
-        type: document.document_type,
-        status: document.review_status,
-        reason: document.reviewer_reason,
-        submittedAt: document.created_at,
-      })),
+      id: application.id, label: application.legal_name,
+      status: application.status, submittedAt: application.submitted_at,
+      progress: { approved: documents.results.filter(d => d.review_status === 'approved').length, total: documents.results.length },
     }
   }))
 
   return c.json({ applications: pending })
 })
 
+adminDriversApp.get('/:applicationId/review', async c => {
+  const application = await c.env.DB.prepare(`SELECT id, user_id, legal_name, status, submitted_at,
+    submission_version, citizenship_attested_at, lodging_rate_ugx, reviewer_reason, applicant_message
+    FROM driver_applications WHERE id=? AND retention_expires_at > ?`)
+    .bind(c.req.param('applicationId'), Date.now()).first<{
+      id:string; user_id:string; legal_name:string; status:string; submitted_at:number|null;
+      submission_version:number; citizenship_attested_at:number|null; lodging_rate_ugx:number|null;
+      reviewer_reason:string|null; applicant_message:string|null
+    }>()
+  if (!application) return c.json(apiError('NOT_FOUND','Application was not found or its evidence expired.'),404)
+  const [documents, requirements, policies, retention, approved] = await Promise.all([
+    c.env.DB.prepare(`SELECT id, document_type AS type, review_status AS status, reviewer_reason AS reason,
+      content_type AS contentType, requirement_version AS requirementVersion FROM driver_application_documents AS document
+      WHERE application_id=? AND submission_version=? AND retention_expires_at > ?
+      AND ${currentChecklistDocumentPredicate('document')} ORDER BY document_type`)
+      .bind(application.id,application.submission_version,Date.now()).all(),
+    getRequiredDocuments(c.env), getCurrentPolicies(c.env,['driver_terms','driver_privacy'],'en'),
+    c.env.DB.prepare("SELECT 1 FROM retention_policies WHERE record_type='driver_application' AND active=1 AND approved_at IS NOT NULL").first(),
+    hasAllRequiredDocumentsApproved(c.env,application.id),
+  ])
+  const accepted = await Promise.all(policies.map(policy => hasCurrentPolicyAcceptance(c.env,application.user_id,policy,'driver_onboarding')))
+  const blockers = [
+    ...(!application.citizenship_attested_at ? ['Citizenship confirmation missing.'] : []),
+    ...(policies.length!==2||accepted.some(value=>!value) ? ['Current driver terms and privacy acceptance required.'] : []),
+    ...(!retention ? ['Approved retention policy required.'] : []),
+    ...(!requirements.length ? ['Active verification checklist required.'] : []),
+    ...(!approved ? ['Required documents are missing, outdated or not yet approved.'] : []),
+  ]
+  return c.json({id:application.id,label:application.legal_name,status:application.status,
+    submittedAt:application.submitted_at,submissionVersion:application.submission_version,
+    lodgingRateUgx:application.lodging_rate_ugx,reason:application.reviewer_reason,applicantMessage:application.applicant_message,
+    checklist:requirements.map(r=>({type:r.document_type,version:r.version})),documents:documents.results,blockers})
+})
+
 adminDriversApp.post('/:applicationId/identity-review', async (c) => {
   const user = await getSignedInUser(c.env, c.req.raw)
   if (!user) return c.json(apiError('UNAUTHORIZED', 'Sign in to continue.'), 401)
-  if (!(await isMarketplaceAdmin(c.env, user.id))) {
+  if (!(await isReviewMember(c.env, user.id))) {
     return c.json(apiError('FORBIDDEN', 'You are not authorized to review identity evidence.'), 403)
   }
 
@@ -687,7 +712,7 @@ adminDriversApp.post('/:applicationId/identity-review', async (c) => {
 adminDriversApp.post('/:applicationId/documents/:documentId/access', async (c) => {
   const user = await getSignedInUser(c.env, c.req.raw)
   if (!user) return c.json(apiError('UNAUTHORIZED', 'Sign in to continue.'), 401)
-  if (!(await isMarketplaceAdmin(c.env, user.id))) {
+  if (!(await isReviewMember(c.env, user.id))) {
     return c.json(apiError('FORBIDDEN', 'You are not authorized to review identity evidence.'), 403)
   }
 
@@ -727,7 +752,7 @@ adminDriversApp.post('/:applicationId/documents/:documentId/access', async (c) =
 adminDriversApp.post('/:applicationId/documents/:documentId/decision', async (c) => {
   const user = await getSignedInUser(c.env, c.req.raw)
   if (!user) return c.json(apiError('UNAUTHORIZED', 'Sign in to continue.'), 401)
-  if (!(await isMarketplaceAdmin(c.env, user.id))) {
+  if (!(await isReviewMember(c.env, user.id))) {
     return c.json(apiError('FORBIDDEN', 'You are not authorized to review driver documents.'), 403)
   }
 
@@ -820,7 +845,7 @@ adminDriversApp.post('/:applicationId/documents/:documentId/decision', async (c)
 adminDriversApp.post('/:applicationId/decision', async (c) => {
   const user = await getSignedInUser(c.env, c.req.raw)
   if (!user) return c.json(apiError('UNAUTHORIZED', 'Sign in to continue.'), 401)
-  if (!(await isMarketplaceAdmin(c.env, user.id))) {
+  if (!(await isReviewMember(c.env, user.id))) {
     return c.json(apiError('FORBIDDEN', 'You are not authorized to review driver applications.'), 403)
   }
 

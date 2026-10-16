@@ -13,6 +13,7 @@ function loadDrivers({ user = { id: 'client-1', name: 'Client', email: 'client@e
   let auditCalls = 0
   let decryptCalls = 0
   class CapturingHono {
+    use() { return this }
     get(path, handler) { routes.set(`GET ${path}`, handler); return this }
     post(path, handler) { routes.set(`POST ${path}`, handler); return this }
   }
@@ -24,6 +25,7 @@ function loadDrivers({ user = { id: 'client-1', name: 'Client', email: 'client@e
     exports,
     require: (name) => {
       if (name === 'hono') return { Hono: CapturingHono }
+      if (name === './review-access') return { reviewAccess: () => {}, isReviewMember: async (env, userId) => env.DB.prepare('SELECT 1 FROM review_memberships WHERE user_id = ? AND active = 1').bind(userId).first() }
       if (name === './marketplace-auth') return {
         apiError: (apiErrorCode, message) => ({ error: { code: apiErrorCode, message } }),
         getSignedInUser: async () => user,
@@ -85,7 +87,7 @@ test('signed-in non-admins cannot open a driver national ID record', async () =>
     error: { code: 'FORBIDDEN', message: 'You are not authorized to review identity evidence.' },
   })
   assert.equal(queries.length, 1)
-  assert.match(queries[0], /FROM admin_memberships/u)
+  assert.match(queries[0], /FROM review_memberships/u)
   assert.equal(app.auditCalls, 0)
   assert.equal(app.decryptCalls, 0)
 })
@@ -112,7 +114,7 @@ test('signed-in non-admins cannot list pending driver applications', async () =>
     error: { code: 'FORBIDDEN', message: 'You are not authorized to review driver applications.' },
   })
   assert.equal(queries.length, 1)
-  assert.match(queries[0], /FROM admin_memberships/u)
+  assert.match(queries[0], /FROM review_memberships/u)
 })
 
 test('a driver application response omits national ID values and private file keys', async () => {

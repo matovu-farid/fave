@@ -30,17 +30,19 @@ export function availabilityFixture(t) {
     static now() { return clock.now }
   }
   const DB = {
+    async exec(query) { sql.exec(query) },
     prepare(query) {
       const statement = sql.prepare(query)
       return {
-        args: [],
+        args: [], query,
         bind(...args) {
           const expected = (query.match(/\?/gu) ?? []).length
           if (expected !== args.length) throw new Error(`Expected ${expected} SQL bindings, got ${args.length}: ${query}`)
           this.args = args; return this
         },
         async first(column) { const row = statement.get(...this.args) ?? null; return column && row ? row[column] : row },
-        async all() { return { success: true, results: statement.all(...this.args) } },
+        allSync() { const results = statement.all(...this.args); return { success: true, results, meta: { changes: sql.prepare('SELECT changes() AS count').get().count } } },
+        async all() { return this.allSync() },
         runSync() { return { success: true, meta: { changes: Number(statement.run(...this.args).changes) } } },
         async run() { return this.runSync() },
       }
@@ -48,7 +50,7 @@ export function availabilityFixture(t) {
     async batch(statements) {
       sql.exec('BEGIN IMMEDIATE')
       try {
-        const results = statements.map((statement) => statement.runSync())
+        const results = statements.map((statement) => statement.allSync())
         sql.exec('COMMIT')
         return results
       } catch (error) { sql.exec('ROLLBACK'); throw error }
@@ -57,6 +59,7 @@ export function availabilityFixture(t) {
   const insert = (table, row) => sql.prepare(`INSERT INTO ${table} (${Object.keys(row).join(',')}) VALUES (${Object.keys(row).map(() => '?').join(',')})`).run(...Object.values(row))
   for (const id of ['client-1', 'client-2', 'staff', 'driver']) {
     insert('user', { id, name: id, email: `${id}@example.test`, emailVerified: 1, createdAt: 1, updatedAt: 1 })
+    insert('session', { id: `${id}-session`, userId: id, token: `${id}-test-token`, expiresAt: clock.now + 365 * 86400000, createdAt: clock.now, updatedAt: clock.now })
     insert('client_profiles', { user_id: id, legal_name: id, phone_e164: '+256700000000', created_at: 1, updated_at: 1 })
   }
   insert('admin_memberships', { user_id: 'staff', active: 1, granted_at: 1 })
@@ -95,7 +98,8 @@ export function availabilityFixture(t) {
   function load(path) {
     if (path === `${worker}/src/auth.ts`) return { createAuth: () => ({ api: { getSession: async ({ headers }) => {
       const user = sql.prepare('SELECT id, name, email FROM user WHERE id = ?').get(headers.get('x-test-user') ?? '')
-      return user ? { user } : null
+      const session = user ? sql.prepare('SELECT * FROM session WHERE userId = ?').get(user.id) : null
+      return user && session && session.expiresAt > clock.now ? { user, session } : null
     } } }) }
     if (path === `${worker}/src/google-maps.ts`) return maps
     if (cache.has(path)) return cache.get(path).exports
@@ -112,18 +116,21 @@ export function availabilityFixture(t) {
   const trips = load(`${worker}/src/bookings.ts`).default
   const admin = load(`${worker}/src/admin-availability-requests.ts`).default
   const vehicles = load(`${worker}/src/vehicles.ts`).vehiclesApp
+  const adminVehicles = load(`${worker}/src/vehicles.ts`).adminVehiclesApp
   const adminDrivers = load(`${worker}/src/drivers.ts`).adminDriversApp
-  async function request(app, method, path, { user = 'client-1', body } = {}) {
+  async function request(app, method, path, { user = 'client-1', body, headers = {} } = {}) {
     const response = await app.request(`https://fave.test${path}`, {
-      method, headers: { 'content-type': 'application/json', ...(user ? { 'x-test-user': user } : {}) },
+      method, headers: { 'content-type': 'application/json', ...(user ? { 'x-test-user': user } : {}), origin: 'https://fave.test', ...headers },
       ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
-    }, { DB })
+    }, { DB, BETTER_AUTH_URL: 'https://fave.test' })
     return { status: response.status, body: response.headers.get('content-type')?.includes('json') ? await response.json() : await response.text() }
   }
   const trip = (method, path, options) => request(trips, method, path, options)
   const staff = (method, path, options = {}) => request(admin, method, path, { user: 'staff', ...options })
   const vehicle = (method, path, options) => request(vehicles, method, path, options)
   const reviewDriver = (method, path, options = {}) => request(adminDrivers, method, path, { user: 'staff', ...options })
+  const reviewVehicle = (method, path, options = {}) => request(adminVehicles, method, path, { user: 'staff', ...options })
+  const reviewSecurity = (method, path, options = {}) => request(load(`${worker}/src/admin-review-security.ts`).default, method, path, { user: 'staff', ...options })
   async function estimateAndRequest(options = {}) {
     const estimate = await trip('POST', '/estimates', { ...options, body: { ...tripInput, ...options.body } })
     if (estimate.status !== 201) throw new Error(`Could not create fixture estimate: ${JSON.stringify(estimate)}`)
@@ -132,5 +139,15 @@ export function availabilityFixture(t) {
     return { estimate: estimate.body, request: result.body }
   }
   async function logCall(requestId, outcome = 'reached') { return staff('POST', `/${requestId}/calls`, { body: { outcome, note: 'Synthetic test call' } }) }
-  return { sql, DB, clock, maps, insert, trip, staff, vehicle, reviewDriver, estimateAndRequest, logCall }
+  function grantReview(user = 'staff', method = 'passkey') {
+    insert('review_memberships', { user_id: user, active: 1, granted_at: 1 })
+    if (method === 'passkey') insert('passkey', { id: `${user}-key`, userId: user, publicKey: 'synthetic', credentialID: `${user}-credential`, counter: 0, deviceType: 'multiDevice', backedUp: 1 })
+    else {
+      insert('twoFactor', { id: `${user}-key`, userId: user, secret: 'synthetic', backupCodes: 'synthetic', verified: 1 })
+      sql.prepare('UPDATE user SET twoFactorEnabled=1 WHERE id=?').run(user)
+    }
+    insert('review_session_proofs', { session_id: `${user}-session`, source_session_id: `${user}-session`, user_id: user, origin: 'https://fave.test', method, credential_id: `${user}-key`, verified_at: clock.now, expires_at: clock.now + 600000 })
+  }
+  return { sql, DB, clock, maps, insert, trip, staff, vehicle, reviewDriver, estimateAndRequest, logCall, grantReview, reviewVehicle, reviewSecurity }
+
 }

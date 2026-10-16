@@ -7,6 +7,7 @@ const reason = 'Evidence matches the approved checklist'
 
 function pendingReview(t) {
   const f = availabilityFixture(t)
+  f.grantReview()
   f.sql.exec("UPDATE driver_applications SET status = 'pending_verification'; UPDATE driver_application_documents SET review_status = 'pending'")
   return f
 }
