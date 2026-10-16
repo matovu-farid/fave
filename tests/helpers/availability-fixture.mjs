@@ -112,6 +112,7 @@ export function availabilityFixture(t) {
   const trips = load(`${worker}/src/bookings.ts`).default
   const admin = load(`${worker}/src/admin-availability-requests.ts`).default
   const vehicles = load(`${worker}/src/vehicles.ts`).vehiclesApp
+  const adminDrivers = load(`${worker}/src/drivers.ts`).adminDriversApp
   async function request(app, method, path, { user = 'client-1', body } = {}) {
     const response = await app.request(`https://fave.test${path}`, {
       method, headers: { 'content-type': 'application/json', ...(user ? { 'x-test-user': user } : {}) },
@@ -122,6 +123,7 @@ export function availabilityFixture(t) {
   const trip = (method, path, options) => request(trips, method, path, options)
   const staff = (method, path, options = {}) => request(admin, method, path, { user: 'staff', ...options })
   const vehicle = (method, path, options) => request(vehicles, method, path, options)
+  const reviewDriver = (method, path, options = {}) => request(adminDrivers, method, path, { user: 'staff', ...options })
   async function estimateAndRequest(options = {}) {
     const estimate = await trip('POST', '/estimates', { ...options, body: { ...tripInput, ...options.body } })
     if (estimate.status !== 201) throw new Error(`Could not create fixture estimate: ${JSON.stringify(estimate)}`)
@@ -130,5 +132,5 @@ export function availabilityFixture(t) {
     return { estimate: estimate.body, request: result.body }
   }
   async function logCall(requestId, outcome = 'reached') { return staff('POST', `/${requestId}/calls`, { body: { outcome, note: 'Synthetic test call' } }) }
-  return { sql, DB, clock, maps, insert, trip, staff, vehicle, estimateAndRequest, logCall }
+  return { sql, DB, clock, maps, insert, trip, staff, vehicle, reviewDriver, estimateAndRequest, logCall }
 }

@@ -804,7 +804,7 @@ adminDriversApp.post('/:applicationId/documents/:documentId/decision', async (c)
           SET status = 'needs_correction', reviewer_reason = ?, applicant_message = ?,
               reviewed_by = ?, reviewed_at = ?, updated_at = ?
         WHERE changes() = 1 AND id = ? AND status = ? AND ? = 'rejected'`,
-    ).bind(applicationReason, (applicantMessage as string).trim(), user.id, now, now,
+    ).bind(applicationReason, decision === 'reject' ? (applicantMessage as string).trim() : null, user.id, now, now,
       c.req.param('applicationId'), application.status, newStatus),
     c.env.DB.prepare(
       `INSERT INTO marketplace_audit_events
