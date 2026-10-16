@@ -11,7 +11,8 @@ import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme'
 import { ApiError, apiBaseUrl } from '@/lib/api'
 import { authClient } from '@/lib/auth-client'
 import { createLatestRequestGuard } from '@/lib/latest-request'
-import { ClientPrerequisites, ClientTripOffer, confirmTrip, getAvailableVehicles, getClientPrerequisites, getCurrentTripOffer, getMyBookings, getTripOfferStatus, PolicyDocument, requestTripQuote, TripBooking, TripQuote, updateClientProfile, Vehicle, withdrawTripOffer } from '@/lib/marketplace'
+import { ClientAvailabilityRequest, ClientPrerequisites, ClientTripOffer, confirmTrip, createTripEstimate, getAvailabilityRequest, getAvailableVehicles, getClientPrerequisites, getCurrentAvailabilityRequest, getCurrentTripOffer, getMyBookings, getTripEstimate, getTripOfferStatus, PolicyDocument, requestAvailabilityCheck, TripBooking, TripEstimate, TripQuote, updateClientProfile, Vehicle, withdrawAvailabilityRequest, withdrawTripOffer } from '@/lib/marketplace'
+import { getAvailabilityView, getRestorableLegacyQuote, isAwaitingAvailability, tripDraftFromEstimate } from '@/lib/trip-availability'
 import { BookingProgressStage, getBookingProgress, getCurrentBookingStage, hasActiveDepositHold, hasTripDraftContent, restoreSelectedVehicleId, TripDraft } from '@/lib/trip-draft'
 import { tripDraftStore } from '@/lib/trip-draft-storage'
 import { getDriverAccommodationNotice } from '@/lib/trip-quote-display'
@@ -31,6 +32,8 @@ export default function TripsScreen() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
   const [selectedVehicle, setSelectedVehicle] = useState('')
   const [quote, setQuote] = useState<TripQuote | null>(null)
+  const [estimate, setEstimate] = useState<TripEstimate | null>(null)
+  const [availabilityRequest, setAvailabilityRequest] = useState<ClientAvailabilityRequest | null>(null)
   const [offer, setOffer] = useState<ClientTripOffer | null>(null)
   const [offerCountdown, setOfferCountdown] = useState(0)
   const [loading, setLoading] = useState(true); const [busy, setBusy] = useState(false); const [error, setError] = useState(''); const [success, setSuccess] = useState('')
@@ -51,6 +54,8 @@ export default function TripsScreen() {
   const invalidateQuote = useCallback(() => {
     quoteRevision.current += 1
     setQuote(null)
+    setEstimate(null)
+    setAvailabilityRequest(null)
     setCheckedPolicies([])
     setSharePhone(false)
   }, [])
@@ -78,6 +83,27 @@ export default function TripsScreen() {
     setSelectedVehicle(current.vehicleId)
   }, [])
 
+  const restoreEstimateInputs = useCallback((saved: TripEstimate) => {
+    const draft = tripDraftFromEstimate(saved)
+    setPickup(draft.pickup); setPickupPin(draft.pickupPin); setPinPickerOpen(Boolean(draft.pickupPin))
+    setDestination(draft.destination); setStartDate(draft.startDate); setEndDate(draft.endDate)
+    setPartySize(draft.partySize); setLuggageCount(draft.luggageCount); setSelectedVehicle(draft.selectedVehicle)
+  }, [])
+
+  const recoverAvailability = useCallback((request: ClientAvailabilityRequest, restoreInputs = false) => {
+    const view = getAvailabilityView(request, Date.now())
+    setAvailabilityRequest(view.phase === 'expired' ? { ...request, status: 'expired' } : request)
+    if (restoreInputs) restoreEstimateInputs(request.estimate)
+    setQuote(view.quote)
+    setEstimate(['checking', 'review', 'quote'].includes(view.phase) ? request.estimate : null)
+    setCheckedPolicies([]); setSharePhone(false)
+    if (['expired', 'unavailable'].includes(view.phase)) {
+      setSelectedVehicle(''); setError(view.message)
+    } else {
+      setSuccess(view.message)
+    }
+  }, [restoreEstimateInputs])
+
   const refresh = useCallback(async () => {
     setLoading(true); setError('')
     if (hydratedDraftUser.current && hydratedDraftUser.current !== userId) {
@@ -86,40 +112,52 @@ export default function TripsScreen() {
       setPickup(''); setPickupPin(null); setPinPickerOpen(false)
       setDestination(''); setStartDate(''); setEndDate('')
       setPartySize('1'); setLuggageCount('0'); setSelectedVehicle('')
-      setVehicles([]); setOffer(null); setQuote(null); setBookingSubmitted(false)
+      setVehicles([]); setOffer(null); setQuote(null); setEstimate(null); setAvailabilityRequest(null); setBookingSubmitted(false)
       setPrerequisites(null); setBookings([]); setDepositBooking(null)
       setLegalName(''); setPhone(''); setAcceptedClientTerms(false)
       setCheckedPolicies([]); setSharePhone(false)
     }
     let currentServerOffer: ClientTripOffer | null = null
+    let hasActiveAvailability = false
     const offerPromise = (focusTargetType === 'offer' && focusTargetId
       ? getTripOfferStatus(focusTargetId).then((offer) => ({ offer }))
       : getCurrentTripOffer()).then((result) => {
-      currentServerOffer = result.offer
+      currentServerOffer = result.offer && (['pending', 'quoting'].includes(result.offer.status) || getRestorableLegacyQuote(result.offer, false, Date.now())) ? result.offer : null
       return result
     }).catch(() => ({ offer: null }))
+    const availabilityPromise = (focusTargetType === 'availability' && focusTargetId
+      ? getAvailabilityRequest(focusTargetId) : getCurrentAvailabilityRequest()).then((result) => {
+      hasActiveAvailability = Boolean(result.request && ['requested', 'confirmed'].includes(result.request.status))
+      return result
+    })
     try {
-      const [result, bookingResult, offerResult] = await Promise.all([
-        getClientPrerequisites(), getMyBookings(), offerPromise,
+      const [result, bookingResult, offerResult, availabilityResult] = await Promise.all([
+        getClientPrerequisites(), getMyBookings(), offerPromise, availabilityPromise,
       ])
       setPrerequisites(result)
       setBookings(bookingResult.bookings)
       setDepositBooking(bookingResult.bookings.find((booking) => booking.status === 'deposit_pending' && booking.holdExpiresAt > Date.now()) ?? null)
-      restoreTripRequest(offerResult.offer)
-      setBookingSubmitted(offerResult.offer?.status === 'booked' || hasActiveDepositHold(bookingResult.bookings, Date.now()))
-      setOffer(offerResult.offer && ['pending', 'quoting'].includes(offerResult.offer.status) ? offerResult.offer : null)
+      if (availabilityResult.request) recoverAvailability(availabilityResult.request, true)
+      else setAvailabilityRequest(null)
+      const activeLegacyOffer = !hasActiveAvailability && offerResult.offer && ['pending', 'quoting'].includes(offerResult.offer.status) ? offerResult.offer : null
+      const legacyQuote = getRestorableLegacyQuote(offerResult.offer, hasActiveAvailability, Date.now())
+      if (activeLegacyOffer) restoreTripRequest(activeLegacyOffer)
+      if (legacyQuote) {
+        restoreTripRequest(offerResult.offer)
+        setQuote(legacyQuote); setEstimate(null); setAvailabilityRequest(null)
+      }
+      setBookingSubmitted(hasActiveDepositHold(bookingResult.bookings, Date.now()))
+      setOffer(activeLegacyOffer)
       if (focusTargetId && offerResult.offer?.offerId === focusTargetId) {
         setSuccess('This is the trip request from your notification. Its current status is shown below.')
       }
-      if (offerResult.offer?.status === 'quoted' && offerResult.offer.quote) setQuote(offerResult.offer.quote)
-      if (offerResult.offer?.status === 'booked') setSuccess('This trip is already booked. See your trip requests below.')
-      if (offerResult.offer && ['declined', 'expired', 'withdrawn', 'quote_failed'].includes(offerResult.offer.status)) {
+      if (focusTargetType === 'offer' && !hasActiveAvailability && offerResult.offer && ['declined', 'expired', 'withdrawn', 'quote_failed'].includes(offerResult.offer.status)) {
         setSelectedVehicle('')
         setError(offerResult.offer.status === 'quote_failed'
           ? 'The quote could not be prepared. No payment was taken. Choose another car and try again.'
           : 'That driver could not accept the trip. No payment was taken. Choose another car to try again.')
       }
-      if (offerResult.offer) {
+      if (activeLegacyOffer) {
         if (userId) void tripDraftStore.clear(userId).catch(() => undefined)
       }
       setLegalName(result.profile?.legalName ?? '')
@@ -128,7 +166,7 @@ export default function TripsScreen() {
     finally {
       if (userId && hydratedDraftUser.current !== userId) {
         hydratedDraftUser.current = userId
-        if (currentServerOffer) {
+        if (currentServerOffer || hasActiveAvailability) {
           void tripDraftStore.clear(userId).catch(() => undefined)
         } else {
           const savedDraft = await tripDraftStore.load(userId).catch(() => null)
@@ -139,6 +177,18 @@ export default function TripsScreen() {
             setDestination(savedDraft.destination)
             setStartDate(savedDraft.startDate); setEndDate(savedDraft.endDate)
             setPartySize(savedDraft.partySize); setLuggageCount(savedDraft.luggageCount)
+            if (savedDraft.estimateId) {
+              try {
+                const savedEstimate = await getTripEstimate(savedDraft.estimateId)
+                setEstimate(savedEstimate)
+                setQuote({
+                  quoteId: savedEstimate.estimateId, vehicleId: savedEstimate.vehicleId,
+                  pickup: savedEstimate.pickup, destination: savedEstimate.destination,
+                  route: savedEstimate.route,
+                  quote: savedEstimate.quote, expiresAt: 0,
+                })
+              } catch { /* The saved draft remains available if the estimate was removed or expired. */ }
+            }
             if (savedDraft.selectedVehicle && savedDraft.startDate && savedDraft.endDate) {
               try {
                 const result = await getAvailableVehicles({
@@ -170,17 +220,17 @@ export default function TripsScreen() {
       setTripDraftReady(true)
       setLoading(false)
     }
-  }, [focusTargetId, focusTargetType, restoreTripRequest, userId])
+  }, [focusTargetId, focusTargetType, restoreTripRequest, recoverAvailability, userId])
   useEffect(() => { void Promise.resolve().then(refresh) }, [refresh])
   useEffect(() => {
     if (!tripDraftReady || !userId || tripDraftOwnerId !== userId) return
-    const draft: TripDraft = { pickup, destination, pickupPin, startDate, endDate, partySize, luggageCount, selectedVehicle }
-    if (offer || quote || bookingSubmitted || !hasTripDraftContent(draft)) {
+    const draft: TripDraft = { pickup, destination, pickupPin, startDate, endDate, partySize, luggageCount, selectedVehicle, estimateId: estimate?.estimateId }
+    if (offer || (availabilityRequest && ['requested', 'confirmed'].includes(availabilityRequest.status)) || bookingSubmitted || !hasTripDraftContent(draft)) {
       void tripDraftStore.clear(userId).then(() => setTripDraftSaveFailed(false)).catch(() => setTripDraftSaveFailed(true))
       return
     }
     void tripDraftStore.save(userId, draft).then(() => setTripDraftSaveFailed(false)).catch(() => setTripDraftSaveFailed(true))
-  }, [tripDraftReady, tripDraftOwnerId, userId, pickup, destination, pickupPin, startDate, endDate, partySize, luggageCount, selectedVehicle, offer, quote, bookingSubmitted])
+  }, [tripDraftReady, tripDraftOwnerId, userId, pickup, destination, pickupPin, startDate, endDate, partySize, luggageCount, selectedVehicle, offer, quote, estimate, availabilityRequest, bookingSubmitted])
   useEffect(() => {
     if (!offer || !['pending', 'quoting'].includes(offer.status)) return
     let active = true
@@ -211,6 +261,26 @@ export default function TripsScreen() {
     const timer = setInterval(() => { void poll() }, 4000)
     return () => { active = false; clearInterval(timer) }
   }, [offer])
+  useEffect(() => {
+    if (!availabilityRequest || !['requested', 'confirmed'].includes(availabilityRequest.status)) return
+    let active = true
+    const poll = async () => {
+      try {
+        const result = await getAvailabilityRequest(availabilityRequest.requestId)
+        if (!active) return
+        const next = result.request
+        if (next.status !== availabilityRequest.status || next.needsReview !== availabilityRequest.needsReview) {
+          recoverAvailability(next)
+        }
+      } catch { /* Keep the status visible and retry on the next interval. */ }
+    }
+    const timer = setInterval(() => { void poll() }, 4000)
+    const expiryTimer = availabilityRequest.status === 'confirmed' && availabilityRequest.holdExpiresAt
+      ? setTimeout(() => recoverAvailability({ ...availabilityRequest, status: 'expired' }),
+        Math.max(0, availabilityRequest.holdExpiresAt - Date.now()))
+      : undefined
+    return () => { active = false; clearInterval(timer); if (expiryTimer) clearTimeout(expiryTimer) }
+  }, [availabilityRequest, recoverAvailability])
   useEffect(() => {
     if (!offer) return
     const updateCountdown = () => setOfferCountdown(Math.max(0, Math.ceil((offer.expiresAt - Date.now()) / 1000)))
@@ -250,12 +320,30 @@ export default function TripsScreen() {
     setBusy(true); setError(''); invalidateQuote()
     const revision = quoteRevision.current
     try {
-      const result = await requestTripQuote({ origin: pickupPin ?? asAddress(pickup.trim()), destination: asAddress(destination.trim()), startDate, endDate, partySize: Number(partySize), luggageCount: Number(luggageCount), vehicleId: requestedVehicle })
+      const result = await createTripEstimate({ origin: pickupPin ?? asAddress(pickup.trim()), destination: asAddress(destination.trim()), startDate, endDate, partySize: Number(partySize), luggageCount: Number(luggageCount), vehicleId: requestedVehicle })
       if (revision !== quoteRevision.current) return
+      setEstimate(result)
+      setAvailabilityRequest(null)
+      setQuote({
+        quoteId: result.estimateId, vehicleId: result.vehicleId, pickup: result.pickup,
+        destination: result.destination, route: result.route, quote: result.quote, expiresAt: 0,
+      })
       setCheckedPolicies([]); setSharePhone(false)
-      setOffer({ offerId: result.offerId, vehicleId: result.vehicleId, status: 'pending', expiresAt: result.expiresAt })
-      setSuccess('Your request is with this car’s driver. You will see the price after they confirm availability. No payment is taken while you wait.')
-    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not create a trip quote.') }
+      setSuccess('Here is your saved price estimate. Review it before asking Fave to check these dates with the driver.')
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not create a trip estimate.') }
+    finally { setBusy(false) }
+  }
+
+  const requestStaffAvailability = async () => {
+    if (!estimate) return
+    setBusy(true); setError(''); setSuccess('')
+    try {
+      const result = await requestAvailabilityCheck(estimate.estimateId)
+      const next = { requestId: result.requestId, estimateId: result.estimateId, status: 'requested' as const, createdAt: result.createdAt, expiresAt: null, holdExpiresAt: null, needsReview: false, estimate }
+      setAvailabilityRequest(next)
+      setQuote(null)
+      setSuccess('Fave will call the driver to check these dates. You will not pay while we check.')
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not ask Fave to check availability.') }
     finally { setBusy(false) }
   }
 
@@ -270,18 +358,31 @@ export default function TripsScreen() {
     finally { setBusy(false) }
   }
 
+  const withdrawAvailability = async () => {
+    if (!availabilityRequest) return
+    setBusy(true); setError('')
+    try {
+      await withdrawAvailabilityRequest(availabilityRequest.requestId)
+      setAvailabilityRequest({ ...availabilityRequest, status: 'withdrawn' })
+      setQuote(null); setEstimate(null)
+      setSuccess('Availability request withdrawn. No payment was taken.')
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not withdraw this request.') }
+    finally { setBusy(false) }
+  }
+
   const disclosures = prerequisites?.bookingDocuments ?? []
   const disclosureIds = useMemo(() => new Set(checkedPolicies), [checkedPolicies])
   const allDisclosureIds = disclosures.length === 6 && disclosures.every((document) => disclosureIds.has(document.id))
   const togglePolicy = (document: PolicyDocument) => setCheckedPolicies((current) => current.includes(document.id) ? current.filter((id) => id !== document.id) : [...current, document.id])
   const currentBookingStage: BookingProgressStage = getCurrentBookingStage({
     hasVehicles: vehicles.length > 0,
-    hasOffer: Boolean(offer),
+    hasOffer: Boolean(offer || isAwaitingAvailability(availabilityRequest)),
     hasQuote: Boolean(quote),
     hasDepositHold: bookingSubmitted,
   })
   const bookingProgress = getBookingProgress(currentBookingStage)
   const currentProgressStep = bookingProgress.findIndex((step) => step.state === 'current')
+  const isFinalQuote = Boolean(quote && quote.expiresAt > 0)
 
   const confirm = async () => {
     if (!quote) return
@@ -415,8 +516,20 @@ export default function TripsScreen() {
         {vehicle.accessibilityDetails ? <ThemedText>{vehicle.accessibilityDetails}</ThemedText> : null}
         <CheckRow title="Select this vehicle" checked={selectedVehicle === vehicle.id} onPress={() => { if (selectedVehicle !== vehicle.id) invalidateQuote(); setSelectedVehicle(vehicle.id) }} disabled={busy} />
       </Card>)}
-        <ActionButton title="Ask this driver to confirm availability" onPress={() => void getQuote()} disabled={!selectedVehicle} busy={busy} />
+        <ActionButton title="See price estimate" onPress={() => void getQuote()} disabled={!selectedVehicle} busy={busy} />
       </> : null}
+      {currentBookingStage === 'driver' && availabilityRequest ? <Card>
+        <ThemedText type="subtitle">{availabilityRequest.needsReview ? 'Fave is rechecking these dates' : 'Fave is checking these dates'}</ThemedText>
+        <ThemedText>{availabilityRequest.estimate.vehicle?.year} {availabilityRequest.estimate.vehicle?.make} {availabilityRequest.estimate.vehicle?.model} · {availabilityRequest.estimate.startDate} to {availabilityRequest.estimate.endDate}</ThemedText>
+        <ThemedText>{availabilityRequest.estimate.pickup.formattedAddress ?? availabilityRequest.estimate.pickup.address} → {availabilityRequest.estimate.destination.formattedAddress ?? availabilityRequest.estimate.destination.address}</ThemedText>
+        <ThemedText>Estimate · {availabilityRequest.estimate.quote.totalAmount.toLocaleString()} {availabilityRequest.estimate.quote.currency}</ThemedText>
+        <ThemedText>{availabilityRequest.needsReview
+          ? 'The car’s availability changed. Fave is reviewing your dates. No payment is due while we recheck.'
+          : 'Fave will call the driver to check these dates. No payment is due while we check.'}</ThemedText>
+        {availabilityRequest.status === 'requested' ? <ThemedText>Asking us to check does not hold the car.</ThemedText> : null}
+        {availabilityRequest.status === 'requested' ? <ActionButton title="Withdraw availability request" onPress={() => void withdrawAvailability()} busy={busy} /> : null}
+        <ActionButton title="Refresh status" onPress={() => void refresh()} disabled={busy} />
+      </Card> : null}
       {currentBookingStage === 'driver' && offer ? <Card>
         {(() => {
           const vehicle = offer.tripRequest?.vehicle ?? vehicles.find((item) => item.id === offer.vehicleId)
@@ -433,7 +546,7 @@ export default function TripsScreen() {
         </>}
       </Card> : null}
       {currentBookingStage === 'quote' && quote ? <Card>
-        <ThemedText type="subtitle">Your trip estimate · {quote.quote.currency}</ThemedText>
+        <ThemedText type="subtitle">{isFinalQuote ? 'Your final trip quote' : 'Your trip estimate'} · {quote.quote.currency}</ThemedText>
         <ThemedText>Pickup · {quote.pickup.formattedAddress ?? quote.pickup.address} ({quote.pickup.latitude.toFixed(5)}, {quote.pickup.longitude.toFixed(5)})</ThemedText>
         <ThemedText>Destination · {quote.destination.formattedAddress ?? quote.destination.address} ({quote.destination.latitude.toFixed(5)}, {quote.destination.longitude.toFixed(5)})</ThemedText>
         <ThemedText>Dates · {startDate} to {endDate} · {partySize} passengers · {luggageCount} luggage pieces</ThemedText>
@@ -455,8 +568,10 @@ export default function TripsScreen() {
           </View>
         })}
         {getDriverAccommodationNotice(quote.quote.components) ? <ThemedText type="small">{getDriverAccommodationNotice(quote.quote.components)}</ThemedText> : null}
-        <View style={styles.quoteLine}><ThemedText type="smallBold">Estimated trip total</ThemedText><ThemedText type="smallBold">{quote.quote.totalAmount.toLocaleString()} {quote.quote.currency}</ThemedText></View>
-        <ThemedText>Deposit to place a time-limited vehicle hold: {quote.quote.depositAmount.toLocaleString()} {quote.quote.currency}. Quote expires {new Date(quote.expiresAt).toLocaleString()}.</ThemedText>
+        <View style={styles.quoteLine}><ThemedText type="smallBold">{availabilityRequest?.status === 'confirmed' ? 'Final trip total · same as your estimate' : isFinalQuote ? 'Trip total' : 'Estimated trip total'}</ThemedText><ThemedText type="smallBold">{quote.quote.totalAmount.toLocaleString()} {quote.quote.currency}</ThemedText></View>
+        {isFinalQuote ? <>
+        <ThemedText>{availabilityRequest?.status === 'confirmed' ? 'Fave confirmed the car for your dates at your saved estimate price. The car is held until' : 'The driver accepted this earlier request. Review the quote before'} {new Date(quote.expiresAt).toLocaleString()}.</ThemedText>
+        <ThemedText>Deposit to place a time-limited vehicle hold: {quote.quote.depositAmount.toLocaleString()} {quote.quote.currency}.</ThemedText>
         <ThemedText>Fare policy · v{quote.quote.farePolicyVersion}</ThemedText>
         <ThemedText type="subtitle">Review booking disclosures</ThemedText>
         {disclosures.map((document) => <View key={document.id} style={styles.document}>
@@ -465,6 +580,11 @@ export default function TripsScreen() {
         </View>)}
         <CheckRow title="I agree that my phone number may be shared with the driver assigned to this trip" detail="Your contact details are not shared with drivers before assignment." checked={sharePhone} onPress={() => setSharePhone(!sharePhone)} disabled={busy} />
         <ActionButton title="Continue to deposit" onPress={() => void confirm()} disabled={!quote.quote.outboundRoute || !quote.quote.returnRoute || !allDisclosureIds || !sharePhone || !prerequisites?.bookingReady} busy={busy} />
+        </> : <>
+          <ThemedText>This estimate is saved with its calculation. You can review it before Fave calls the driver. No payment is due now.</ThemedText>
+          <ActionButton title="Ask Fave to book these dates" onPress={() => void requestStaffAvailability()} disabled={!estimate} busy={busy} />
+          <ActionButton title="Edit trip details" onPress={() => { setQuote(null); setEstimate(null); setVehicles([]); setSelectedVehicle('') }} disabled={busy} />
+        </>}
       </Card> : null}
       {currentBookingStage === 'deposit' ? <Card>
         <ThemedText type="subtitle">Deposit needed to confirm your trip</ThemedText>

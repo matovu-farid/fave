@@ -71,6 +71,14 @@ function loadBookings({
         parseTripDateRange: () => ({ startDate: '2099-01-01', endDate: '2099-01-03' }),
       }
       if (name === './vehicles') return { approvedVehicleEvidencePredicate: () => '? AND ? AND ? AND ? AND ? AND ?' }
+      // Legacy offer and pure fare tests use mocked D1. The new availability
+      // lifecycle, including these helpers, is exercised against real SQLite.
+      if (name === './availability-requests') return {
+        expireAvailabilityRequests: async () => undefined,
+        requestNeedsReviewPredicate: () => '0',
+        requestReviewBindings: () => [],
+        availabilityAuditStatement: (env) => env.DB.prepare('SELECT 1 /* availability audit */'),
+      }
       if (name === './notification-store') return {
         buildNotificationEventStatements(_db, event) {
           notificationEvents.push(event)
@@ -177,7 +185,7 @@ test('quote snapshots use the selected driver lodging rate instead of a global n
   assert.equal(snapshot.driverLodgingRate, 42_000)
 })
 
-test('trip quote creation fails closed when no approved fare policy is active', async () => {
+test('trip estimate creation fails closed when no approved fare policy is active', async () => {
   let routeCalculationCount = 0
   const { routes } = loadBookings({
     signedInUser: { id: 'client-1', name: 'Client', email: 'client@example.test' },
@@ -224,12 +232,12 @@ test('trip quote creation fails closed when no approved fare policy is active', 
     json: (payload, status = 200) => ({ payload, status }),
   }
 
-  const response = await routes.get('/quote')(context)
+  const response = await routes.get('/estimates')(context)
   assert.equal(response.status, 409)
   assert.deepEqual(JSON.parse(JSON.stringify(response.payload)), {
     error: {
       code: 'FARE_POLICY_UNAVAILABLE',
-      message: 'Trip quotes are unavailable until the approved fare policy is configured.',
+      message: 'Trip estimates are unavailable until the approved fare policy is configured.',
     },
   })
   assert.equal(routeCalculationCount, 0, 'do not request a route until a valid fare policy is available')
@@ -239,74 +247,56 @@ test('trip quote creation fails closed when no approved fare policy is active', 
   }
 })
 
-test('trip quote request waits for the selected driver before calculating a price', async () => {
-  const route = { kind: 'route', distanceMeters: 10_200, durationSeconds: 7_200 }
+test('client estimate is priced before intent and saved without creating a driver offer', async () => {
+  const route = { kind: 'route', distanceMeters: 80_000, durationSeconds: 7_200 }
   const farePolicy = {
     id: 'fare-v1', version: '1', currency: 'UGX',
-    rules_json: JSON.stringify({
-      components: [
-        { key: 'driver_lodging', label: 'Driver accommodation', amount: 1, unit: 'per_night' },
-        { key: 'distance', label: 'Distance', amount: 1_500, unit: 'per_kilometer' },
-      ],
-      depositBasisPoints: 5_000,
-    }),
-    quote_ttl_seconds: 3600,
-    hold_ttl_seconds: 1800,
+    rules_json: JSON.stringify({ components: [
+      { key: 'driver_lodging', label: 'Driver accommodation', amount: 1, unit: 'per_night' },
+      { key: 'distance', label: 'Old shared distance price', amount: 1_500, unit: 'per_kilometer' },
+    ], depositBasisPoints: 5_000 }), quote_ttl_seconds: 3600, hold_ttl_seconds: 1800,
   }
-  let routeCalls = 0
   const { routes } = loadBookings({
-    signedInUser: { id: 'client-1', name: 'Client', email: 'client@example.test' },
-    routeResult: route,
-    onRouteCalculation: () => { routeCalls += 1 },
+    signedInUser: { id: 'client-1', name: 'Client' }, routeResult: route,
   })
   const queries = []
   const DB = {
     prepare(sql) {
-      const query = { sql, args: [] }
-      queries.push(query)
+      const query = { sql, args: [] }; queries.push(query)
       return Object.assign(query, {
         bind(...args) { query.args = args; return this },
         async first() {
-          if (sql.includes('FROM driver_trip_offers')) return null
-          if (sql.includes('FROM vehicles AS vehicle')) {
-            return {
-              id: 'vehicle-1', passenger_capacity: 4, luggage_capacity: 3, driver_lodging_rate_ugx: 42_000,
-              benchmark_amount_ugx: testVehicleBenchmark.amountUgx,
-              benchmark_basis_json: JSON.stringify(testVehicleBenchmark.basis),
-              benchmark_derivation_version: 1,
-            }
+          if (sql.includes('FROM vehicles AS vehicle')) return {
+            id: 'vehicle-1', driver_application_id: 'driver-app-1', passenger_capacity: 4, luggage_capacity: 3,
+            driver_lodging_rate_ugx: 42_000, benchmark_amount_ugx: testVehicleBenchmark.amountUgx,
+            benchmark_basis_json: JSON.stringify(testVehicleBenchmark.basis), benchmark_derivation_version: 1,
           }
-          if (sql.includes('FROM vehicle_unavailability')) return null
           if (sql.includes('FROM fare_policies')) return farePolicy
+          if (sql.includes('FROM vehicle_unavailability')) return null
           throw new Error(`Unexpected query: ${sql}`)
         },
         async run() { return { success: true, meta: { changes: 1 } } },
       })
     },
-    async batch(statements) {
-      return statements.map(statement => ({ meta: { changes: statement.sql.includes('notification event') ? 0 : 1 } }))
-    },
   }
-  const body = {
-    origin: { address: 'Kampala' }, destination: { address: 'Jinja' },
-    startDate: '2099-01-01', endDate: '2099-01-03',
-    partySize: 2, luggageCount: 1, vehicleId: 'vehicle-1',
-  }
+  const body = { origin: { address: 'Kampala' }, destination: { address: 'Jinja' }, startDate: '2099-01-01', endDate: '2099-01-03', partySize: 2, luggageCount: 1, vehicleId: 'vehicle-1' }
   const context = {
-    env: { DB },
-    req: { raw: new Request('https://fave.test/api/trips/quote', { method: 'POST' }), json: async () => body },
+    env: { DB }, req: { raw: new Request('https://fave.test/api/trips/estimates', { method: 'POST' }), json: async () => body },
     json: (payload, status = 200) => ({ payload, status }),
   }
 
-  const response = await routes.get('/quote')(context)
+  const response = await routes.get('/estimates')(context)
 
-  assert.equal(response.status, 202, JSON.stringify(response.payload))
-  assert.equal(response.payload.status, 'pending_driver_acceptance')
-  assert.equal(routeCalls, 0)
-  assert.equal(queries.some((query) => query.sql.includes('INSERT INTO driver_trip_offers')), true)
-  assert.match(queries.find((query) => query.sql.includes('INSERT INTO driver_trip_offers')).sql, /NOT EXISTS/u,
-    'offer creation must recheck availability inside its atomic insert')
-  assert.equal(queries.some((query) => query.sql.includes('INSERT INTO trip_quotes')), false)
+  assert.equal(response.status, 201)
+  assert.equal(response.payload.quote.totalAmount, 484_000)
+  assert.equal(response.payload.quote.outboundRoute.distanceMeters, 80_000)
+  assert.equal(response.payload.quote.returnRoute.distanceMeters, 80_000)
+  assert.equal(queries.some((query) => query.sql.includes('INSERT INTO trip_estimates')), true)
+  const saveEstimate = queries.find((query) => query.sql.includes('INSERT INTO trip_estimates'))
+  assert.match(saveEstimate.sql, /JOIN vehicles AS booked_vehicle ON booked_vehicle\.id = bookings\.vehicle_id/u)
+  assert.equal(queries.some((query) => query.sql.includes('INSERT INTO driver_trip_offers')), false)
+  assert.equal(queries.some((query) => query.sql.includes('booking.driver_offer_created')), false)
+  for (const query of queries) assert.equal(query.args.length, (query.sql.match(/\?/gu) ?? []).length)
 })
 
 test('a client can withdraw their own pending driver offer without creating a quote', async () => {
@@ -385,81 +375,6 @@ test('an unauthenticated client cannot withdraw a driver offer', async () => {
 
   assert.equal(response.status, 401)
   assert.equal(response.payload.error.code, 'UNAUTHORIZED')
-})
-
-test('requesting a trip saves a private driver offer and does not return a quote before acceptance', async () => {
-  let routeCalls = 0
-  const notificationEvents = []
-  const { routes } = loadBookings({
-    signedInUser: { id: 'client-1', name: 'Client', email: 'client@example.test' },
-    onRouteCalculation: () => { routeCalls += 1 },
-    notificationEvents,
-  })
-  const queries = []
-  const DB = {
-    prepare(sql) {
-      const query = { sql, args: [] }
-      queries.push(query)
-      return Object.assign(query, {
-        bind(...args) { query.args = args; return this },
-        async first() {
-          if (sql.includes('FROM driver_trip_offers')) return null
-          if (sql.includes('FROM vehicles AS vehicle')) {
-            return {
-              id: 'vehicle-1', driver_application_id: 'driver-app-1', driver_user_id: 'driver-1',
-              passenger_capacity: 4, luggage_capacity: 3, driver_lodging_rate_ugx: 42_000,
-              benchmark_amount_ugx: testVehicleBenchmark.amountUgx,
-              benchmark_basis_json: JSON.stringify(testVehicleBenchmark.basis),
-              benchmark_derivation_version: 1,
-            }
-          }
-          if (sql.includes('FROM vehicle_unavailability')) return null
-          if (sql.includes('FROM fare_policies')) return {
-            id: 'fare-v1', version: '1', currency: 'UGX',
-            rules_json: JSON.stringify({ components: [{ key: 'driver_lodging', label: 'Lodging', amount: 1, unit: 'per_night' }], depositBasisPoints: 5000 }),
-            quote_ttl_seconds: 3600, hold_ttl_seconds: 1800,
-          }
-          throw new Error(`Unexpected query: ${sql}`)
-        },
-        async run() { return { success: true, meta: { changes: 1 } } },
-      })
-    },
-    async batch(statements) {
-      return statements.map(statement => ({ meta: { changes: statement.sql.includes('notification event') ? 0 : 1 } }))
-    },
-  }
-  const body = {
-    origin: { address: 'Kampala' }, destination: { address: 'Jinja' },
-    startDate: '2099-01-01', endDate: '2099-01-03', partySize: 2,
-    luggageCount: 1, vehicleId: 'vehicle-1',
-  }
-  const context = {
-    env: { DB },
-    req: { raw: new Request('https://fave.test/api/trips/quote', { method: 'POST' }), json: async () => body },
-    json: (payload, status = 200) => ({ payload, status }),
-  }
-  const before = Date.now()
-
-  const response = await routes.get('/quote')(context)
-
-  const after = Date.now()
-  assert.equal(response.status, 202, JSON.stringify(response.payload))
-  assert.equal(response.payload.status, 'pending_driver_acceptance')
-  assert.equal(typeof response.payload.offerId, 'string')
-  assert.ok(response.payload.expiresAt >= before + 15 * 60 * 1000)
-  assert.ok(response.payload.expiresAt <= after + 15 * 60 * 1000)
-  assert.equal(routeCalls, 0, 'do not calculate a client quote before driver acceptance')
-  assert.equal(queries.some((query) => query.sql.includes('INSERT INTO driver_trip_offers')), true)
-  assert.equal(queries.some((query) => query.sql.includes('INSERT INTO trip_quotes')), false)
-  assert.deepEqual(notificationEvents.map(event => event.eventType), [
-    'booking.quote_requested', 'booking.driver_offer_created',
-  ])
-  assert.equal(notificationEvents[1].recipients[0].userId, 'driver-1')
-  const offerInsert = queries.find((query) => query.sql.includes('INSERT INTO driver_trip_offers'))
-  assert.doesNotMatch(offerInsert.sql, /phone|email|contact/iu, 'driver offers must not store client contact details')
-  for (const query of queries) {
-    assert.equal(query.args.length, (query.sql.match(/\?/gu) ?? []).length, 'every SQL placeholder has exactly one binding')
-  }
 })
 
 test('driver acceptance creates the quote using that driver’s registered lodging rate', async () => {
@@ -845,7 +760,7 @@ test('late route completion cannot save or return a quote after timeout recovery
   assert.equal(quoteRows, 0, 'a stale route response must not leave an orphan quote')
 })
 
-test('trip quote fails closed when the selected driver has no registered lodging rate', async () => {
+test('trip estimate fails closed when the selected driver has no registered lodging rate', async () => {
   let routeCalls = 0
   const { routes } = loadBookings({
     signedInUser: { id: 'client-1', name: 'Client', email: 'client@example.test' },
@@ -856,6 +771,7 @@ test('trip quote fails closed when the selected driver has no registered lodging
       return {
         bind() { return this },
         async first() {
+          if (sql.includes('FROM fare_policies')) return null
           if (sql.includes('FROM vehicles AS vehicle')) {
             return { id: 'vehicle-1', passenger_capacity: 4, luggage_capacity: 3, driver_lodging_rate_ugx: null }
           }
@@ -876,7 +792,7 @@ test('trip quote fails closed when the selected driver has no registered lodging
     json: (payload, status = 200) => ({ payload, status }),
   }
 
-  const response = await routes.get('/quote')(context)
+  const response = await routes.get('/estimates')(context)
 
   assert.equal(response.status, 409)
   assert.equal(response.payload.error.code, 'DRIVER_LODGING_RATE_REQUIRED')
@@ -962,7 +878,7 @@ test('booking confirmation fails closed when required approved disclosures are u
   assert.equal(queries.some((query) => query.sql.includes('INSERT INTO policy_acceptances')), false)
 })
 
-test('booking confirmation preserves the driver lodging rate captured in the quote', async () => {
+test('staff-confirmed quote preserves its saved price and converts its date hold into the deposit hold', async () => {
   const farePolicy = {
     id: 'policy-1', version: '1', currency: 'UGX',
     rules_json: JSON.stringify({
@@ -993,6 +909,8 @@ test('booking confirmation preserves the driver lodging rate captured in the quo
     route_duration_seconds: route.durationSeconds,
     quote_json: JSON.stringify(quoteSnapshot),
     expires_at: Date.now() + 60_000,
+    availability_request_id: 'request-1', availability_status: 'confirmed',
+    availability_hold_expires_at: Date.now() + 60_000,
   }
   const currentDocuments = [
     'client_terms', 'client_privacy', 'booking_policy', 'payment_policy', 'cancellation_policy', 'safety_policy',
@@ -1020,7 +938,8 @@ test('booking confirmation preserves the driver lodging rate captured in the quo
       }
     },
     async batch(statements) {
-      return statements.map((_, index) => ({ meta: { changes: index === 0 ? 1 : 0 } }))
+      queries.push(...statements.map((statement) => ({ sql: statement.sql, args: statement.args ?? [] })))
+      return statements.map((_, index) => ({ meta: { changes: index < 2 ? 1 : 0 } }))
     },
   }
   const body = {
@@ -1039,6 +958,12 @@ test('booking confirmation preserves the driver lodging rate captured in the quo
 
   assert.equal(response.status, 201)
   assert.equal(response.payload.quote.driverLodgingRate, 42_000)
+  const bookingInsert = queries.find((query) => query.sql.includes('INSERT INTO bookings'))
+  const holdConversion = queries.find((query) => query.sql.includes("SET status = 'converted_to_booking'"))
+  assert.ok(bookingInsert)
+  assert.match(bookingInsert.sql, /active\.id != COALESCE\(\?, ''\)/u)
+  assert.ok(holdConversion)
+  assert.match(holdConversion.sql, /status = 'confirmed' AND hold_expires_at > \?/u)
   assert.equal(response.payload.quote.components.find((component) => component.key === 'driver_lodging').unitRate, 42_000)
   assert.equal(response.payload.quote.components.find((component) => component.key === 'driver_lodging').amount, 84_000)
   assert.equal(queries.some((query) => /lodging_rate_ugx/u.test(query.sql)), false, 'confirmation must use the accepted snapshot, not the driver profile rate')

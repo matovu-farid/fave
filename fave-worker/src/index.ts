@@ -11,8 +11,10 @@ import policiesApp from './marketplace-policies'
 import { adminDriversApp, driversApp } from './drivers'
 import { adminVehiclesApp, purgeExpiredVehicleEvidence, vehiclesApp } from './vehicles'
 import tripsApp, { expireDepositPendingBookings, expirePendingDriverTripOffers } from './bookings'
+import { expireAvailabilityRequests } from './availability-requests'
 import { purgeExpiredDriverEvidence } from './drivers'
 import adminTripOffersApp from './admin-trip-offers'
+import adminAvailabilityRequestsApp from './admin-availability-requests'
 import notificationsApp from './notifications'
 import adminNotificationsApp from './admin-notifications'
 import { dispatchDueNotificationDeliveries, handleNotificationQueue, sweepExpoReceipts } from './notification-delivery'
@@ -39,6 +41,7 @@ app.route('/api/admin/drivers', adminDriversApp)
 app.route('/api/vehicles', vehiclesApp)
 app.route('/api/admin/vehicles', adminVehiclesApp)
 app.route('/api/admin/trip-offers', adminTripOffersApp)
+app.route('/api/admin/availability-requests', adminAvailabilityRequestsApp)
 app.route('/api/notifications', notificationsApp)
 app.route('/api/admin/notifications', adminNotificationsApp)
 app.route('/api/trips', tripsApp)
@@ -272,6 +275,7 @@ export default {
         dispatchDueNotificationDeliveries(env),
         sweepExpoReceipts(env),
         expirePendingDriverTripOffers(env),
+        expireAvailabilityRequests(env, Date.now()),
       ]
       if (isHourlyMaintenanceTick(controller.scheduledTime)) {
         scheduledJobs.push(

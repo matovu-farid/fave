@@ -1,6 +1,6 @@
 # Staff-confirmed vehicle availability and client booking design
 
-**Status:** Draft for product-owner review  
+**Status:** Approved by product owner
 **Date:** 2026-10-16  
 **Issues:** [#9 distance and accommodation estimates](https://github.com/matovu-farid/fave/issues/9), [#10 client trip request](https://github.com/matovu-farid/fave/issues/10), [#12 pre-quote driver assignment](https://github.com/matovu-farid/fave/issues/12), [#31 admin driver follow-up](https://github.com/matovu-farid/fave/issues/31)
 

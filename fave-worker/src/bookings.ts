@@ -1,4 +1,4 @@
-import { Hono } from 'hono'
+import { Hono, type Context } from 'hono'
 import type { AuthBindings } from './auth'
 import {
   apiError,
@@ -9,6 +9,7 @@ import { computeDrivingRoute, classifyLocation, parseLocationInput } from './goo
 import { getCurrentPolicies } from './marketplace-policies'
 import { daysBetween, parseTripDateRange } from './trip-dates'
 import { approvedVehicleEvidencePredicate } from './vehicles'
+import { availabilityAuditStatement, expireAvailabilityRequests, requestNeedsReviewPredicate, requestReviewBindings } from './availability-requests'
 import { buildNotificationEventStatements } from './notification-store'
 import type { NotificationEventInput } from './notification-contracts'
 import { calculateVehicleFareLeg, validateVehicleFareBenchmark } from './vehicle-fares'
@@ -111,6 +112,258 @@ function clientTripRequestSnapshot(offer: ClientTripOfferRow) {
 
 const tripsApp = new Hono<{ Bindings: AuthBindings }>()
 const DRIVER_TRIP_OFFER_TTL_MS = 15 * 60 * 1000
+
+// Estimates are immutable and do not hold a vehicle. Availability is checked
+// again atomically when staff confirms the dates.
+tripsApp.post('/estimates', async (c) => {
+  const user = await getSignedInUser(c.env, c.req.raw)
+  if (!user) return c.json(apiError('UNAUTHORIZED', 'Sign in to continue.'), 401)
+
+  const body: unknown = await c.req.json().catch(() => null)
+  const validation = await validateTripRequest(c.env, body)
+  if (validation.kind !== 'valid') {
+    const status = validation.kind === 'invalid' ? 400 : validation.kind === 'provider' ? 503 : 422
+    return c.json(apiError(validation.kind.toUpperCase(), validation.message), status)
+  }
+  const vehicleId = typeof body === 'object' && body !== null && !Array.isArray(body)
+    ? (body as Record<string, unknown>).vehicleId
+    : null
+  if (typeof vehicleId !== 'string' || vehicleId.length > 80) {
+    return c.json(apiError('VEHICLE_REQUIRED', 'Choose an approved vehicle to estimate this trip.'), 400)
+  }
+
+  const [vehicle, farePolicy] = await Promise.all([
+    c.env.DB.prepare(
+      `SELECT vehicle.id, vehicle.driver_application_id, vehicle.passenger_capacity, vehicle.luggage_capacity,
+              driver.lodging_rate_ugx AS driver_lodging_rate_ugx,
+              vehicle.benchmark_amount_ugx, vehicle.benchmark_basis_json,
+              vehicle.benchmark_derivation_version
+         FROM vehicles AS vehicle
+         JOIN driver_applications AS driver ON driver.id = vehicle.driver_application_id
+        WHERE vehicle.id = ? AND vehicle.status = 'approved' AND driver.status = 'approved'
+          AND ${approvedVehicleEvidencePredicate('vehicle')}
+        LIMIT 1`,
+    ).bind(vehicleId, Date.now(), Date.now(), Date.now(), Date.now(), Date.now(), Date.now())
+      .first<{
+        id: string; driver_application_id: string; passenger_capacity: number; luggage_capacity: number;
+        driver_lodging_rate_ugx: number | null; benchmark_amount_ugx: number | null;
+        benchmark_basis_json: string | null; benchmark_derivation_version: number | null
+      }>(),
+    getActiveFarePolicy(c.env),
+  ])
+  if (!vehicle) return c.json(apiError('VEHICLE_UNAVAILABLE', 'This vehicle is not available for selection.'), 409)
+  if (vehicle.passenger_capacity < validation.partySize || vehicle.luggage_capacity < validation.luggageCount) {
+    return c.json(apiError('VEHICLE_CAPACITY', 'This vehicle does not have enough passenger or luggage capacity.'), 422)
+  }
+  if (!Number.isSafeInteger(vehicle.driver_lodging_rate_ugx) || vehicle.driver_lodging_rate_ugx === null || vehicle.driver_lodging_rate_ugx < 1) {
+    return c.json(apiError('DRIVER_LODGING_RATE_REQUIRED', 'This driver’s overnight accommodation rate is not available yet. Choose another vehicle or try again later.'), 409)
+  }
+  if (!farePolicy) return c.json(apiError('FARE_POLICY_UNAVAILABLE', 'Trip estimates are unavailable until the approved fare policy is configured.'), 409)
+
+  let benchmark: VehicleFareBenchmark | null = null
+  try {
+    if (vehicle.benchmark_amount_ugx !== null && vehicle.benchmark_basis_json && vehicle.benchmark_derivation_version === 1) {
+      benchmark = {
+        amountUgx: vehicle.benchmark_amount_ugx,
+        currency: 'UGX',
+        basis: JSON.parse(vehicle.benchmark_basis_json) as VehicleFareBenchmark['basis'],
+        derivationVersion: 1,
+      }
+    }
+  } catch { benchmark = null }
+  if (!benchmark || !validateVehicleFareBenchmark(benchmark)) {
+    return c.json(apiError('VEHICLE_FARE_UNAVAILABLE', 'This vehicle does not have an approved fare benchmark yet. Choose another car or try again later.'), 409)
+  }
+
+  const now = Date.now()
+  const unavailable = await c.env.DB.prepare(
+    `SELECT 1 AS unavailable FROM vehicle_unavailability
+      WHERE vehicle_id = ? AND start_date < ? AND end_date > ?
+     UNION ALL
+     SELECT 1 AS unavailable FROM bookings
+      JOIN vehicles AS booked_vehicle ON booked_vehicle.id = bookings.vehicle_id
+      WHERE (bookings.vehicle_id = ? OR booked_vehicle.driver_application_id = ?)
+        AND bookings.start_date < ? AND bookings.end_date > ?
+        AND (bookings.status = 'confirmed' OR (bookings.status = 'deposit_pending' AND bookings.hold_expires_at > ?))
+     UNION ALL
+     SELECT 1 AS unavailable FROM availability_requests
+      WHERE (vehicle_id = ? OR driver_application_id = ?) AND start_date < ? AND end_date > ?
+        AND status = 'confirmed' AND hold_expires_at > ?
+     UNION ALL
+     SELECT 1 AS unavailable FROM driver_trip_offers
+      WHERE (vehicle_id = ? OR driver_application_id = ?) AND start_date < ? AND end_date > ?
+        AND status IN ('pending', 'quoting') AND expires_at > ?
+     LIMIT 1`,
+  ).bind(
+    vehicleId, validation.endDate, validation.startDate,
+    vehicleId, vehicle.driver_application_id, validation.endDate, validation.startDate, now,
+    vehicleId, vehicle.driver_application_id, validation.endDate, validation.startDate, now,
+    vehicleId, vehicle.driver_application_id, validation.endDate, validation.startDate, now,
+  ).first<{ unavailable: number }>()
+  if (unavailable) return c.json(apiError('VEHICLE_DATES_UNAVAILABLE', 'This vehicle is already booked or held for those dates.'), 409)
+
+  const [outboundRoute, returnRoute] = await Promise.all([
+    computeDrivingRoute(c.env, validation.origin, validation.destination),
+    computeDrivingRoute(c.env, validation.destination, validation.origin),
+  ])
+  if (outboundRoute.kind === 'provider_error' || returnRoute.kind === 'provider_error') {
+    return c.json(apiError('GOOGLE_MAPS_UNAVAILABLE', 'We could not calculate this trip estimate right now.'), 503)
+  }
+  if (outboundRoute.kind === 'no_route' || returnRoute.kind === 'no_route') {
+    return c.json(apiError('ROUTE_UNAVAILABLE', 'A drivable outbound and return route could not be found.'), 422)
+  }
+
+  const snapshot = buildVehicleQuoteSnapshot(
+    farePolicy, outboundRoute, returnRoute, daysBetween(validation.startDate, validation.endDate),
+    validation.partySize, vehicle.driver_lodging_rate_ugx, benchmark,
+    { vehicleId: vehicle.id, driverApplicationId: vehicle.driver_application_id },
+  )
+  if (!snapshot) return c.json(apiError('FARE_POLICY_INVALID', 'The configured fare policy could not calculate this estimate.'), 409)
+
+  const estimateId = crypto.randomUUID()
+  const saved = await c.env.DB.prepare(
+    `INSERT INTO trip_estimates
+      (id, client_user_id, vehicle_id, driver_application_id, policy_id, origin_json, destination_json,
+       start_date, end_date, party_size, luggage_count, snapshot_json, created_at)
+     SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+      WHERE NOT EXISTS (
+        SELECT 1 FROM vehicle_unavailability
+         WHERE vehicle_id = ? AND start_date < ? AND end_date > ?
+      ) AND NOT EXISTS (
+        SELECT 1 FROM bookings
+          JOIN vehicles AS booked_vehicle ON booked_vehicle.id = bookings.vehicle_id
+         WHERE (bookings.vehicle_id = ? OR booked_vehicle.driver_application_id = ?)
+           AND bookings.start_date < ? AND bookings.end_date > ?
+           AND (bookings.status = 'confirmed' OR (bookings.status = 'deposit_pending' AND bookings.hold_expires_at > ?))
+      ) AND NOT EXISTS (
+        SELECT 1 FROM availability_requests WHERE (vehicle_id = ? OR driver_application_id = ?)
+          AND start_date < ? AND end_date > ? AND status = 'confirmed' AND hold_expires_at > ?
+      )`,
+  ).bind(
+    estimateId, user.id, vehicle.id, vehicle.driver_application_id, farePolicy.id,
+    JSON.stringify(validation.originSnapshot), JSON.stringify(validation.destinationSnapshot),
+    validation.startDate, validation.endDate, validation.partySize, validation.luggageCount,
+    JSON.stringify(snapshot), now,
+    vehicleId, validation.endDate, validation.startDate,
+    vehicleId, vehicle.driver_application_id, validation.endDate, validation.startDate, now,
+    vehicleId, vehicle.driver_application_id, validation.endDate, validation.startDate, now,
+  ).run()
+  if (saved.meta.changes !== 1) return c.json(apiError('VEHICLE_DATES_UNAVAILABLE', 'This vehicle is no longer available for those dates.'), 409)
+
+  return c.json({
+    estimateId, vehicleId: vehicle.id, pickup: validation.originSnapshot, destination: validation.destinationSnapshot,
+    startDate: validation.startDate, endDate: validation.endDate, partySize: validation.partySize,
+    luggageCount: validation.luggageCount,
+    route: { distanceMeters: outboundRoute.distanceMeters, durationSeconds: outboundRoute.durationSeconds },
+    quote: snapshot, createdAt: now,
+  }, 201)
+})
+
+tripsApp.get('/estimates/:estimateId', async (c) => {
+  const user = await getSignedInUser(c.env, c.req.raw)
+  if (!user) return c.json(apiError('UNAUTHORIZED', 'Sign in to continue.'), 401)
+  const estimate = await c.env.DB.prepare(
+    `SELECT estimate.id, estimate.vehicle_id, estimate.origin_json, estimate.destination_json,
+            estimate.start_date, estimate.end_date, estimate.party_size, estimate.luggage_count,
+            estimate.snapshot_json, estimate.created_at, vehicle.make, vehicle.model, vehicle.model_year,
+            vehicle.passenger_capacity, vehicle.luggage_capacity
+       FROM trip_estimates AS estimate JOIN vehicles AS vehicle ON vehicle.id = estimate.vehicle_id
+      WHERE estimate.id = ? AND estimate.client_user_id = ? LIMIT 1`,
+  ).bind(c.req.param('estimateId'), user.id).first<Record<string, unknown>>()
+  if (!estimate) return c.json(apiError('ESTIMATE_NOT_FOUND', 'This trip estimate was not found.'), 404)
+  const snapshot = JSON.parse(String(estimate.snapshot_json)) as QuoteSnapshot
+  return c.json({
+    estimateId: estimate.id, vehicleId: estimate.vehicle_id,
+    pickup: JSON.parse(String(estimate.origin_json)) as TripLocationSnapshot,
+    destination: JSON.parse(String(estimate.destination_json)) as TripLocationSnapshot,
+    startDate: estimate.start_date, endDate: estimate.end_date, partySize: estimate.party_size,
+    luggageCount: estimate.luggage_count,
+    vehicle: { make: estimate.make, model: estimate.model, year: estimate.model_year },
+    quote: snapshot, route: { distanceMeters: snapshot.distanceMeters, durationSeconds: snapshot.durationSeconds },
+    createdAt: estimate.created_at,
+  })
+})
+
+tripsApp.post('/estimates/:estimateId/availability-request', async (c) => {
+  const user = await getSignedInUser(c.env, c.req.raw)
+  if (!user) return c.json(apiError('UNAUTHORIZED', 'Sign in to continue.'), 401)
+  const now = Date.now()
+  const requestId = crypto.randomUUID()
+  const inserted = await c.env.DB.batch([c.env.DB.prepare(
+    `INSERT INTO availability_requests
+      (id, estimate_id, client_user_id, vehicle_id, driver_application_id, start_date, end_date,
+       status, created_at, updated_at)
+     SELECT ?, estimate.id, estimate.client_user_id, estimate.vehicle_id, estimate.driver_application_id,
+            estimate.start_date, estimate.end_date, 'requested', ?, ?
+       FROM trip_estimates AS estimate
+      WHERE estimate.id = ? AND estimate.client_user_id = ?
+        AND NOT EXISTS (SELECT 1 FROM availability_requests WHERE estimate_id = estimate.id)`,
+  ).bind(requestId, now, now, c.req.param('estimateId'), user.id),
+  availabilityAuditStatement(c.env, { requestId, actorUserId: user.id, action: 'availability_requested', priorState: null, newState: 'requested', now }),
+  ])
+  if (inserted[0]?.meta.changes !== 1) return c.json(apiError('ESTIMATE_UNAVAILABLE', 'This estimate cannot be submitted for an availability check.'), 409)
+  return c.json({ requestId, estimateId: c.req.param('estimateId'), status: 'requested', createdAt: now }, 201)
+})
+
+async function clientAvailabilityResponse(c: Context<{ Bindings: AuthBindings }>, requestId?: string) {
+  const user = await getSignedInUser(c.env, c.req.raw)
+  if (!user) return c.json(apiError('UNAUTHORIZED', 'Sign in to continue.'), 401)
+  const now = Date.now()
+  await expireAvailabilityRequests(c.env, now, user.id)
+  const request = await c.env.DB.prepare(
+    `SELECT request.id, request.estimate_id, request.status, request.created_at, request.quote_id,
+            request.hold_expires_at, quote.quote_json, quote.expires_at,
+            estimate.vehicle_id, estimate.origin_json, estimate.destination_json, estimate.start_date,
+            estimate.end_date, estimate.party_size, estimate.luggage_count, estimate.snapshot_json,
+            estimate.created_at AS estimate_created_at, vehicle.make, vehicle.model, vehicle.model_year,
+            ${requestNeedsReviewPredicate('request')} AS needs_review
+       FROM availability_requests AS request
+       JOIN trip_estimates AS estimate ON estimate.id = request.estimate_id
+       JOIN vehicles AS vehicle ON vehicle.id = estimate.vehicle_id
+       LEFT JOIN trip_quotes AS quote ON quote.id = request.quote_id
+      WHERE request.client_user_id = ? ${requestId ? 'AND request.id = ?' : ''}
+      ORDER BY request.created_at DESC, request.id DESC LIMIT 1`,
+  ).bind(...requestReviewBindings(now), user.id, ...(requestId ? [requestId] : [])).first<Record<string, unknown>>()
+  if (!request) return requestId
+    ? c.json(apiError('REQUEST_NOT_FOUND', 'This availability request was not found.'), 404)
+    : c.json({ request: null })
+  const estimateSnapshot = JSON.parse(String(request.snapshot_json)) as QuoteSnapshot
+  return c.json({ request: {
+    requestId: request.id, estimateId: request.estimate_id, status: request.status,
+    needsReview: Boolean(request.needs_review),
+    createdAt: request.created_at, expiresAt: request.expires_at ?? null,
+    holdExpiresAt: request.hold_expires_at ?? null,
+    estimate: {
+      estimateId: request.estimate_id, vehicleId: request.vehicle_id,
+      pickup: JSON.parse(String(request.origin_json)) as TripLocationSnapshot,
+      destination: JSON.parse(String(request.destination_json)) as TripLocationSnapshot,
+      startDate: request.start_date, endDate: request.end_date,
+      partySize: request.party_size, luggageCount: request.luggage_count,
+      quote: estimateSnapshot,
+      route: { distanceMeters: estimateSnapshot.distanceMeters, durationSeconds: estimateSnapshot.durationSeconds },
+      vehicle: { make: request.make, model: request.model, year: request.model_year },
+      createdAt: request.estimate_created_at,
+    },
+    ...(request.status === 'confirmed' && !request.needs_review && request.quote_json
+      ? { quote: JSON.parse(String(request.quote_json)) as QuoteSnapshot, quoteId: request.quote_id } : {}),
+  } })
+}
+tripsApp.get('/availability-requests/current', (c) => clientAvailabilityResponse(c))
+tripsApp.get('/availability-requests/:requestId', (c) => clientAvailabilityResponse(c, c.req.param('requestId')))
+
+tripsApp.post('/availability-requests/:requestId/withdraw', async (c) => {
+  const user = await getSignedInUser(c.env, c.req.raw)
+  if (!user) return c.json(apiError('UNAUTHORIZED', 'Sign in to continue.'), 401)
+  const now = Date.now()
+  const result = await c.env.DB.batch([c.env.DB.prepare(
+    `UPDATE availability_requests SET status = 'withdrawn', updated_at = ?
+      WHERE id = ? AND client_user_id = ? AND status = 'requested'`,
+  ).bind(now, c.req.param('requestId'), user.id),
+  availabilityAuditStatement(c.env, { requestId: c.req.param('requestId'), actorUserId: user.id, action: 'availability_withdrawn', priorState: 'requested', newState: 'withdrawn', now }),
+  ])
+  if (result[0]?.meta.changes !== 1) return c.json(apiError('REQUEST_NOT_PENDING', 'Only a pending availability request can be withdrawn.'), 409)
+  return c.json({ requestId: c.req.param('requestId'), status: 'withdrawn' })
+})
 
 function notificationStatements(db: AuthBindings['DB'], event: NotificationEventInput, now: number) {
   return buildNotificationEventStatements(db, event, now, { requirePriorChange: true })
@@ -384,198 +637,12 @@ async function validateTripRequest(
   }
 }
 
+// Existing offers remain readable/respondable during the transition. New
+// booking intent must use the saved estimate and staff availability flow.
 tripsApp.post('/quote', async (c) => {
   const user = await getSignedInUser(c.env, c.req.raw)
   if (!user) return c.json(apiError('UNAUTHORIZED', 'Sign in to continue.'), 401)
-
-  const body: unknown = await c.req.json().catch(() => null)
-  const validation = await validateTripRequest(c.env, body)
-  if (validation.kind !== 'valid') {
-    const status = validation.kind === 'invalid' ? 400 : validation.kind === 'provider' ? 503 : 422
-    return c.json(apiError(validation.kind.toUpperCase(), validation.message), status)
-  }
-
-  if (typeof body !== 'object' || body === null || Array.isArray(body)) {
-    return c.json(apiError('INVALID_TRIP', 'Enter a valid trip request.'), 400)
-  }
-  const vehicleId = (body as Record<string, unknown>).vehicleId
-  if (typeof vehicleId !== 'string' || vehicleId.length > 80) {
-    return c.json(apiError('VEHICLE_REQUIRED', 'Choose an approved vehicle to request a quote.'), 400)
-  }
-
-  const vehicle = await c.env.DB.prepare(
-    `SELECT vehicle.id, vehicle.driver_application_id, driver.user_id AS driver_user_id,
-            vehicle.passenger_capacity, vehicle.luggage_capacity,
-            driver.lodging_rate_ugx AS driver_lodging_rate_ugx,
-            vehicle.benchmark_amount_ugx, vehicle.benchmark_basis_json,
-            vehicle.benchmark_derivation_version
-      FROM vehicles AS vehicle
-       JOIN driver_applications AS driver ON driver.id = vehicle.driver_application_id
-      WHERE vehicle.id = ? AND vehicle.status = 'approved' AND driver.status = 'approved'
-        AND ${approvedVehicleEvidencePredicate('vehicle')}
-      LIMIT 1`,
-  )
-    .bind(vehicleId, Date.now(), Date.now(), Date.now(), Date.now(), Date.now(), Date.now())
-    .first<{ id: string; driver_application_id: string; driver_user_id: string; passenger_capacity: number; luggage_capacity: number; driver_lodging_rate_ugx: number | null; benchmark_amount_ugx: number | null; benchmark_basis_json: string | null; benchmark_derivation_version: number | null }>()
-  if (!vehicle) return c.json(apiError('VEHICLE_UNAVAILABLE', 'This vehicle is not available for selection.'), 409)
-  if (vehicle.passenger_capacity < validation.partySize || vehicle.luggage_capacity < validation.luggageCount) {
-    return c.json(apiError('VEHICLE_CAPACITY', 'This vehicle does not have enough passenger or luggage capacity.'), 422)
-  }
-  if (!Number.isSafeInteger(vehicle.driver_lodging_rate_ugx) || vehicle.driver_lodging_rate_ugx === null || vehicle.driver_lodging_rate_ugx < 1) {
-    return c.json(apiError('DRIVER_LODGING_RATE_REQUIRED', 'This driver’s overnight accommodation rate is not available yet. Choose another vehicle or try again later.'), 409)
-  }
-  let selectedVehicleBenchmark: VehicleFareBenchmark | null = null
-  try {
-    if (vehicle.benchmark_amount_ugx !== null && vehicle.benchmark_basis_json && vehicle.benchmark_derivation_version === 1) {
-      selectedVehicleBenchmark = {
-        amountUgx: vehicle.benchmark_amount_ugx,
-        currency: 'UGX',
-        basis: JSON.parse(vehicle.benchmark_basis_json) as VehicleFareBenchmark['basis'],
-        derivationVersion: 1,
-      }
-    }
-  } catch {
-    selectedVehicleBenchmark = null
-  }
-  if (!selectedVehicleBenchmark || !validateVehicleFareBenchmark(selectedVehicleBenchmark)) {
-    return c.json(apiError('VEHICLE_FARE_UNAVAILABLE', 'This vehicle does not have an approved fare benchmark yet. Choose another car or try again later.'), 409)
-  }
-
-  const now = Date.now()
-  const currentOffer = await c.env.DB.prepare(
-    `SELECT id, vehicle_id, status, expires_at FROM driver_trip_offers
-      WHERE client_user_id = ? AND status IN ('pending', 'quoting') AND expires_at > ?
-      ORDER BY created_at DESC LIMIT 1`,
-  ).bind(user.id, now).first<{ id: string; vehicle_id: string; status: string; expires_at: number }>()
-  if (currentOffer) {
-    return c.json(apiError('TRIP_OFFER_PENDING', 'You already have a trip request waiting for a driver. Check its status before requesting another car.'), 409)
-  }
-
-  const overlap = await c.env.DB.prepare(
-    `SELECT 1 AS unavailable FROM vehicle_unavailability
-      WHERE vehicle_id = ? AND start_date < ? AND end_date > ?
-     UNION ALL
-     SELECT 1 AS unavailable FROM bookings
-      WHERE vehicle_id = ? AND start_date < ? AND end_date > ?
-        AND (status = 'confirmed' OR (status = 'deposit_pending' AND hold_expires_at > ?))
-     UNION ALL
-     SELECT 1 AS unavailable FROM driver_trip_offers
-      WHERE vehicle_id = ? AND start_date < ? AND end_date > ?
-        AND status IN ('pending', 'quoting') AND expires_at > ?
-     UNION ALL
-     SELECT 1 AS unavailable FROM driver_trip_offers
-      WHERE driver_application_id = ? AND start_date < ? AND end_date > ?
-        AND status IN ('pending', 'quoting') AND expires_at > ?
-     LIMIT 1`,
-  )
-    .bind(vehicleId, validation.endDate, validation.startDate,
-      vehicleId, validation.endDate, validation.startDate, now,
-      vehicleId, validation.endDate, validation.startDate, now,
-      vehicle.driver_application_id, validation.endDate, validation.startDate, now)
-    .first<{ unavailable: number }>()
-  if (overlap) return c.json(apiError('VEHICLE_DATES_UNAVAILABLE', 'This vehicle already has a hold or booking for those dates.'), 409)
-
-  const farePolicy = await getActiveFarePolicy(c.env)
-  if (!farePolicy) {
-    return c.json(apiError('FARE_POLICY_UNAVAILABLE', 'Trip quotes are unavailable until the approved fare policy is configured.'), 409)
-  }
-
-  const offerId = crypto.randomUUID()
-  const createdAt = Date.now()
-  const expiresAt = createdAt + DRIVER_TRIP_OFFER_TTL_MS
-  const offerInsert = c.env.DB.prepare(
-    `INSERT INTO driver_trip_offers
-      (id, client_user_id, driver_application_id, vehicle_id, origin_json, destination_json,
-       start_date, end_date, party_size, luggage_count, status, expires_at, created_at)
-     SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?
-      WHERE NOT EXISTS (
-        SELECT 1 FROM driver_trip_offers
-         WHERE client_user_id = ? AND status IN ('pending', 'quoting') AND expires_at > ?
-      )
-        AND NOT EXISTS (
-          SELECT 1 FROM vehicle_unavailability
-           WHERE vehicle_id = ? AND start_date < ? AND end_date > ?
-        )
-        AND NOT EXISTS (
-          SELECT 1 FROM bookings
-           WHERE vehicle_id = ? AND start_date < ? AND end_date > ?
-             AND (status = 'confirmed' OR (status = 'deposit_pending' AND hold_expires_at > ?))
-        )
-        AND NOT EXISTS (
-          SELECT 1 FROM driver_trip_offers
-           WHERE vehicle_id = ? AND start_date < ? AND end_date > ?
-             AND status IN ('pending', 'quoting') AND expires_at > ?
-        )
-        AND NOT EXISTS (
-          SELECT 1 FROM driver_trip_offers
-           WHERE driver_application_id = ? AND start_date < ? AND end_date > ?
-             AND status IN ('pending', 'quoting') AND expires_at > ?
-        )`,
-  )
-    .bind(
-      offerId,
-      user.id,
-      vehicle.driver_application_id,
-      vehicleId,
-      JSON.stringify(validation.originSnapshot),
-      JSON.stringify(validation.destinationSnapshot),
-      validation.startDate,
-      validation.endDate,
-      validation.partySize,
-      validation.luggageCount,
-      expiresAt,
-      createdAt,
-      user.id,
-      now,
-      vehicleId,
-      validation.endDate,
-      validation.startDate,
-      vehicleId,
-      validation.endDate,
-      validation.startDate,
-      now,
-      vehicleId,
-      validation.endDate,
-      validation.startDate,
-      now,
-      vehicle.driver_application_id,
-      validation.endDate,
-      validation.startDate,
-      now,
-    )
-  const inserted = await c.env.DB.batch([
-    offerInsert,
-    ...notificationStatements(c.env.DB, {
-      id: `booking.quote_requested:${offerId}`,
-      eventType: 'booking.quote_requested',
-      eventVersion: 1,
-      domainType: 'trip_offer',
-      domainId: offerId,
-      occurredAt: createdAt,
-      expiresAt,
-      recipients: [{ userId: user.id, role: 'client' }],
-    }, createdAt),
-    ...notificationStatements(c.env.DB, {
-      id: `booking.driver_offer_created:${offerId}`,
-      eventType: 'booking.driver_offer_created',
-      eventVersion: 1,
-      domainType: 'trip_offer',
-      domainId: offerId,
-      occurredAt: createdAt,
-      expiresAt,
-      recipients: [{ userId: vehicle.driver_user_id, role: 'driver' }],
-    }, createdAt),
-  ])
-  if (inserted[0]?.meta?.changes !== 1) {
-    return c.json(apiError('TRIP_OFFER_CONFLICT', 'This car or its driver is no longer available for those dates. Choose another car or try again.'), 409)
-  }
-
-  return c.json({
-    status: 'pending_driver_acceptance',
-    offerId,
-    vehicleId,
-    expiresAt,
-  }, 202)
+  return c.json(apiError('BOOKING_FLOW_UPDATED', 'Update Fave to see a price estimate and ask staff to confirm your dates.'), 410)
 })
 
 tripsApp.get('/quote-requests/current', async (c) => {
@@ -1023,10 +1090,13 @@ tripsApp.post('/confirm', async (c) => {
   }
 
   const quote = await c.env.DB.prepare(
-    `SELECT id, vehicle_id, policy_id, origin_json, destination_json, start_date, end_date,
-            party_size, luggage_count, route_distance_meters, route_duration_seconds,
-            quote_json, expires_at
-       FROM trip_quotes WHERE id = ? AND client_user_id = ? LIMIT 1`,
+    `SELECT quote.id, quote.vehicle_id, quote.policy_id, quote.origin_json, quote.destination_json, quote.start_date, quote.end_date,
+            quote.party_size, quote.luggage_count, quote.route_distance_meters, quote.route_duration_seconds,
+            quote.quote_json, quote.expires_at, availability.id AS availability_request_id,
+            availability.status AS availability_status, availability.hold_expires_at AS availability_hold_expires_at
+       FROM trip_quotes AS quote
+       LEFT JOIN availability_requests AS availability ON availability.quote_id = quote.id
+      WHERE quote.id = ? AND quote.client_user_id = ? LIMIT 1`,
   )
     .bind(input.quoteId, user.id)
     .first<{
@@ -1043,6 +1113,9 @@ tripsApp.post('/confirm', async (c) => {
       route_duration_seconds: number
       quote_json: string
       expires_at: number
+      availability_request_id: string | null
+      availability_status: string | null
+      availability_hold_expires_at: number | null
     }>()
   if (!quote) return c.json(apiError('QUOTE_NOT_FOUND', 'This trip quote was not found.'), 404)
 
@@ -1051,8 +1124,13 @@ tripsApp.post('/confirm', async (c) => {
     return c.json(apiError('QUOTE_EXPIRED', 'This quote expired. Request a fresh quote before confirming.'), 409)
   }
 
+  const staffAvailabilityConfirmed = quote.availability_request_id !== null && quote.availability_status === 'confirmed' &&
+    quote.availability_hold_expires_at !== null && quote.availability_hold_expires_at > now
+  if (quote.availability_request_id && !staffAvailabilityConfirmed) {
+    return c.json(apiError('QUOTE_EXPIRED', 'The staff-confirmed availability hold expired. Ask Fave to check availability again.'), 409)
+  }
   const currentPolicy = await getActiveFarePolicy(c.env)
-  if (!currentPolicy || currentPolicy.id !== quote.policy_id) {
+  if (!currentPolicy || (!staffAvailabilityConfirmed && currentPolicy.id !== quote.policy_id)) {
     return c.json(apiError('QUOTE_CHANGED', 'The fare policy changed. Review a new quote before confirming.'), 409)
   }
 
@@ -1074,44 +1152,32 @@ tripsApp.post('/confirm', async (c) => {
     return c.json(apiError('QUOTE_INVALID', 'This quote could not be verified. Request a new one.'), 409)
   }
 
-  const [pickup, destinationResult] = await Promise.all([
-    classifyLocation(c.env, origin),
-    classifyLocation(c.env, destination),
-  ])
-  if (pickup.kind === 'provider_error' || destinationResult.kind === 'provider_error') {
-    return c.json(apiError('GOOGLE_MAPS_UNAVAILABLE', 'We could not recheck these trip locations right now.'), 503)
-  }
-  if (pickup.kind !== 'resolved' || pickup.countryCode !== 'UG' || !pickup.pickupArea) {
-    return c.json(apiError('QUOTE_CHANGED', 'The pickup no longer meets the service area rules. Choose another address or map pin and request a fresh quote.'), 409)
-  }
-  if (destinationResult.kind !== 'resolved' || destinationResult.countryCode !== 'UG') {
-    return c.json(apiError('QUOTE_CHANGED', 'The destination could not be verified in Uganda. Choose another address and request a fresh quote.'), 409)
-  }
-  const originSnapshot = toTripLocationSnapshot(origin, pickup)
-  const destinationSnapshot = toTripLocationSnapshot(destination, destinationResult)
-  if (!matchesStoredLocation(storedOrigin, originSnapshot) ||
-      !matchesStoredLocation(storedDestination, destinationSnapshot)) {
-    return c.json(apiError('QUOTE_CHANGED', 'A trip location resolved differently. Request and review a fresh quote before confirming.'), 409)
-  }
-
-  const [currentRoute, currentReturnRoute] = await Promise.all([
-    computeDrivingRoute(c.env, origin, destination),
-    computeDrivingRoute(c.env, destination, origin),
-  ])
-  if (currentRoute.kind === 'provider_error' || currentReturnRoute.kind === 'provider_error') {
-    return c.json(apiError('GOOGLE_MAPS_UNAVAILABLE', 'We could not recheck this trip route right now.'), 503)
-  }
-  if (currentRoute.kind === 'no_route' || currentReturnRoute.kind === 'no_route') {
-    return c.json(apiError('QUOTE_CHANGED', 'The route is no longer available. Request a new quote.'), 409)
-  }
-  if (
-    currentRoute.distanceMeters !== quote.route_distance_meters ||
-    currentRoute.durationSeconds !== quote.route_duration_seconds ||
-    !previousQuote.returnRoute ||
-    currentReturnRoute.distanceMeters !== previousQuote.returnRoute.distanceMeters ||
-    currentReturnRoute.durationSeconds !== previousQuote.returnRoute.durationSeconds
-  ) {
-    return c.json(apiError('QUOTE_CHANGED', 'One of the route estimates changed. Request and review a new quote before confirming.'), 409)
+  let originSnapshot: TripLocationSnapshot
+  let destinationSnapshot: TripLocationSnapshot
+  if (staffAvailabilityConfirmed) {
+    if (typeof storedOrigin !== 'object' || storedOrigin === null || typeof storedDestination !== 'object' || storedDestination === null) {
+      return c.json(apiError('QUOTE_INVALID', 'This saved estimate could not be verified.'), 409)
+    }
+    originSnapshot = storedOrigin as TripLocationSnapshot
+    destinationSnapshot = storedDestination as TripLocationSnapshot
+  } else {
+    const [pickup, destinationResult] = await Promise.all([
+      classifyLocation(c.env, origin), classifyLocation(c.env, destination),
+    ])
+    if (pickup.kind === 'provider_error' || destinationResult.kind === 'provider_error') {
+      return c.json(apiError('GOOGLE_MAPS_UNAVAILABLE', 'We could not recheck these trip locations right now.'), 503)
+    }
+    if (pickup.kind !== 'resolved' || pickup.countryCode !== 'UG' || !pickup.pickupArea) {
+      return c.json(apiError('QUOTE_CHANGED', 'The pickup no longer meets the service area rules. Choose another address or map pin and request a fresh quote.'), 409)
+    }
+    if (destinationResult.kind !== 'resolved' || destinationResult.countryCode !== 'UG') {
+      return c.json(apiError('QUOTE_CHANGED', 'The destination could not be verified in Uganda. Choose another address and request a fresh quote.'), 409)
+    }
+    originSnapshot = toTripLocationSnapshot(origin, pickup)
+    destinationSnapshot = toTripLocationSnapshot(destination, destinationResult)
+    if (!matchesStoredLocation(storedOrigin, originSnapshot) || !matchesStoredLocation(storedDestination, destinationSnapshot)) {
+      return c.json(apiError('QUOTE_CHANGED', 'A trip location resolved differently. Request and review a fresh quote before confirming.'), 409)
+    }
   }
 
   if (!previousQuote.vehicleFareBenchmark || !validateVehicleFareBenchmark(previousQuote.vehicleFareBenchmark)) {
@@ -1124,18 +1190,29 @@ tripsApp.post('/confirm', async (c) => {
   if (typeof previousQuote.driverLodgingRate !== 'number' || !Number.isSafeInteger(previousQuote.driverLodgingRate)) {
     return c.json(apiError('QUOTE_INVALID', 'This quote is missing its driver lodging rate. Request a new one.'), 409)
   }
-  const currentSnapshot = buildVehicleQuoteSnapshot(
-    currentPolicy,
-    currentRoute,
-    currentReturnRoute,
-    daysBetween(quote.start_date, quote.end_date),
-    quote.party_size,
-    previousQuote.driverLodgingRate,
-    previousQuote.vehicleFareBenchmark,
-    { vehicleId: previousQuote.vehicleId, driverApplicationId: previousQuote.driverApplicationId },
-  )
-  if (!currentSnapshot || JSON.stringify(currentSnapshot) !== JSON.stringify(previousQuote)) {
-    return c.json(apiError('QUOTE_CHANGED', 'The fare changed. Review a new quote before confirming.'), 409)
+  if (!staffAvailabilityConfirmed) {
+    const [currentRoute, currentReturnRoute] = await Promise.all([
+      computeDrivingRoute(c.env, origin, destination), computeDrivingRoute(c.env, destination, origin),
+    ])
+    if (currentRoute.kind === 'provider_error' || currentReturnRoute.kind === 'provider_error') {
+      return c.json(apiError('GOOGLE_MAPS_UNAVAILABLE', 'We could not recheck this trip route right now.'), 503)
+    }
+    if (currentRoute.kind === 'no_route' || currentReturnRoute.kind === 'no_route') {
+      return c.json(apiError('QUOTE_CHANGED', 'The route is no longer available. Request a new quote.'), 409)
+    }
+    if (currentRoute.distanceMeters !== quote.route_distance_meters || currentRoute.durationSeconds !== quote.route_duration_seconds ||
+        !previousQuote.returnRoute || currentReturnRoute.distanceMeters !== previousQuote.returnRoute.distanceMeters ||
+        currentReturnRoute.durationSeconds !== previousQuote.returnRoute.durationSeconds) {
+      return c.json(apiError('QUOTE_CHANGED', 'One of the route estimates changed. Request and review a new quote before confirming.'), 409)
+    }
+    const currentSnapshot = buildVehicleQuoteSnapshot(
+      currentPolicy, currentRoute, currentReturnRoute, daysBetween(quote.start_date, quote.end_date),
+      quote.party_size, previousQuote.driverLodgingRate, previousQuote.vehicleFareBenchmark,
+      { vehicleId: previousQuote.vehicleId, driverApplicationId: previousQuote.driverApplicationId },
+    )
+    if (!currentSnapshot || JSON.stringify(currentSnapshot) !== JSON.stringify(previousQuote)) {
+      return c.json(apiError('QUOTE_CHANGED', 'The fare changed. Review a new quote before confirming.'), 409)
+    }
   }
 
   const [profile, currentDocuments] = await Promise.all([
@@ -1194,10 +1271,15 @@ tripsApp.post('/confirm', async (c) => {
         SELECT 1 FROM trip_quotes
          WHERE id = ? AND client_user_id = ? AND vehicle_id = ? AND policy_id = ? AND expires_at > ?
       )
+        AND (? = 0 OR EXISTS (
+          SELECT 1 FROM availability_requests
+           WHERE id = ? AND quote_id = ? AND client_user_id = ? AND status = 'confirmed' AND hold_expires_at > ?
+        ))
         AND EXISTS (
           SELECT 1 FROM vehicles AS vehicle
           JOIN driver_applications AS driver ON driver.id = vehicle.driver_application_id
-           WHERE vehicle.id = ? AND vehicle.status = 'approved' AND driver.status = 'approved'
+           WHERE vehicle.id = ? AND vehicle.driver_application_id = ?
+             AND vehicle.status = 'approved' AND driver.status = 'approved'
              AND vehicle.passenger_capacity >= ? AND vehicle.luggage_capacity >= ?
              AND ${approvedVehicleEvidencePredicate('vehicle')}
         )
@@ -1207,9 +1289,18 @@ tripsApp.post('/confirm', async (c) => {
         )
         AND NOT EXISTS (
           SELECT 1 FROM bookings AS active
-           WHERE active.vehicle_id = ? AND active.start_date < ? AND active.end_date > ?
+           JOIN vehicles AS active_vehicle ON active_vehicle.id = active.vehicle_id
+           WHERE (active.vehicle_id = ? OR active_vehicle.driver_application_id = ?)
+             AND active.start_date < ? AND active.end_date > ?
              AND (active.status = 'confirmed' OR
                   (active.status = 'deposit_pending' AND active.hold_expires_at > ?))
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM availability_requests AS active
+           WHERE active.id != COALESCE(?, '')
+             AND (active.vehicle_id = ? OR active.driver_application_id = ?)
+             AND active.start_date < ? AND active.end_date > ?
+             AND active.status = 'confirmed' AND active.hold_expires_at > ?
         )
         AND (SELECT COUNT(*) FROM policy_documents
               WHERE document_type IN ('client_terms', 'client_privacy', 'booking_policy',
@@ -1233,12 +1324,19 @@ tripsApp.post('/confirm', async (c) => {
     holdExpiresAt,
     now,
     now,
+    now,
     quote.id,
     user.id,
     quote.vehicle_id,
-    currentPolicy.id,
+    quote.policy_id,
+    now,
+    staffAvailabilityConfirmed ? 1 : 0,
+    quote.availability_request_id,
+    quote.id,
+    user.id,
     now,
     quote.vehicle_id,
+    previousQuote.driverApplicationId,
     quote.party_size,
     quote.luggage_count,
     now,
@@ -1251,12 +1349,26 @@ tripsApp.post('/confirm', async (c) => {
     quote.end_date,
     quote.start_date,
     quote.vehicle_id,
+    previousQuote.driverApplicationId,
+    quote.end_date,
+    quote.start_date,
+    now,
+    quote.availability_request_id,
+    quote.vehicle_id,
+    previousQuote.driverApplicationId,
     quote.end_date,
     quote.start_date,
     now,
     now,
     ...currentDocuments.map((document) => document.id),
   )
+  const convertAvailabilityHold = staffAvailabilityConfirmed
+    ? c.env.DB.prepare(
+      `UPDATE availability_requests SET status = 'converted_to_booking', updated_at = ?
+        WHERE id = ? AND quote_id = ? AND client_user_id = ? AND status = 'confirmed' AND hold_expires_at > ?
+          AND EXISTS (SELECT 1 FROM bookings WHERE quote_id = ? AND status = 'deposit_pending')`,
+    ).bind(now, quote.availability_request_id, quote.id, user.id, now, quote.id)
+    : c.env.DB.prepare('SELECT 1')
   const snapshotQuoteTerms = c.env.DB.prepare(
     `UPDATE trip_quotes SET terms_snapshot_json = ?, contact_share_consented_at = ?
       WHERE id = ? AND client_user_id = ? AND terms_snapshot_json IS NULL
@@ -1287,6 +1399,11 @@ tripsApp.post('/confirm', async (c) => {
   try {
     result = await c.env.DB.batch([
       insertBooking,
+      convertAvailabilityHold,
+      ...(staffAvailabilityConfirmed ? [availabilityAuditStatement(c.env, {
+        requestId: quote.availability_request_id!, actorUserId: user.id,
+        action: 'availability_converted_to_booking', priorState: 'confirmed', newState: 'converted_to_booking', now,
+      })] : []),
       ...holdCreatedNotification,
       ...acceptanceStatements,
       snapshotQuoteTerms,
@@ -1299,6 +1416,9 @@ tripsApp.post('/confirm', async (c) => {
   const bookingResult = result[0]
   if ((bookingResult?.meta.changes ?? 0) !== 1) {
     return c.json(apiError('BOOKING_UNAVAILABLE', 'This vehicle, quote, or disclosure set changed. Refresh availability and review a new quote.'), 409)
+  }
+  if (staffAvailabilityConfirmed && (result[1]?.meta.changes ?? 0) !== 1) {
+    return c.json(apiError('BOOKING_UNAVAILABLE', 'The staff-confirmed date hold is no longer active. Ask Fave to check availability again.'), 409)
   }
 
   return c.json({

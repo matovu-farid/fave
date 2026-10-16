@@ -67,7 +67,10 @@ test('push notification taps open the signed-in inbox for warm and cold app star
   assert.match(layout, /router\.push/u)
 })
 
-test('notification navigation focuses only supported booking and trip-offer targets', () => {
+test('notification navigation focuses only supported booking, staff request, and trip-offer targets', () => {
+  assert.deepEqual(getNotificationDestination({ routeKey: 'availability', targetId: 'request-1' }), {
+    pathname: '/trips', params: { focusTargetId: 'request-1', focusTargetType: 'availability' },
+  })
   assert.deepEqual(getNotificationDestination({ routeKey: 'driver_offers', targetId: 'offer-1' }), {
     pathname: '/driver', params: { focusTargetId: 'offer-1', focusTargetType: 'offer' },
   })

@@ -811,10 +811,17 @@ vehiclesApp.get('/catalog', async (c) => {
         )
         AND NOT EXISTS (
           SELECT 1 FROM bookings AS booking
-           WHERE booking.vehicle_id = vehicle.id
+           JOIN vehicles AS booked_vehicle ON booked_vehicle.id = booking.vehicle_id
+           WHERE (booking.vehicle_id = vehicle.id OR booked_vehicle.driver_application_id = driver.id)
              AND booking.start_date < ? AND booking.end_date > ?
              AND (booking.status = 'confirmed' OR
                   (booking.status = 'deposit_pending' AND booking.hold_expires_at > ?))
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM availability_requests AS request
+           WHERE (request.vehicle_id = vehicle.id OR request.driver_application_id = driver.id)
+             AND request.start_date < ? AND request.end_date > ?
+             AND request.status = 'confirmed' AND request.hold_expires_at > ?
         )
         AND NOT EXISTS (
           SELECT 1 FROM driver_trip_offers AS offer
@@ -833,7 +840,7 @@ vehiclesApp.get('/catalog', async (c) => {
       LIMIT 50`,
   )
     .bind(partySize, luggageCount, endDate, startDate, endDate, startDate,
-      now, endDate, startDate, now, endDate, startDate, now, now, now, now, now, now, now)
+      now, endDate, startDate, now, endDate, startDate, now, endDate, startDate, now, now, now, now, now, now, now)
     .all<{
       id: string
       make: string

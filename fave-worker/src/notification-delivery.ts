@@ -15,6 +15,9 @@ type DeliveryRecord = {
 }
 
 const pushCopy: Record<string, { title: string; body: string }> = {
+  availability_confirmed: { title: 'Your car is available', body: 'Fave confirmed your dates. Review your saved-price quote before the hold expires.' },
+  availability_unavailable: { title: 'Please choose another car', body: 'Fave could not confirm your selected car. No deposit is due.' },
+  availability_expired: { title: 'Your quote hold ended', body: 'The quote window has ended. Check current availability for a new estimate.' },
   quote_requested: { title: 'Trip request sent', body: 'Your trip request is waiting for a driver.' },
   driver_offer_received: { title: 'New trip offer', body: 'A trip offer is waiting for your response.' },
   driver_offer_accepted: { title: 'Driver accepted', body: 'Your driver accepted. Your quote is ready soon.' },

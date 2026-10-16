@@ -6,6 +6,8 @@ type NotificationTarget = Pick<NotificationInboxItem, 'routeKey' | 'targetId'>
 
 export function getNotificationDestination({ routeKey, targetId }: NotificationTarget): Href {
   switch (routeKey) {
+    case 'availability':
+      return { pathname: '/trips', params: { focusTargetId: targetId, focusTargetType: 'availability' } }
     case 'driver_offers':
       return { pathname: '/driver', params: { focusTargetId: targetId, focusTargetType: 'offer' } }
     case 'trips':

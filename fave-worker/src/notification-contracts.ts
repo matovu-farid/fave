@@ -1,8 +1,20 @@
 export type NotificationRole = 'client' | 'driver' | 'operations'
 export type NotificationPriority = 'ordinary' | 'urgent' | 'time_sensitive'
-export type NotificationDomainType = 'trip_offer' | 'booking' | 'trip' | 'payment' | 'incident' | 'support'
+export type NotificationDomainType = 'trip_offer' | 'availability_request' | 'booking' | 'trip' | 'payment' | 'incident' | 'support'
 
 export const notificationEventContracts = {
+  'booking.availability_confirmed': {
+    eventVersion: 1, domainType: 'availability_request', allowedRecipientRoles: ['client'],
+    templateKey: 'availability_confirmed', routeKey: 'availability', priority: 'time_sensitive', expiryPolicy: 'domain',
+  },
+  'booking.availability_unavailable': {
+    eventVersion: 1, domainType: 'availability_request', allowedRecipientRoles: ['client'],
+    templateKey: 'availability_unavailable', routeKey: 'availability', priority: 'ordinary', expiryPolicy: 'none',
+  },
+  'booking.availability_expired': {
+    eventVersion: 1, domainType: 'availability_request', allowedRecipientRoles: ['client'],
+    templateKey: 'availability_expired', routeKey: 'availability', priority: 'ordinary', expiryPolicy: 'none',
+  },
   'booking.quote_requested': {
     eventVersion: 1,
     domainType: 'trip_offer',

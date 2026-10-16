@@ -7,6 +7,7 @@ export type TripDraft = {
   partySize: string
   luggageCount: string
   selectedVehicle: string
+  estimateId?: string
 }
 
 export type BookingProgressStage = 'trip' | 'vehicle' | 'driver' | 'quote' | 'deposit'
@@ -29,7 +30,7 @@ const tripDraftVersion = 1
 const bookingStages: { id: BookingProgressStage; label: string }[] = [
   { id: 'trip', label: 'Trip details' },
   { id: 'vehicle', label: 'Choose a car' },
-  { id: 'driver', label: 'Driver response' },
+  { id: 'driver', label: 'Availability check' },
   { id: 'quote', label: 'Quote and terms' },
   { id: 'deposit', label: 'Deposit' },
 ]
@@ -47,7 +48,8 @@ function isTripDraft(value: unknown): value is TripDraft {
     typeof draft.destination === 'string' && validPin &&
     typeof draft.startDate === 'string' && typeof draft.endDate === 'string' &&
     typeof draft.partySize === 'string' && typeof draft.luggageCount === 'string' &&
-    typeof draft.selectedVehicle === 'string'
+    typeof draft.selectedVehicle === 'string' &&
+    (draft.estimateId === undefined || typeof draft.estimateId === 'string')
 }
 
 function parseSavedDraft(value: string | null): { userId: string; draft: TripDraft } | null {

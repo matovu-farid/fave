@@ -33,6 +33,16 @@ test('trip draft store restores the signed-in user draft and preserves map pin c
   assert.deepEqual(await tripDrafts.load('client-1'), draft)
 })
 
+test('trip draft keeps the saved estimate id so a client can review it again', async () => {
+  const storage = createMemoryStorage()
+  const tripDrafts = createTripDraftStore(storage)
+  const withEstimate = { ...draft, estimateId: 'estimate-1' }
+
+  await tripDrafts.save('client-1', withEstimate)
+
+  assert.deepEqual(await tripDrafts.load('client-1'), withEstimate)
+})
+
 test('trip draft store removes a draft owned by a different signed-in user', async () => {
   const storage = createMemoryStorage()
   const tripDrafts = createTripDraftStore(storage)
@@ -70,7 +80,7 @@ test('booking progress marks earlier stages complete and the current stage clear
   assert.deepEqual(getBookingProgress('driver'), [
     { id: 'trip', label: 'Trip details', state: 'complete' },
     { id: 'vehicle', label: 'Choose a car', state: 'complete' },
-    { id: 'driver', label: 'Driver response', state: 'current' },
+    { id: 'driver', label: 'Availability check', state: 'current' },
     { id: 'quote', label: 'Quote and terms', state: 'upcoming' },
     { id: 'deposit', label: 'Deposit', state: 'upcoming' },
   ])

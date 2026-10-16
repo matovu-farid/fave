@@ -114,8 +114,38 @@ export type TripQuote = {
     vehicleFareBenchmark?: VehicleFareBenchmark
     vehicleId?: string
     driverApplicationId?: string
+    distanceMeters?: number
+    durationSeconds?: number
+    nights?: number
   }
   expiresAt: number
+}
+export type TripEstimate = {
+  estimateId: string
+  vehicleId: string
+  pickup: TripQuote['pickup']
+  destination: TripQuote['destination']
+  startDate: string
+  endDate: string
+  partySize: number
+  luggageCount: number
+  vehicle?: Pick<Vehicle, 'make' | 'model' | 'year'>
+  quote: TripQuote['quote']
+  route: { distanceMeters: number; durationSeconds: number }
+  createdAt: number
+}
+export type AvailabilityRequestStatus = 'requested' | 'confirmed' | 'unavailable' | 'withdrawn' | 'expired' | 'converted_to_booking'
+export type ClientAvailabilityRequest = {
+  requestId: string
+  estimateId: string
+  status: AvailabilityRequestStatus
+  createdAt: number
+  expiresAt: number | null
+  holdExpiresAt: number | null
+  needsReview: boolean
+  estimate: TripEstimate
+  quoteId?: string
+  quote?: TripQuote['quote']
 }
 export type TripOfferStatus = 'pending' | 'quoting' | 'quoted' | 'booked' | 'declined' | 'expired' | 'withdrawn' | 'quote_failed'
 export type ClientTripRequestSnapshot = {
@@ -163,7 +193,7 @@ export type NotificationInboxItem = {
   id: string
   title: string
   body: string
-  routeKey: 'trips' | 'driver_offers' | 'booking' | 'trip' | 'payments' | 'safety' | 'support'
+  routeKey: 'trips' | 'availability' | 'driver_offers' | 'booking' | 'trip' | 'payments' | 'safety' | 'support'
   targetId: string
   priority: 'ordinary' | 'urgent' | 'time_sensitive'
   createdAt: number
@@ -179,6 +209,29 @@ export type AdminTripOffers = {
   pendingOffers: AdminDriverTripOffer[]
   processingOffers: AdminDriverTripOffer[]
   recentOffers: AdminDriverTripOffer[]
+  refreshedAt: number
+}
+export type AdminAvailabilityRequest = {
+  requestId: string
+  estimateId: string
+  status: AvailabilityRequestStatus
+  createdAt: number
+  startDate: string
+  endDate: string
+  vehicle: { id: string; make: string; model: string; year: number }
+  route: { pickupArea: string; destinationArea: string }
+  estimate: { currency: string; totalAmount: number }
+  callCount: number
+  driverReached: boolean
+  calls: { callId: string; outcome: DriverCallOutcome; note: string | null; createdAt: number; actorName: string }[]
+  needsReview: boolean
+  quoteId: string | null
+  holdExpiresAt: number | null
+}
+export type AdminAvailabilityRequests = {
+  pendingRequests: AdminAvailabilityRequest[]
+  confirmedRequests: AdminAvailabilityRequest[]
+  recentRequests: AdminAvailabilityRequest[]
   refreshedAt: number
 }
 export type AdminNotificationFailure = {
@@ -292,6 +345,34 @@ export function requestTripQuote(input: {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input),
   })
 }
+export function createTripEstimate(input: {
+  origin: { address: string } | { latitude: number; longitude: number }; destination: { address: string }
+  startDate: string; endDate: string; partySize: number; luggageCount: number; vehicleId: string
+}) {
+  return authenticatedFetch<TripEstimate>('/api/trips/estimates', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input),
+  })
+}
+export function getTripEstimate(estimateId: string) {
+  return authenticatedFetch<TripEstimate>(`/api/trips/estimates/${encodeURIComponent(estimateId)}`)
+}
+export function requestAvailabilityCheck(estimateId: string) {
+  return authenticatedFetch<{ requestId: string; estimateId: string; status: 'requested'; createdAt: number }>(
+    `/api/trips/estimates/${encodeURIComponent(estimateId)}/availability-request`,
+    { method: 'POST' },
+  )
+}
+export function getCurrentAvailabilityRequest() {
+  return authenticatedFetch<{ request: ClientAvailabilityRequest | null }>('/api/trips/availability-requests/current')
+}
+export function getAvailabilityRequest(requestId: string) {
+  return authenticatedFetch<{ request: ClientAvailabilityRequest }>(`/api/trips/availability-requests/${encodeURIComponent(requestId)}`)
+}
+export function withdrawAvailabilityRequest(requestId: string) {
+  return authenticatedFetch<{ requestId: string; status: 'withdrawn' }>(
+    `/api/trips/availability-requests/${encodeURIComponent(requestId)}/withdraw`, { method: 'POST' },
+  )
+}
 export function getCurrentTripOffer() {
   return authenticatedFetch<{ offer: ClientTripOffer | null }>('/api/trips/quote-requests/current')
 }
@@ -315,6 +396,28 @@ export function getAdminAccess() {
 }
 export function getAdminTripOffers() {
   return authenticatedFetch<AdminTripOffers>('/api/admin/trip-offers')
+}
+export function getAdminAvailabilityRequests() {
+  return authenticatedFetch<AdminAvailabilityRequests>('/api/admin/availability-requests')
+}
+export function getAvailabilityDriverContact(requestId: string) {
+  return authenticatedFetch<DriverContact>(`/api/admin/availability-requests/${encodeURIComponent(requestId)}/driver-contact`, { method: 'POST' })
+}
+export function recordAvailabilityCall(requestId: string, outcome: DriverCallOutcome, note: string) {
+  return authenticatedFetch<{ callId: string; requestId: string; outcome: DriverCallOutcome; createdAt: number }>(
+    `/api/admin/availability-requests/${encodeURIComponent(requestId)}/calls`,
+    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ outcome, note }) },
+  )
+}
+export function confirmAvailabilityRequest(requestId: string) {
+  return authenticatedFetch<{ requestId: string; quoteId: string; status: 'confirmed'; holdExpiresAt: number }>(
+    `/api/admin/availability-requests/${encodeURIComponent(requestId)}/confirm`, { method: 'POST' },
+  )
+}
+export function markAvailabilityUnavailable(requestId: string) {
+  return authenticatedFetch<{ requestId: string; status: 'unavailable' }>(
+    `/api/admin/availability-requests/${encodeURIComponent(requestId)}/unavailable`, { method: 'POST' },
+  )
 }
 export function getAdminNotificationHealth() {
   return authenticatedFetch<AdminNotificationHealth>('/api/admin/notifications/health')
