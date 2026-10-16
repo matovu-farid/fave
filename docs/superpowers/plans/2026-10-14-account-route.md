@@ -64,3 +64,18 @@
   review found no actionable issue. Export/deletion workflow remains separate:
   direct deletion of the identity currently cascades to trip/consent records, so
   it cannot implement the required retention-aware lifecycle.
+
+### Sign-out recovery release checkpoint
+
+- CI38970750094 passed for main9116b8014886e58899b0a27bf61ba0fa0458c252.
+  Worker/web version227f0078-596d-4a54-842f-f06241fe2915 (main-9116b80)
+  serves100% traffic in deployment39f0ba04-cccb-48cb-abee-75e4479ad9fe, created
+  2026-10-16T21:40:47.229495Z (17 October in Kampala). Runtime and all17
+  bindings match predecessor667a5fcc-1b85-45eb-a1d2-04b6870ef390. No migration,
+  trigger, policy activation or authentication-configuration change was needed.
+- Production curl checks: health/database200ok, Account200HTML, signed-out
+  staff-review security and current availability-request APIs401JSON. The local
+  synthetic session remained signed out after reload. Test server/tab stopped;
+  viewport restored and owner's production security page retained.
+- This publishes the web build and shared source fix. It is not evidence of an
+  EAS native binary/OTA release or a new physical-device acceptance test.
