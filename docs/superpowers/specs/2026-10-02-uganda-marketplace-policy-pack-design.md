@@ -1,6 +1,8 @@
 # Uganda Marketplace Policy Pack Design
 
-> **Status: Draft pack produced from the approved scope; awaiting product and Ugandan counsel review.** The policy documents remain drafts and are not effective. This is a product/document design, not a legal opinion, filing, or determination that Fidexa LLC holds the required licences.
+> **Approved scope — status updated 17 October 2026.** Later owner instructions require finished customer/provider copy, superseding this original design's draft-label and placeholder directions for those documents. Finished [client/booking disclosures](../../legal/booking-policy-research-and-review.md) and [driver documents](../../legal/driver-policy-research-and-review.md) now replace those templates. Internal checklist/regulatory work remains unresolved. No policy registry activation, legal opinion, filing or licence is established by this design or the finished wording.
+>
+> The sections below preserve the original 2 October plan and research context. Their proposed Fidexa LLC identity and draft-path descriptions are historical; the verified supplier is FIDEXA ENTERPRISES - SMC LIMITED, and the linked current records govern document status.
 
 ## Goal
 

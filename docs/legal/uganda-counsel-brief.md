@@ -102,7 +102,7 @@ For each item below, please provide the applicable authority and source, a writt
 The finished customer set and its [publication/review map](booking-policy-research-and-review.md) are available for exact-version review. The earlier payment template now serves only as an internal provider-readiness record. Please approve or identify required changes, with version and effective date:
 
 - customer booking and transport terms, pricing/refunds/cancellation disclosures, privacy notice, and incident/contact guidance;
-- driver/provider agreement, onboarding and verification notice, vehicle-use/insurance requirements, conduct and safety standards, complaint and incident cooperation terms, and payment/tax terms;
+- the finished [driver agreement](../policies/driver-service-agreement.md) and [privacy notice](../policies/driver-privacy-notice.md), including vehicle-use/insurance, conduct/safety, complaint/incident and payment/tax terms; the [driver review record](driver-policy-research-and-review.md) identifies remaining checklist, retention and operating evidence;
 - any required consent, acknowledgement, insurance confirmation, or regulator-facing policy;
 - staff access and identity-data handling policy and an incident-response procedure.
 

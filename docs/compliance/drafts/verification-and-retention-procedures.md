@@ -2,6 +2,8 @@
 
 > **DRAFT FOR UGANDAN COUNSEL REVIEW — NOT EFFECTIVE.** Version 0.1, 3 October 2026. These are proposed operational safeguards, not an approved statutory checklist. Do not activate a checklist or retention record in D1 until counsel and the responsible authority confirm the applicable requirements.
 
+**Current document sources — 17 October 2026:** finished [driver agreement](../../policies/driver-service-agreement.md) and [driver privacy notice](../../policies/driver-privacy-notice.md) replace the old driver template. The [driver review record](../../legal/driver-policy-research-and-review.md) distinguishes their policy periods from statutory category mapping and records the immediate-expiry-on-resubmission code gap. This operating procedure and its unresolved legal checklist remain internal; finished wording alone does not approve or activate them.
+
 ## 1. Scope and control principle
 
 This procedure covers #6 driver application, #7 staff verification, #8 vehicle listing/photo moderation, and the related data retention and incident controls required before #10 vehicle selection. The workflow must distinguish (a) facts explicitly required by law/regulation, (b) the particular licences/evidence confirmed by counsel or the Competent Authority, and (c) additional Fave risk controls. Staff must not present a proposed Fave control as a legal requirement.
@@ -105,7 +107,7 @@ Only designated administrators may review private evidence. No account self-prom
 ## 7. Checklist approval and publication flow
 
 1. Counsel maps each checklist row to statutory provision, licence condition or explicitly labeled risk control; names acceptable proof and an authorized verification method.
-2. Fidexa LLC approves the operational procedure, reviewer roles, applicant messages, support/appeal route, and staffing/incident responsibilities.
+2. Fave approves the operational procedure, reviewer roles, applicant messages, support/appeal route, and staffing/incident responsibilities.
 3. Competent Authority/insurer/PSP confirmation is obtained where the law or activity classification is unresolved.
 4. Privacy lead completes category/field basis, notice, recipients, transfer and approved retention matrix, and PDPO registration/DPO actions.
 5. Version and approve each document/checklist/retention record with approver, approval date, language, scope, effective date and hash. Publish only approved effective versions to D1. Keep prior versions immutable for acceptance/audit.
