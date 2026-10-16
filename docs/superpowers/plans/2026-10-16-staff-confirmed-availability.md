@@ -100,3 +100,35 @@ No payment-provider contract, legal-policy approval, or payment launch gate was 
 - Public hostname checks: `/health` returns HTTP 200 with API/D1 healthy; `/api/trips/availability-requests/current` and `/api/admin/availability-requests` return the expected HTTP 401 signed out. The availability endpoint returned HTTP 404 before this release. Cloudflare rejected the Python HTTP client's probe with 1010; standard curl checks above succeeded.
 - Restarted the stopped localhost Expo preview and manually loaded `/trips` with the existing signed-in session at 390px. The new five-step booking screen loads without the previous HTTP 404 alert. Client setup/search remain disabled with the missing-approved-terms explanation. No profile, policy acceptance, estimate, booking, payment, or test notification was created.
 - Production aggregate gate check: zero active approved fare policies and zero approved client terms/privacy documents. No policy was activated and no payment capability was enabled. Complete client/staff booking, admin-session review, and physical-device verification remain open, along with the separate legal, pricing, and provider launch decisions.
+
+### Driver-review maintenance release (2026-10-16)
+
+- Released `main` commit `daac945c91b9fe08ce6ec86c0438cfdc55491a35` using the
+  standing production Worker release authorization. The only Worker change since
+  the preceding release is in `src/drivers.ts`: approve without a rejection note,
+  reject stale application/document decisions, and tie audit/success to the
+  actual update. The finished client-policy copy is repository content; this
+  release does not activate it in D1.
+- [CI passed](https://github.com/matovu-farid/fave/actions/runs/38871654653).
+  Local checks passed: 207 tests with no failures or skips, Expo lint, app and
+  Worker TypeScript, and packaging dry run. The first sandboxed dry run could not
+  write Wrangler's normal log file; a clean authorized rerun passed.
+- Confirmed the existing Cloudflare account and all required Worker permissions.
+  No production migrations were pending. Uploaded version
+  `7cc8058b-5450-485d-bdcc-800eb8b6acd1`, tag `main-daac945`, and compared all 16
+  bindings plus runtime settings against the previous version: unchanged.
+- Deployment `a1e88c6c-b576-430c-96ae-5f24dc1d178f` sends 100% of traffic to that
+  version. Used version upload/deploy with preserved variables; domain, cron and
+  Queue triggers were not reapplied. Previous version
+  `53a015ef-82c7-4b7b-8d42-65eacf06615a` remains the code rollback reference.
+- Production hostname `/health` returned HTTP 200 with API/D1 healthy.
+  `/api/admin/drivers/pending` and
+  `/api/trips/availability-requests/current` returned HTTP 401 without a session.
+  Read-only D1 counts remain zero active approved fares and zero approved client
+  terms/privacy records.
+- Manually opened `/trips` in the signed-in browser. Session recovery and the
+  five-step booking screen work; client setup/search correctly remain disabled
+  until policy publication. No live evidence review, profile, acceptance,
+  booking, payment or notification was submitted. Race/approval behavior was
+  exercised through production handlers and SQL in isolated integration tests;
+  no staff-review browser UI exists yet to test those actions interactively.
