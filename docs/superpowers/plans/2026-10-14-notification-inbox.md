@@ -382,3 +382,19 @@ Limits:delivery cannot recall a request already sent to Expo. Registration/domai
 checks and the external send cannot share an atomic transaction. The existing
 upstream-acceptance-before-ticket-persistence crash window and concurrent Queue
 consumer duplicate-send risk remain; this is not an exactly-once push guarantee.
+
+### Audience/device release checkpoint
+
+- Main implementation:6b7fed3206fbcdabff0bc598792c2f2c7ac46895.
+- CI38911870585 passed for the exact commit; Worker upload dry-run passed.
+- Worker version:f4bb66e1-b3b8-4c0d-bd82-89a7a43dfd90, tagmain-6b7fed3.
+- Deployment:bc94bc1d-5026-4438-bf8f-4d6c80957a27, created2026-10-16T13:59:24.971562Z,
+  serving100% traffic. Runtime, static assets configuration and all bindings match
+  the prior live version. No migration, trigger, fare or legal publication changed.
+- Rollback:b0834aec-2d3a-46d2-9421-634a7acc868e.
+- Read-only production checks:health/databaseok; signed-out inbox, admin
+  notification-health and staff-security APIs401JSON; unknown API404JSON.
+  The console uses its configured trailing-slash redirect before serving HTML.
+- Remaining:consumer concurrency/lease behavior, delivery-time quiet-hour and
+  expiry checks across slow sends, remaining producer integration coverage,
+  real-device push and future domain/policy gates. The broader issue is open.
