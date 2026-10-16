@@ -48,7 +48,7 @@ export function Message({ children, error }: React.PropsWithChildren<{ error?: b
 }
 
 export function CheckRow({ title, detail, checked, onPress, disabled }: { title: string; detail?: string; checked: boolean; onPress: () => void; disabled?: boolean }) {
-  return <Pressable accessibilityRole="checkbox" accessibilityState={{ checked, disabled }} disabled={disabled} onPress={onPress} style={styles.checkRow}>
+  return <Pressable accessibilityRole="checkbox" accessibilityState={{ checked, disabled }} aria-checked={checked} aria-disabled={disabled} disabled={disabled} onPress={onPress} style={styles.checkRow}>
     <ThemedText style={styles.check}>{checked ? '☑' : '□'}</ThemedText>
     <View style={styles.checkText}><ThemedText type="smallBold">{title}</ThemedText>{detail ? <ThemedText type="small" themeColor="textSecondary">{detail}</ThemedText> : null}</View>
   </Pressable>
