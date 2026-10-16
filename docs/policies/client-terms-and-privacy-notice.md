@@ -38,11 +38,11 @@ If unavailable, Fave asks you to choose another car. Fave does not silently subs
 
 ### 4. Final quote, temporary hold and payment
 
-After staff confirm availability, Fave issues the final quote at the **same total and itemized price as your saved estimate**. A later car or driver rate change does not increase that saved estimate when it becomes the final quote. The car and driver are held for your requested dates through the quote window shown in the app.
+After staff confirm availability, Fave issues the final quote at the **same total and itemized price as your saved estimate**. A later car or driver rate change does not increase that saved estimate when it becomes the final quote. The car and driver are held for your requested dates for 24 hours from staff confirmation while you decide whether to book at that saved price. The app shows the quote deadline.
 
 Review the trip, car, dates, total, deposit, balance, expiry and current booking, payment, cancellation and safety disclosures. You can correct a request or decide not to continue. Changing the itinerary before booking requires a new estimate and availability check, rather than an undisclosed edit to the saved price.
 
-The deposit step begins only after staff confirmation, your acceptance of the final quote and current disclosures, and your separate contact-sharing choice. During checkout, the quote hold is replaced by a deposit hold; the app must show its deadline. If the quote or hold expires, availability must be checked again before continuing. If the driver's availability or eligibility changes, payment is blocked while staff review it.
+The deposit step begins only after staff confirmation, your acceptance of the final quote and current disclosures, and your separate contact-sharing choice. When you start deposit checkout, the quote hold is replaced by a 30-minute hold for the car and driver, measured from checkout start; the app shows its deadline. If the quote or hold expires, availability must be checked again before continuing. If the driver's availability or eligibility changes, payment is blocked while staff review it.
 
 A request, estimate and temporary hold are not a confirmed booking. Your trip contract with Fave is formed when Fave issues the booking confirmation after you accept the current final quote and disclosures and your deposit is verified. Before that confirmation, do not treat an estimate, staff availability check, payment screenshot or bank debit alone as a confirmed trip. If payment is received but Fave cannot confirm the agreed booking, it must be refunded; this does not limit any other right you have under law.
 
