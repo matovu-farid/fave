@@ -7,6 +7,21 @@
 **Related issue:** [#14 — Uganda legal, regulatory, privacy, and safety review](https://github.com/matovu-farid/fave/issues/14)
 **Research scope:** Public primary and regulator sources listed below; counsel must verify the current consolidated law, amendments, administrative practice, and applicability to Fave before decisions are treated as final.
 
+**Client document update — 16 October 2026:** The owner requested finished client
+terms and privacy copy with research and adversarial review. The contracting
+company is **FIDEXA ENTERPRISES - SMC LIMITED**, the Ugandan single member company,
+not the previously assumed Fidexa LLC. Owner-authorized URSB filings establish
+registration **80034103105807**, incorporation **30 October 2024**, registered
+office **Zone D, Makerere 2, Kawempe Division, Kampala, Uganda**, postal address
+**P.O. Box 175930, Kampala GPO**, and director **Matovu Nkoba Farid**. These are
+historical filings, not a fresh registry search. The owner confirms **Fave promises
+the client that the trip will be provided** and **farid@fidexa.org** is the support
+and privacy email; business telephone is **+256705222144**. The
+[finished copy](../policies/client-terms-and-privacy-notice.md) and
+[research/review record](client-policy-research-and-review.md) replace the old
+client template; creating that wording does not establish lawyer approval
+of the new version or activate policy records or payments.
+
 ## 1. Product model to review
 
 Please confirm or correct these working assumptions before advising:
@@ -21,7 +36,7 @@ Please confirm or correct these working assumptions before advising:
 - **Owner-confirmed driver payment model (2026-10-13; not legal approval; rate source updated 2026-10-13):** “Accommodation” means the driver’s lodging of any kind, not hotels only. Each driver sets their own per-night lodging rate during registration; that rate applies across destinations. Fave assigns an eligible driver before showing the final quote, so the quote can use that driver’s registered rate. The accepted quote stores the applicable rate, trip dates, night count, and calculation, and extensions use the rate saved in that accepted quote. Fave breaks the driver’s pay down by trip day and sends that day’s itemized full pay in the morning. The daily total includes that day’s accommodation fee; it is the driver’s complete pay for that day, not an advance toward later pay. Fave does not send a trip-long lump sum or a separate lodging advance. The driver keeps a daily payment already sent if the trip is cancelled, and no payment is sent for later days after the trip ends. The accommodation fee is not returned separately for an unused night because it is included in the daily payment. After the trip, Fave verifies the daily-payment and trip records; no routine driver balance is due. Exceptional adjustments, records, and cancellation treatment require counsel review. Fave does not arrange or pay for client/passenger lodging.
 - The initial payment is intended to be a configurable percentage, defaulting to 50%; the remaining balance is due after the trip. Fave assigns an eligible driver before presenting the final quote; deposit/payment follows client acceptance. Driver contact details remain subject to the separately approved release event and client consent.
 - Drivers may self-register. Fave administrators manually review driver identity before allowing the driver to accept bookings. The planned onboarding information includes a driver’s national ID, name, phone number, driving details, and vehicle information and photographs.
-- Fave has not yet recorded whether drivers are employees, contractors, agents, or independent providers; who owns each vehicle; who contracts with the passenger; or whether Fave receives, holds, or pays out customer funds. These facts may change the legal analysis.
+- The owner confirms that Fave promises transport performance to the client and clients pay Fave; Fave funds daily driver pay from its business funds. The terms must preserve Fave's own duties even where a driver carries out the trip. Driver employment/agency classification, vehicle ownership, licensing, custody of funds and the precise payment-provider structure still require legal verification.
 
 ## 2. Decisions and written deliverables requested
 

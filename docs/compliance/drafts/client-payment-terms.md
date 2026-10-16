@@ -4,7 +4,7 @@
 
 **Counsel review:** The owner confirms counsel approved the payment-provider terms on 12 October 2026. The written advice has not been attached to this repository. That approval is recorded separately from provider selection, signature and onboarding, the final merchant/funds-flow configuration, provider-specific fees and refund capabilities, and any required regulatory approvals.
 
-**Related records:** [MVP booking policy](../../policies/mvp-booking-policy-draft.md), [Uganda payment-provider review](../../policies/uganda-payment-provider-review.md), [client terms and privacy draft](client-terms-and-privacy-notice.md), GitHub issues [#14](https://github.com/matovu-farid/fave/issues/14), [#15](https://github.com/matovu-farid/fave/issues/15), and [#16](https://github.com/matovu-farid/fave/issues/16).
+**Related records:** [MVP booking policy](../../policies/mvp-booking-policy-draft.md), [Uganda payment-provider review](../../policies/uganda-payment-provider-review.md), [client terms and privacy notice](../../policies/client-terms-and-privacy-notice.md), GitHub issues [#14](https://github.com/matovu-farid/fave/issues/14), [#15](https://github.com/matovu-farid/fave/issues/15), and [#16](https://github.com/matovu-farid/fave/issues/16).
 
 ## 1. Who takes payment
 

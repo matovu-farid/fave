@@ -36,7 +36,7 @@ An important legal question concerns retention: regulation 22(2) of the Digital 
 2. `docs/compliance/drafts/driver-terms-and-privacy-notice.md`
    - Proposed Fidexa LLC identity, service description, driver relationship, application and eligibility process, account status, identity evidence, data uses/sharing, rights/contact path, and version/acceptance fields.
    - Bracketed fields for legal entity particulars, licensing status, fees/commission, insurance, support contacts, and any other unresolved business/legal terms.
-3. `docs/compliance/drafts/client-terms-and-privacy-notice.md`
+3. `docs/policies/client-terms-and-privacy-notice.md` (finished copy replaces the original client template, 16 October 2026)
    - Client registration, trip request and vehicle selection, quote/booking lifecycle, payment, cancellation/refund, safety/contact sharing, data handling, and dispute/contact terms.
    - Unsettled fare, deposit, payment-provider, operator/contracting-party, and cancellation choices remain explicit placeholders.
 4. `docs/compliance/drafts/verification-and-retention-procedures.md`
