@@ -328,3 +328,17 @@ Validation for this checkpoint:264 tests passed, zero failures/skips; Expo lint,
 app TypeScript and Worker TypeScript passed. The initial sandboxed full-suite run
 skipped three loopback tests; the successful final run allowed loopback and ran
 all of them. Independent review confirmed the direct expiry rollback coverage.
+
+### Notification expiry release checkpoint
+
+- Main implementation:9cc787aff7d4ca56315f8003af8fd118fed612b6.
+- CI38909410706 passed for that exact commit. Worker upload dry-run passed.
+- Worker version:b0834aec-2d3a-46d2-9421-634a7acc868e, tagmain-9cc787a.
+- Deployment:7d553f6d-9f3f-41cc-8203-936681c2d1f0, created2026-10-16T13:40:45.005135Z,
+  serving100% traffic. Runtime, static assets configuration and all bindings match
+  the prior version; no migrations, triggers, fare or legal publication changed.
+- Rollback:e53416a8-1d01-4666-b26f-6e97fb56e654.
+- Public health200 with databaseok; signed-out inbox, notification-health and staff
+  security APIs401JSON. Staff security API/static page retainprivate/no-store;
+  static page200HTML. Unknown API404JSON. These are read-only smoke checks, not
+  production end-to-end notification delivery or real-device push acceptance.
