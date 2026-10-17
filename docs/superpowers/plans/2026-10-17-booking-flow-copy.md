@@ -37,6 +37,11 @@ Desktop and 390×844 phone layouts were inspected; viewport reset and fixture
 stopped afterward. Screenshots: `/tmp/fave-staff-availability-copy-phone.png` and
 `/tmp/fave-driver-availability-copy-phone.png`.
 
-Exact-source CI and production release evidence will be recorded after those
-gates pass. Existing broader payment, legal, incident, suspension and launch
-requirements remain open.
+Source `c79531aa8a722897a555a9887c9a1337ad878d30` passed
+[CI39022349089](https://github.com/matovu-farid/fave/actions/runs/39022349089):
+627 tests with zero failures/skips, lint, app/Worker types and iOS/Android/web
+bundles. The web correction is released. Live health/database, canonical console,
+anonymous API denials and cache protection passed; the served bundle matches the
+verified production artifact. No physical-device update or observation is claimed.
+Existing broader payment, legal, incident, suspension and launch requirements
+remain open.

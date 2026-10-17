@@ -49,6 +49,12 @@ responses carry explicit cache protection. Synthetic browser call-to-quote and
 contact-clearing checks passed at desktop and phone widths. The repair is
 released; it does not implement the proposed suspension/recovery workflow.
 
+The booking-copy correction subsequently passed
+[CI39022349089](https://github.com/matovu-farid/fave/actions/runs/39022349089)
+with 627 tests and all checks. Empty legacy-offer sections no longer describe the
+new staff-check workflow; real earlier offers retain their controls and deadlines.
+The web correction is released and manually reviewed with synthetic accounts.
+
 ## Open issue coverage and remaining work
 
 Every issue below remains open. “Present” identifies implementation to preserve,
@@ -124,3 +130,27 @@ Provider choice, commercial completion/payment rules, safety coverage and exact
 operating/legal readiness remain distinct decisions. Do not fill them with new
 defaults, activate policies, invent a payment provider or treat the 389-test
 baseline as permission to accept public trips.
+
+## Decision-wait audit — 17 October 2026
+
+A fresh repository query returns the same 17 open MVP issues and no open PR.
+The scope/evidence table above still applies; the released repairs do not close
+those broader requirements. No currently approved implementation is queued
+behind a running test/build/deployment for these releases.
+
+The unanswered suspension/existing-booking question has persisted through the
+driver-operations proposal, Operations lifecycle repair and booking-copy repair.
+The independent work found during that wait has been completed and released.
+Continue with that one question, rather than silently selecting cancellation,
+refund, replacement or restoration behavior or opening multiple new questions.
+
+Other remaining feature dependencies are distinct, not substitutes for that
+answer: #11/#16 require a chosen/eligible provider and confirmed funds flow;
+#13/#15 need completion, balance, no-show and daily-pay operating decisions;
+#19 needs support/rest/check-in/escalation and replacement procedures; #14/#21
+need the actual retention/holds/erasure and exact operating-readiness decisions;
+#20 needs the paid end-to-end journey and device evidence. #22 still needs the
+separately pending Apple key authorization/device check and events from those
+unimplemented domains. The proposal and existing research are ready for owner
+decisions; do not treat waiting as approval or start financial/credential actions
+to manufacture progress. The full goal is not complete.
