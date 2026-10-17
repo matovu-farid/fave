@@ -61,3 +61,18 @@ The request moved to Quote sent with its configured date hold and contact hidden
 Phone layout checked at 390×844, then the viewport override reset. Screenshot:
 `/tmp/fave-operations-quote-phone.png`. No production contact or booking decision
 was used. The synthetic fare-policy window is not production policy activation.
+
+The initial UI source `7bc0b3a` passed
+[CI39021222872](https://github.com/matovu-farid/fave/actions/runs/39021222872)
+with 620 tests and all checks, then was released. Live health and anonymous access
+checks exposed a pre-existing gap in the two booking-operations API routes:
+responses lacked explicit cache protection. Seven additional tests reproduced
+the gap for signed-out, unauthorized and authorized responses, plus unknown admin
+routes. A shared admin API middleware adds private/no-store and no-cache headers;
+authorization, response bodies, streaming and the UI artifact remain unchanged.
+The follow-up receives its own validation/release gate before closing this repair.
+
+The follow-up passed 627 full-suite tests, zero failures/skips, lint, both
+typechecks and Worker packaging. Independent review found no remaining issue;
+additional checks exercised handled server errors, raw streams and preflights.
+The manually tested web artifact is unchanged by the Worker-only header repair.

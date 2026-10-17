@@ -29,6 +29,12 @@ const app = new Hono<{ Bindings: AuthBindings }>()
 
 app.onError(accountLifecycleErrorHandler)
 
+app.use('/api/admin/*', async (c, next) => {
+  c.header('Cache-Control', 'private, no-store')
+  c.header('Pragma', 'no-cache')
+  await next()
+})
+
 app.use(
   '/api/*',
   cors({
