@@ -497,3 +497,41 @@ reset; production owner console retained. No production test event or push sent.
   318 passed, zero failures/skips; app lint and app/Worker typechecks passed.
   Test/docs-only change requires no Worker release. Issue 22 remains open for
   real-device push and payment/trip/safety producers in their owning modules.
+
+### Inbox response ordering — 17 October 2026
+
+- Reproduced against the actual exported app, production Worker/Better Auth and
+  all migrations in isolated SQLite: delay an inbox refresh, mark all read, then
+  release the response captured before the write. The database retained zero
+  unread items, while the old screen restored 25 unread. No production data or
+  real device push was involved.
+- The screen now accepts only the latest focused list response. Older-page
+  results/errors belong to their original list version and cannot append to a
+  refreshed inbox or replace its cursor. Read actions invalidate earlier reads,
+  prevent repeated simultaneous opens, and reload authoritative unread state
+  after a successful write. Resume subscriptions exist only while focused.
+- Independent review reproduced two additional cases before repair: a write
+  completing after blur/refocus must reconcile without stale navigation; a push
+  target arriving during a read action must wait rather than be consumed. Both
+  now have failing-then-passing tests. Push targets are consumed only when their
+  open action starts. Successful obsolete writes may refresh a currently focused
+  screen but cannot trigger the old navigation.
+- Nine actual-component regression tests control only services, navigation and
+  lifecycle. The initial seven failed before the first fix; two review regressions
+  failed before their repairs. The complete suite passes 365 tests, zero failures
+  or skips. Expo lint and app/Worker TypeScript pass. Focused inbox tests: 17 pass.
+  Independent follow-up review found no remaining material issues.
+- Fresh browser export verified the original race with 45 synthetic alerts:
+  releasing the delayed pre-write response leaves zero unread. A delayed older
+  page released after refresh does not append to its 30 items or alter pagination;
+  a new older-page request correctly expands to 45. Checked at 390px, with no
+  browser warnings/errors. The fixture had zero bookings and zero push tokens.
+  Screenshot: /tmp/fave-inbox-ordering-fixed.png. Actual native push taps remain
+  covered by controlled component tests here, not a new physical-device check.
+- This changes the app inbox only. No migration, Queue/Cron setting, fare/legal
+  activation or live payment behavior changes. Issue 22 remains open for real
+  device push verification and future payment/trip/safety producers.
+
+API references checked for the installed versions:
+[Expo Router SDK 57](https://docs.expo.dev/versions/v57.0.0/sdk/router/#usefocuseffecteffect-do_not_pass_a_second_prop)
+and [React Native 0.86 AppState](https://reactnative.dev/docs/0.86/appstate).

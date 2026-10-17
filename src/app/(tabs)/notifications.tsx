@@ -33,6 +33,10 @@ export default function NotificationsScreen() {
   const [inboxNextCursor, setInboxNextCursor] = useState<{ createdAt: number; id: string } | null>(null)
   const [loadingMore, setLoadingMore] = useState(false)
   const openedFromPush = useRef<string | null>(null)
+  const inboxFocused = useRef(false)
+  const inboxVersion = useRef(0)
+  const olderRequest = useRef<symbol | null>(null)
+  const readAction = useRef<symbol | null>(null)
 
   const refresh = useCallback(async () => {
     setError('')
@@ -60,46 +64,80 @@ export default function NotificationsScreen() {
   }, [refresh])
 
   const loadInbox = useCallback(async () => {
+    if (!inboxFocused.current) return
+    const version = ++inboxVersion.current
+    olderRequest.current = null
+    setLoadingMore(false)
     setInboxError('')
     setInboxLoading(true)
     try {
       const page = await getNotificationInbox()
+      if (!inboxFocused.current || inboxVersion.current !== version) return
       setInbox(page.notifications)
       setInboxUnreadCount(page.unreadCount)
       setInboxNextCursor(page.nextCursor)
     } catch (cause) {
-      setInboxError(cause instanceof Error ? cause.message : 'Your inbox is temporarily unavailable.')
+      if (inboxFocused.current && inboxVersion.current === version) {
+        setInboxError(cause instanceof Error ? cause.message : 'Your inbox is temporarily unavailable.')
+      }
     } finally {
-      setInboxLoading(false)
+      if (inboxFocused.current && inboxVersion.current === version) setInboxLoading(false)
     }
   }, [])
 
   const loadMore = async () => {
-    if (!inboxNextCursor || loadingMore) return
+    if (!inboxFocused.current || !inboxNextCursor || inboxLoading || olderRequest.current || readAction.current) return
+    const version = inboxVersion.current
+    const request = Symbol()
+    olderRequest.current = request
+    const current = () => inboxFocused.current && inboxVersion.current === version && olderRequest.current === request
     setLoadingMore(true)
     setInboxError('')
     try {
       const page = await getNotificationInbox(inboxNextCursor)
+      if (!current()) return
       setInbox(items => [...items, ...page.notifications.filter(item => !items.some(existing => existing.id === item.id))])
       setInboxNextCursor(page.nextCursor)
     } catch (cause) {
-      setInboxError(cause instanceof Error ? cause.message : 'More notifications are temporarily unavailable.')
+      if (current()) setInboxError(cause instanceof Error ? cause.message : 'More notifications are temporarily unavailable.')
     } finally {
-      setLoadingMore(false)
+      if (current()) {
+        olderRequest.current = null
+        setLoadingMore(false)
+      }
     }
   }
 
   useFocusEffect(useCallback(() => {
+    inboxFocused.current = true
+    setInboxBusy(false)
     void loadInbox()
-    return undefined
-  }, [loadInbox]))
-
-  useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {
       if (state === 'active') void loadInbox()
     })
-    return () => subscription.remove()
-  }, [loadInbox])
+    return () => {
+      inboxFocused.current = false
+      inboxVersion.current++
+      olderRequest.current = null
+      readAction.current = null
+      subscription.remove()
+    }
+  }, [loadInbox]))
+
+  // A read write supersedes any list/page captured before it. Reload after the
+  // write as well, so newer arrivals keep their authoritative unread state.
+  const beginReadAction = useCallback(() => {
+    if (!inboxFocused.current || readAction.current) return null
+    const action = Symbol()
+    readAction.current = action
+    inboxVersion.current++
+    olderRequest.current = null
+    setLoadingMore(false)
+    setInboxLoading(false)
+    setInboxBusy(true)
+    setInboxError('')
+    return action
+  }, [])
 
   const enable = async () => {
     setBusy(true)
@@ -135,39 +173,62 @@ export default function NotificationsScreen() {
   }
 
   const openNotification = useCallback(async (item: NotificationInboxItem) => {
+    const action = beginReadAction()
+    if (!action) return
+    const current = () => inboxFocused.current && readAction.current === action
     if (!item.isRead) {
       try {
         const result = await markNotificationRead(item.id)
+        if (!current()) {
+          void loadInbox()
+          return
+        }
         setInbox(items => items.map(current => current.id === item.id ? { ...current, isRead: true, readAt: result.readAt } : current))
-        setInboxUnreadCount(count => Math.max(0, count - 1))
+        void loadInbox()
       } catch (cause) {
+        if (!current()) return
         setInboxError(cause instanceof Error ? cause.message : 'Could not update this notification.')
       }
     }
+    if (!current()) return
+    readAction.current = null
+    setInboxBusy(false)
     router.push(getNotificationDestination(item))
-  }, [])
+  }, [beginReadAction, loadInbox])
 
   useEffect(() => {
     const notificationId = Array.isArray(requestedNotificationId) ? requestedNotificationId[0] : requestedNotificationId
-    if (!notificationId || inboxLoading || openedFromPush.current === notificationId) return
+    if (!notificationId || inboxLoading || inboxBusy || openedFromPush.current === notificationId) return
     const item = inbox.find((notification) => notification.id === notificationId)
     if (!item) return
-    openedFromPush.current = notificationId
-    const timer = setTimeout(() => { void openNotification(item) }, 0)
+    const timer = setTimeout(() => {
+      if (!inboxFocused.current || readAction.current) return
+      openedFromPush.current = notificationId
+      void openNotification(item)
+    }, 0)
     return () => clearTimeout(timer)
-  }, [inbox, inboxLoading, openNotification, requestedNotificationId])
+  }, [inbox, inboxBusy, inboxLoading, openNotification, requestedNotificationId])
 
   const readAll = async () => {
-    setInboxBusy(true)
-    setInboxError('')
+    const action = beginReadAction()
+    if (!action) return
+    const current = () => inboxFocused.current && readAction.current === action
     try {
       const result = await markAllNotificationsRead()
+      if (!current()) {
+        void loadInbox()
+        return
+      }
       setInbox(items => items.map(item => ({ ...item, isRead: true, readAt: item.readAt ?? result.readAt })))
       setInboxUnreadCount(0)
+      void loadInbox()
     } catch (cause) {
-      setInboxError(cause instanceof Error ? cause.message : 'Could not mark notifications as read.')
+      if (current()) setInboxError(cause instanceof Error ? cause.message : 'Could not mark notifications as read.')
     } finally {
-      setInboxBusy(false)
+      if (current()) {
+        readAction.current = null
+        setInboxBusy(false)
+      }
     }
   }
 
@@ -217,7 +278,7 @@ export default function NotificationsScreen() {
             : null}
           {!inboxLoading && inbox.length > 0
             ? inbox.map(item => (
-                <Pressable key={item.id} accessibilityRole="button" accessibilityLabel={`${item.title}. ${item.body}`} onPress={() => void openNotification(item)}>
+                <Pressable key={item.id} accessibilityRole="button" accessibilityLabel={`${item.title}. ${item.body}`} disabled={inboxBusy} onPress={() => void openNotification(item)}>
                   <Card>
                     <ThemedView style={styles.notificationTitleRow}>
                       <ThemedText type="smallBold" style={styles.notificationTitle}>{item.title}</ThemedText>
