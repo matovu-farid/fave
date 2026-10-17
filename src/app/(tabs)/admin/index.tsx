@@ -1,7 +1,5 @@
 import { Link, type Href } from 'expo-router'
-import { useCallback, useEffect, useState } from 'react'
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native'
-import * as Linking from 'expo-linking'
 import { SafeAreaView } from 'react-native-safe-area-context'
 
 import { ActionButton, Card, Field, Message, SectionTitle } from '@/components/marketplace-ui'
@@ -9,21 +7,8 @@ import { ThemedText } from '@/components/themed-text'
 import { ThemedView } from '@/components/themed-view'
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme'
 import { AdminNotificationHealth } from '@/components/admin-notification-health'
-import {
-  getAdminAccess,
-  AdminDriverTripOffer,
-  AdminAvailabilityRequest,
-  DriverCallOutcome,
-  DriverContact,
-  confirmAvailabilityRequest,
-  getAdminAvailabilityRequests,
-  getAdminTripOffers,
-  getAvailabilityDriverContact,
-  getDriverTripOfferContact,
-  markAvailabilityUnavailable,
-  recordAvailabilityCall,
-  recordDriverTripOfferFollowUp,
-} from '@/lib/marketplace'
+import { type DriverCallOutcome } from '@/lib/marketplace'
+import { useBookingOperations } from '@/hooks/use-booking-operations'
 
 const callOutcomes: { value: DriverCallOutcome; label: string }[] = [
   { value: 'reached', label: 'Reached' },
@@ -50,157 +35,12 @@ function statusLabel(status: string) {
 }
 
 export default function AdminScreen() {
-  const [operations,setOperations]=useState(false)
-  const [pendingOffers, setPendingOffers] = useState<AdminDriverTripOffer[]>([])
-  const [processingOffers, setProcessingOffers] = useState<AdminDriverTripOffer[]>([])
-  const [recentOffers, setRecentOffers] = useState<AdminDriverTripOffer[]>([])
-  const [availabilityRequests, setAvailabilityRequests] = useState<AdminAvailabilityRequest[]>([])
-  const [confirmedRequests, setConfirmedRequests] = useState<AdminAvailabilityRequest[]>([])
-  const [recentRequests, setRecentRequests] = useState<AdminAvailabilityRequest[]>([])
-  const [decisionRequestId, setDecisionRequestId] = useState('')
-  const [contacts, setContacts] = useState<Record<string, DriverContact['driver']>>({})
-  const [outcomes, setOutcomes] = useState<Record<string, DriverCallOutcome>>({})
-  const [notes, setNotes] = useState<Record<string, string>>({})
-  const [loggingOfferId, setLoggingOfferId] = useState('')
-  const [busyOfferId, setBusyOfferId] = useState('')
-  const [now, setNow] = useState(0)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-  const [message, setMessage] = useState('')
-
-  const refresh = useCallback(async (showLoading = false) => {
-    if (showLoading) setLoading(true)
-    setError('')
-    try {
-      const access=await getAdminAccess()
-      setOperations(access.operations)
-      if(!access.operations)return
-      const [result, availability] = await Promise.all([getAdminTripOffers(), getAdminAvailabilityRequests()])
-      setPendingOffers(result.pendingOffers)
-      setProcessingOffers(result.processingOffers)
-      setRecentOffers(result.recentOffers)
-      setAvailabilityRequests(availability.pendingRequests)
-      setConfirmedRequests(availability.confirmedRequests)
-      setRecentRequests(availability.recentRequests)
-      setNow(Date.now())
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Trip operations are temporarily unavailable.')
-    } finally {
-      if (showLoading) setLoading(false)
-    }
-  }, [])
-
-  const revealAvailabilityDriver = async (requestId: string) => {
-    setBusyOfferId(requestId); setError(''); setMessage('')
-    try {
-      const result = await getAvailabilityDriverContact(requestId)
-      setContacts((current) => ({ ...current, [requestId]: result.driver }))
-      setOutcomes((current) => ({ ...current, [requestId]: current[requestId] ?? 'no_answer' }))
-      setMessage('Driver contact access was recorded. Call the driver to check these dates.')
-    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Driver contact is temporarily unavailable.') }
-    finally { setBusyOfferId('') }
-  }
-
-  const callAvailabilityDriver = async (requestId: string) => {
-    const contact = contacts[requestId]
-    if (!contact) return
-    try {
-      await Linking.openURL(`tel:${contact.phone}`)
-      setLoggingOfferId(requestId)
-      setMessage('After the call, save its outcome before deciding availability.')
-    } catch {
-      setError('This device could not open the phone app. You can still record a call attempt.')
-      setLoggingOfferId(requestId)
-    }
-  }
-
-  const saveAvailabilityCall = async (requestId: string) => {
-    setBusyOfferId(requestId); setError(''); setMessage('')
-    try {
-      await recordAvailabilityCall(requestId, outcomes[requestId] ?? 'no_answer', notes[requestId] ?? '')
-      setNotes((current) => ({ ...current, [requestId]: '' }))
-      setLoggingOfferId('')
-      setMessage(outcomes[requestId] === 'reached'
-        ? 'Call attempt saved. You can now confirm or decline availability for the requested dates.'
-        : 'Call attempt saved. The driver has not been reached; leave this request awaiting follow-up.')
-      await refresh()
-    } catch (cause) { setError(cause instanceof Error ? cause.message : 'The call attempt could not be saved.') }
-    finally { setBusyOfferId('') }
-  }
-
-  const decideAvailability = async (requestId: string, available: boolean) => {
-    setBusyOfferId(requestId); setError(''); setMessage('')
-    try {
-      if (available) await confirmAvailabilityRequest(requestId)
-      else await markAvailabilityUnavailable(requestId)
-      setContacts((current) => { const next = { ...current }; delete next[requestId]; return next })
-      setDecisionRequestId('')
-      setMessage(available ? 'Dates confirmed. The client has the same-price quote and a hold through the quote window.' : 'Marked unavailable. The client was notified and no deposit is requested.')
-      await refresh()
-    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not update availability.') }
-    finally { setBusyOfferId('') }
-  }
-
-  useEffect(() => {
-    const initialLoadTimer = setTimeout(() => { void refresh(true) }, 0)
-    const refreshTimer = setInterval(() => { void refresh() }, 15_000)
-    const clockTimer = setInterval(() => setNow(Date.now()), 1000)
-    return () => {
-      clearTimeout(initialLoadTimer)
-      clearInterval(refreshTimer)
-      clearInterval(clockTimer)
-    }
-  }, [refresh])
-
-  const revealDriverContact = async (offerId: string) => {
-    setBusyOfferId(offerId)
-    setError('')
-    setMessage('')
-    try {
-      const result = await getDriverTripOfferContact(offerId)
-      setContacts((current) => ({ ...current, [offerId]: result.driver }))
-      setOutcomes((current) => ({ ...current, [offerId]: current[offerId] ?? 'no_answer' }))
-      setMessage('Driver contact access was recorded. Call the driver if a follow-up is needed.')
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Driver contact is temporarily unavailable.')
-    } finally {
-      setBusyOfferId('')
-    }
-  }
-
-  const callDriver = async (offerId: string) => {
-    const contact = contacts[offerId]
-    if (!contact) return
-    try {
-      await Linking.openURL(`tel:${contact.phone}`)
-      setLoggingOfferId(offerId)
-      setMessage('After the call, save its outcome below.')
-    } catch {
-      setError('This device could not open the phone app. You can still record a call attempt below.')
-      setLoggingOfferId(offerId)
-    }
-  }
-
-  const saveFollowUp = async (offerId: string) => {
-    setBusyOfferId(offerId)
-    setError('')
-    setMessage('')
-    try {
-      await recordDriverTripOfferFollowUp(
-        offerId,
-        outcomes[offerId] ?? 'no_answer',
-        notes[offerId] ?? '',
-      )
-      setNotes((current) => ({ ...current, [offerId]: '' }))
-      setLoggingOfferId('')
-      setMessage('Call attempt saved to the audit trail.')
-      await refresh()
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'The call attempt could not be saved.')
-    } finally {
-      setBusyOfferId('')
-    }
-  }
+  const {
+    operations, pendingOffers, processingOffers, recentOffers, availabilityRequests, confirmedRequests, recentRequests,
+    decisionRequestId, contacts, outcomes, notes, loggingOfferId, busyOfferId, now, loading, error, message,
+    refresh, revealAvailabilityDriver, callAvailabilityDriver, saveAvailabilityCall, decideAvailability,
+    revealDriverContact, callDriver, saveFollowUp, setOutcomes, setNotes, setDecisionRequestId, setLoggingOfferId,
+  } = useBookingOperations()
 
   return (
     <ThemedView style={styles.container}>
@@ -365,6 +205,7 @@ export default function AdminScreen() {
                     <ThemedText type="smallBold">{contact.name}</ThemedText>
                     <ThemedText selectable>{contact.phone}</ThemedText>
                     <ActionButton title="Call driver" disabled={expired} onPress={() => void callDriver(offer.offerId)} />
+                    {loggingOfferId !== offer.offerId ? <ActionButton title="Record call attempt" disabled={expired || Boolean(busyOfferId)} onPress={() => setLoggingOfferId(offer.offerId)} /> : null}
                     {loggingOfferId === offer.offerId ? (
                       <View style={styles.followUpForm}>
                         <ThemedText type="smallBold">Log call outcome</ThemedText>
