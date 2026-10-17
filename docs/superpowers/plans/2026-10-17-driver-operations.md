@@ -58,10 +58,10 @@ Files: create `src/lib/driver-operations.ts`, `src/hooks/use-private-operations.
 Files: update this plan, approved spec and `docs/runbooks/mvp-implementation-readiness.md` with product-level evidence.
 
 - [x] Run focused SQL and UI regressions, then independent security/spec/maintainability review; fix concrete findings with reproducing tests.
-- [ ] Run `npm run lint`, `npm run typecheck`, Worker `tsc --noEmit`, full tests and iOS/Android/web export checks.
+- [x] Run `npm run lint`, `npm run typecheck`, Worker `tsc --noEmit`, full tests and iOS/Android/web export checks.
 - [x] Build a synthetic local web fixture with real migrations, signed synthetic sessions and actual Worker routes. Manually exercise desktop and phone queues/detail, suspend, preserved existing booking/flag, restore, corrections, reviewed outcome and lock. Save screenshots; do not suspend a real user for testing.
-- [ ] Commit only task files on main, push and verify CI for that source. Apply the additive migration and use the established staged Worker/web release procedure; preserve bindings/runtime settings and verify production health/routes/access denial. Keep sensitive deployment evidence local.
-- [ ] Update issues #7/#17 with a minimal product/test summary. Do not close the broader issues or claim paid trip/incident/provider readiness.
+- [x] Commit only task files on main, push and verify CI for that source. Apply the additive migration and use the established staged Worker/web release procedure; preserve bindings/runtime settings and verify production health/routes/access denial. Keep sensitive deployment evidence local.
+- [x] Update issues #7/#17 with a minimal product/test summary. Do not close the broader issues or claim paid trip/incident/provider readiness.
 
 ## Local verification evidence
 
@@ -72,3 +72,11 @@ Files: update this plan, approved spec and `docs/runbooks/mvp-implementation-rea
 - Synthetic browser at 1280px desktop and 390px phone: approved driver lookup; explicit reason/message and suspension confirmation; unchanged confirmed booking plus new review flag; restore with flag preserved; explicit outcome and reviewed record; later suspension produces another flag; corrections keeps new-work restriction and supplies the driver next step; locking hides detail and clears a pending outcome draft.
 - Browser verification used only signed synthetic accounts and an in-memory migrated database. No real driver, document, booking, payment or policy activation was used as a fixture. Backend tests cover missing/changed restoration prerequisites and revocation races.
 - Screenshots remain local under /tmp/fave-driver-operations-*.png and /tmp/fave-booking-review-*.png. Test/build/release logs remain local.
+
+## Release evidence
+
+Implementation source `a25615cd16fc5837c7ad6d218379c05c6399302f` is pushed on main and released.
+[CI39046056506](https://github.com/matovu-farid/fave/actions/runs/39046056506) passed all 665 tests, zero failures/skips, lint, both typechecks and iOS/Android/web exports.
+Production health/database checks pass; both new routes serve the verified web asset; anonymous owner-queue/history requests return 401 with no-store headers. Browser checks confirmed the released navigation, authenticated queues and locked verification controls without mutating real records. The additive schema migration is applied, no migration remains pending, and the prior binding/runtime configuration was preserved.
+
+Issues #7 and #17 have product-level release updates and remain open for their broader requirements. Detailed infrastructure/rollback evidence remains in local release logs. The disposable test server and browser tab were closed, the browser viewport restored, and the released booking-review page left open for the owner. No branch/worktree/PR was created; unrelated .superpowers files were preserved.

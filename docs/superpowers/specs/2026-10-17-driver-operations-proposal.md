@@ -2,7 +2,8 @@
 
 Status: approved by the owner, 17 October 2026. Implement inline on main and
 manually test in the browser. The suspension rule and concrete design below
-are approved; implementation is in progress.
+are approved. The bounded feature is implemented and released; verification is
+recorded in the matching driver-operations implementation plan.
 
 Tracks [driver verification #7](https://github.com/matovu-farid/fave/issues/7)
 and [operations #17](https://github.com/matovu-farid/fave/issues/17), both currently

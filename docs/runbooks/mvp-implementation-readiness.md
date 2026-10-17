@@ -121,7 +121,9 @@ records the current code gap and implementation checks. The owner confirmed:
 **suspension stops new bookings and flags existing bookings for owner review.**
 The concrete design adds a separate driver-operations screen and durable booking
 review flags, preserving booking state and requiring an explicit review outcome.
-The owner approved the written design and requested implementation on main with browser testing. The implementation now passes local tests and independent review; exact-source CI and production release checks are the remaining gates.
+The owner approved the written design and implementation on main. The feature
+is released after exact-source CI, independent review and synthetic browser
+tests. Remaining work is the broader issue coverage and readiness evidence below.
 
 Apple notification-key management remains separately pending specific
 authorization after an automatic approval-review rejection; do not enter
@@ -134,7 +136,8 @@ baseline as permission to accept public trips.
 
 ## Decision-wait audit and resumption — 17 October 2026
 
-A fresh repository query returns the same 17 open MVP issues and no open PR.
+The repository audit before this implementation returned 17 open MVP issues and
+no open PR.
 The scope/evidence table above still applies; the released repairs do not close
 those broader requirements. No currently approved implementation is queued
 behind a running test/build/deployment for these releases.
@@ -142,8 +145,8 @@ behind a running test/build/deployment for these releases.
 The suspension/existing-booking question was unanswered during the
 driver-operations proposal, Operations lifecycle repair and booking-copy repair.
 The independent work found during that wait was completed and released. The
-owner has now answered, resolving that blocker. Continue the driver-operations
-design and implementation workflow using the confirmed rule. Cancellation,
+owner answered, resolving that blocker; the approved driver-operations feature
+has since been implemented and released using the confirmed rule. Cancellation,
 refund and replacement remain separate decisions; the answer does not authorize
 those actions.
 
@@ -173,6 +176,10 @@ Local checks pass 665 tests, zero failures/skips, lint, app/Worker typechecks an
 production web export. Independent backend and UI reviews have no outstanding
 findings. Synthetic phone/desktop browser checks exercised suspension, restoration,
 corrections, preserved bookings/flags, review outcomes and lock/draft clearing.
-Exact-source CI and production release evidence will be recorded after publishing.
+[CI39046056506](https://github.com/matovu-farid/fave/actions/runs/39046056506)
+passed the same 665 tests and iOS/Android/web exports for release source
+`a25615c`. Production health/database, both page routes, verified web assets and
+anonymous access denial checks passed. The released pages were also checked in
+the owner browser with private review controls locked.
 This completes this bounded feature, not the broader #7/#17 operating or launch
 requirements. No cancellation, refund, replacement or payment execution is added.
