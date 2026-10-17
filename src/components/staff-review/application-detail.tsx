@@ -20,47 +20,62 @@ export default function ApplicationDetail({kind,id,access}:{kind:ReviewKind;id:s
   const [identity,setIdentity]=useState<Awaited<ReturnType<typeof revealReviewIdentity>>|null>(null)
   const [evidence,setEvidence]=useState<Evidence|null>(null)
   const current=useRef(0)
+  const focused=useRef(false)
+  const action=useRef<symbol|null>(null)
   const file=useRef<{url:string;request?:AbortController}|null>(null)
   const closeEvidence=useCallback(()=>{file.current?.request?.abort();if(file.current?.url)URL.revokeObjectURL(file.current.url);file.current=null;setEvidence(null)},[])
-  const clear=useCallback(()=>{current.current++;closeEvidence();setDetail(null);setIdentity(null);setPurpose('');setMessage('');setBusy(false)},[closeEvidence])
+  const clear=useCallback(()=>{current.current++;action.current=null;closeEvidence();setDetail(null);setIdentity(null);setPurpose('');setMessage('');setBusy(false)},[closeEvidence])
   const refresh=useCallback(async()=>{
+    if(!focused.current)return
     const generation=++current.current;setLoading(true)
     try{const next=await getReviewDetail(kind,id);if(current.current===generation){setDetail(next);setError('')}}
     catch(cause){if(current.current===generation){setDetail(null);setError(cause instanceof Error?cause.message:'Application is unavailable.')}}
     finally{if(current.current===generation)setLoading(false)}
   },[kind,id])
   useEffect(()=>{if(!access.unlocked)return clear;const timer=setTimeout(()=>void refresh(),0);return()=>{clearTimeout(timer);clear()}},[access.unlocked,refresh,clear])
-  useFocusEffect(useCallback(()=>()=>clear(),[clear]))
-  const failure=async(cause:unknown)=>{
+  useFocusEffect(useCallback(()=>{focused.current=true;return()=>{focused.current=false;clear()}},[clear]))
+  const beginAction=()=>{
+    if(!focused.current||!access.unlocked||action.current)return null
+    const token=Symbol()
+    action.current=token;setBusy(true);setError('')
+    return token
+  }
+  const isCurrent=(token:symbol)=>focused.current&&action.current===token
+  const finishAction=(token:symbol)=>{if(isCurrent(token)){action.current=null;setBusy(false)}}
+  const failure=async(cause:unknown,token:symbol)=>{
+    if(!isCurrent(token))return
+    const message=cause instanceof Error?cause.message:'Review could not be saved. Try again.'
+    setError(message)
     if(cause instanceof ApiError&&(cause.status===428||cause.status===401||cause.status===403)){clear();await access.refresh()}
     if(cause instanceof ApiError&&cause.status===409){closeEvidence();setIdentity(null);await refresh()}
-    setError(cause instanceof Error?cause.message:'Review could not be saved. Try again.')
+    if(isCurrent(token))setError(message)
   }
   const decide=async(documentId:string|null,decision:'approve'|'reject',reason:string,applicantMessage:string)=>{
-    if(busy)return
-    setBusy(true);setError('');setMessage('')
-    const generation=current.current
-    try{await decideReview(kind,id,documentId,{decision,reason,applicantMessage});if(generation===current.current){closeEvidence();setIdentity(null);setMessage('Decision saved.');await refresh()}}
-    catch(cause){await failure(cause);throw cause}
-    finally{setBusy(false)}
+    const token=beginAction()
+    if(!token)throw new Error('A review action is already running or reviews are locked.')
+    setMessage('')
+    try{await decideReview(kind,id,documentId,{decision,reason,applicantMessage});if(isCurrent(token)){closeEvidence();setIdentity(null);setMessage('Decision saved.');await refresh()}}
+    catch(cause){await failure(cause,token);throw cause}
+    finally{finishAction(token)}
   }
   const openFile=async(documentId:string,type:string,label:string)=>{
-    if(busy||Platform.OS!=='web')return
-    closeEvidence();setBusy(true);setError('')
-    const generation=current.current
+    if(Platform.OS!=='web')return
+    const token=beginAction()
+    if(!token)return
+    closeEvidence()
     const request=new AbortController();file.current={url:'',request}
     try{
       const blob=await openReviewEvidence(kind,id,documentId,purpose.trim(),request.signal)
-      if(generation!==current.current||request.signal.aborted)return
+      if(!isCurrent(token)||request.signal.aborted)return
       if(!['image/jpeg','image/png','image/webp','application/pdf'].includes(blob.type))throw new Error('This file cannot be displayed safely.')
       const url=URL.createObjectURL(blob);file.current={url,request};setEvidence({url,type,label})
-    }catch(cause){if(!request.signal.aborted)await failure(cause)}finally{setBusy(false)}
+    }catch(cause){if(!request.signal.aborted)await failure(cause,token)}finally{finishAction(token)}
   }
   const reveal=async()=>{
-    if(busy)return
-    const generation=current.current;setBusy(true);setError('')
-    try{const values=await revealReviewIdentity(kind,id,purpose.trim());if(generation===current.current)setIdentity(values)}
-    catch(cause){await failure(cause)}finally{setBusy(false)}
+    const token=beginAction()
+    if(!token)return
+    try{const values=await revealReviewIdentity(kind,id,purpose.trim());if(isCurrent(token))setIdentity(values)}
+    catch(cause){await failure(cause,token)}finally{finishAction(token)}
   }
   if(!access.unlocked)return <Message>Unlock reviews to open this application’s details and evidence.</Message>
   return <>
