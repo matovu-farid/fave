@@ -96,11 +96,20 @@ than reopening a completed, narrower issue or calling the launch complete.
 
 ## Current next step
 
-The next account engineering step is authorized deletion/export fulfillment,
-with the owner's existing-trip access answer first. Only one owner question is
-being pursued at a time. Apple notification-key management remains separately
-pending specific authorization after an automatic approval-review rejection;
-do not enter credential-management menus as a read-only workaround.
+Automatic account downloads are released. The owner's account-deletion choices
+are recorded above: stop new work immediately and preserve existing-trip access.
+Actual erasure and exceptional statutory-case completion remain open.
+
+The next operations step is approved-driver lookup, suspension and recovery
+under #7/#17. The [concrete proposal](../superpowers/specs/2026-10-17-driver-operations-proposal.md)
+records the current code gap and implementation checks. One owner question is
+pending: whether suspension should stop new bookings and flag existing bookings
+for review, rather than automatically cancelling them. No such new rule is
+implemented or activated yet.
+
+Apple notification-key management remains separately pending specific
+authorization after an automatic approval-review rejection; do not enter
+credential-management menus as a read-only workaround.
 
 Provider choice, commercial completion/payment rules, safety coverage and exact
 operating/legal readiness remain distinct decisions. Do not fill them with new
