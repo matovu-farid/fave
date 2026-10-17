@@ -103,7 +103,13 @@ export default function AccountExportScreen() {
   const reauthenticate = async () => {
     if (!focused.current || identity.current !== accountId || action.current) return
     const generation = current.current, token = Symbol(); action.current = token; setBusy(true); setError('')
-    try { const result = await authClient.signOut(); if (result.error) throw Error('Could not sign out. Please try again.') }
+    try {
+      const result = await authClient.signOut()
+      if (result.error) throw Error('Could not sign out. Please try again.')
+      // The root auth gate unmounts the navigation stack on sign-out. A fresh
+      // document keeps this fixed destination through that navigation reset.
+      if (Platform.OS === 'web' && typeof window !== 'undefined') window.location.assign(getExportWebUrl())
+    }
     catch { if (valid(generation)) setError('Could not sign out. Please try again.') }
     finally { if (valid(generation) && action.current === token) { action.current = null; setBusy(false) } }
   }

@@ -22,7 +22,7 @@ function harness(path, services = {}, initialProps = {}) {
   const jsx = (type,props) => ({type,props})
   const module = {exports:{}}
   const code = ts.transpileModule(readFileSync(new URL(path,import.meta.url),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText
-  vm.runInNewContext(code,{module,exports:module.exports,Date,Error,Promise,Symbol,Math,document,setTimeout:(fn)=>{const id=Symbol();timers.set(id,fn);return id},clearTimeout:(id)=>timers.delete(id),
+  vm.runInNewContext(code,{module,exports:module.exports,Date,Error,Promise,Symbol,Math,document,window:services.window,setTimeout:(fn)=>{const id=Symbol();timers.set(id,fn);return id},clearTimeout:(id)=>timers.delete(id),
     require(name) {
       if(name==='react')return react
       if(name==='react/jsx-runtime')return {jsx,jsxs:jsx,Fragment:'Fragment'}
@@ -188,4 +188,12 @@ test('older download receipt pages remain accessible without accumulating unboun
  assert.deepEqual(calls,[undefined,'opaque-cursor'])
  assert.match(screen.text(),/older-receipt/)
  assert.equal(screen.button('View older download requests'),undefined)
+})
+
+
+test('successful renewed sign-in navigates back to the fixed secure export page after stack reset',async()=>{
+ const destinations=[]
+ const screen=harness(screenPath,services({window:{location:{assign:url=>destinations.push(url)}},getAccountExports:async()=>({requests:[],canDownload:false,freshUntil:null}),signOut:async()=>({error:null})}))
+ await screen.settle();screen.press('Sign in again');await screen.settle()
+ assert.deepEqual(destinations,['https://api.fave.fidexa.org/account/export'])
 })
