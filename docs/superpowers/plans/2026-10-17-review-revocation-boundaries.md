@@ -31,7 +31,7 @@ must not be described as rolling it back.
   contract, including no correction/audit side effects on authorization failure.
 - [x] Independent spec/security and code-quality review; repair findings. Full
   regression suite, lint, app/Worker typechecks and synthetic browser lock/retry.
-- [ ] Commit/push main, exact-source CI and authorized production release, then
+- [x] Commit/push main, exact-source CI and authorized production release, then
   anonymous smoke verification and minimal issue update. No real identity reads
   or driver/vehicle decisions for production verification.
 
@@ -75,3 +75,12 @@ review, private identity read, policy change or payment was used for verificatio
 
 This is a revocation-boundary repair, not completion of the broader operations
 console, driver suspension/recovery workflow, payment or incident tooling.
+
+## Release record
+
+Released from source `a1844b50b1221c8948ed68773814fbba014d6ffc` after
+[CI39019652939](https://github.com/matovu-farid/fave/actions/runs/39019652939)
+passed606 tests with zero failures/skips, lint, both typechecks and all platform
+bundles. Production health/database and staff/download page checks pass;
+anonymous staff read and decision routes reject access with no-store responses.
+No real private record or review decision was used by production verification.

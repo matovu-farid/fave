@@ -34,6 +34,12 @@ bytes, renewed sign-in, and protected owner follow-up. Production smoke checks
 created no real export. The original inspected baseline above remains historical;
 this addition does not establish full launch or statutory-case completion.
 
+The staff-review revocation repair subsequently passed
+[CI39019652939](https://github.com/matovu-farid/fave/actions/runs/39019652939)
+with606 tests, zero failures/skips and all platform/check gates. Browser tests
+verified ordinary approval and locking during a delayed private-file request.
+The repair is released; wider operations-console requirements remain open.
+
 ## Open issue coverage and remaining work
 
 Every issue below remains open. “Present” identifies implementation to preserve,
@@ -53,7 +59,7 @@ not a conclusion that all of its acceptance criteria have passed.
 | [#14](https://github.com/matovu-farid/fave/issues/14) Legal/privacy | Finished disclosure source and adversarial drafting review; private evidence/MFA/audit and durable expiry cleanup/guards. | Recorded exact-version and operating/legal readiness, licensing/insurance/tax/privacy decisions, retention categories/holds/access windows/necessity reviews/backups and functioning rights requests. Written notices are not deployed procedures. |
 | [#15](https://github.com/matovu-farid/fave/issues/15) Commercial rules | Owner-confirmed fixed estimate, 24h/30m holds, UGX nearest rounding, all-in processing fees, registered lodging rate and morning daily-pay direction. | Benchmark reference, provider fees/tax treatment, deposit setting, daily pay components, completion/balance/dispute events, no-show/reconciliation/exception rules and safe driving/rest arrangements. |
 | [#16](https://github.com/matovu-farid/fave/issues/16) Provider | `payment-provider-requirements.md` and researched provider review. | Recorded choice, actual merchant eligibility/terms/fees, Uganda collection/payout rails, funds flow, operating balance and sandbox evidence. No authority to contact/accept provider terms or move funds is inferred from the brief. |
-| [#17](https://github.com/matovu-farid/fave/issues/17) Operations | Staff availability queue, separate application reviews, ten-minute MFA and notification health/retry. | Suspension/recovery operation, payment exceptions, incident queue, policy/rate lifecycle, rights requests and protected investigation/export. Existing review screens are not the entire admin console. |
+| [#17](https://github.com/matovu-farid/fave/issues/17) Operations | Staff availability queue, separate application reviews, ten-minute MFA, transaction-bound review revocation with cancelled private transfers, and notification health/retry. | Suspension/recovery operation, payment exceptions, incident queue, policy/rate lifecycle, rights requests and protected investigation/export. Existing review screens are not the entire admin console. |
 | [#19](https://github.com/matovu-farid/fave/issues/19) Safety | Published-source safety copy and versioned notification contracts. No incident/check-in store or incident router exists. | Approved support coverage/escalation/rest/check-in/replacement rules, reporting and protected incident workflow, missed-check-in records/alerts, replacement consent and actual operational exercises. |
 | [#20](https://github.com/matovu-farid/fave/issues/20) End-to-end launch | CI, multiple synthetic browser journeys, signed artifact and deployment checks. | Full paid client/driver/operations journey, incident/completion/refund/dispute cases, newer physical-device evidence and responsible go/no-go sign-off. Remains a launch blocker. |
 | [#21](https://github.com/matovu-farid/fave/issues/21) Accounts | Shared identity/separate profiles, consent/version snapshots and sign-out recovery; private-file cascade guard; durable deletion receipt, immediate new-work restrictions and preserved existing-trip access, with protected paginated owner intake; automatic fresh-sign-in private ZIPs, owned retained uploads and tracked exceptional access follow-up. | Full statutory access-case completion and actual erasure, retained-record categories, legal holds, external processors and backup handling. See [investigation](../superpowers/specs/2026-10-17-account-request-investigation.md). |
