@@ -38,7 +38,7 @@ immediate reconciliation.
 - [x] Full regressions, lint, app/Worker types and all platform bundle gates.
 - [x] Synthetic actual-app/browser call-to-quote and contact-clearing checks,
   with a phone layout. No real contact or booking action as a test.
-- [ ] Commit/push main, exact-source CI, verify hosted artifact and authorized
+- [x] Commit/push main, exact-source CI, verify hosted artifact and authorized
   release with configuration preserved; production read-only checks and issue
   update. No database migration or role grant is required.
 
@@ -76,3 +76,12 @@ The follow-up passed 627 full-suite tests, zero failures/skips, lint, both
 typechecks and Worker packaging. Independent review found no remaining issue;
 additional checks exercised handled server errors, raw streams and preflights.
 The manually tested web artifact is unchanged by the Worker-only header repair.
+
+Final source `7f96e12c1fe3e7a934192df6320f37225933afa3` passed
+[CI39021711184](https://github.com/matovu-farid/fave/actions/runs/39021711184):
+627 tests, zero failures/skips, lint, app/Worker typechecks and all platform
+bundles. The final repair is released. Live health/database and canonical console
+checks passed, anonymous operations requests returned 401 with private/no-store
+and no-cache headers, and the served web bundle matches the verified artifact.
+No real driver contact or booking decision was used in these checks. Issue17
+remains open for its broader workflow and operating requirements.

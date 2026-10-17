@@ -40,6 +40,15 @@ with606 tests, zero failures/skips and all platform/check gates. Browser tests
 verified ordinary approval and locking during a delayed private-file request.
 The repair is released; wider operations-console requirements remain open.
 
+The booking-operations lifecycle repair subsequently passed
+[CI39021711184](https://github.com/matovu-farid/fave/actions/runs/39021711184)
+with 627 tests, zero failures/skips and all check/bundle gates. Contacts and
+pending actions are scoped to the focused account/session, late responses cannot
+restore old details, settled decisions reconcile after returning, and staff API
+responses carry explicit cache protection. Synthetic browser call-to-quote and
+contact-clearing checks passed at desktop and phone widths. The repair is
+released; it does not implement the proposed suspension/recovery workflow.
+
 ## Open issue coverage and remaining work
 
 Every issue below remains open. “Present” identifies implementation to preserve,
