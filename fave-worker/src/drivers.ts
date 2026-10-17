@@ -1,5 +1,5 @@
 import { evidenceRetirement, deleteRetiredEvidence } from './private-evidence-retention'
-import { reviewAccess, isReviewMember } from './review-access'
+import { reviewAccess, isReviewMember, reviewGuardSelect, reviewGuardBindings, reviewSnapshotValid, type ReviewEnvironment } from './review-access'
 import { Hono } from 'hono'
 import type { AuthBindings } from './auth'
 import {
@@ -198,7 +198,7 @@ async function hasAllRequiredDocumentsApproved(
 }
 
 const driversApp = new Hono<{ Bindings: AuthBindings }>()
-const adminDriversApp = new Hono<{ Bindings: AuthBindings }>()
+const adminDriversApp = new Hono<ReviewEnvironment>()
 adminDriversApp.use('*', reviewAccess)
 
 driversApp.get('/application', async (c) => {
@@ -795,6 +795,7 @@ adminDriversApp.post('/:applicationId/documents/:documentId/decision', async (c)
 
   const newStatus = decision === 'approve' ? 'approved' : 'rejected'
   const now = Date.now()
+  const authorization = c.get('reviewAuthorization')
   const applicationReason = `A submitted verification document needs correction: ${reason.trim()}`
   const result = await c.env.DB.batch([
     c.env.DB.prepare(
@@ -806,9 +807,11 @@ adminDriversApp.post('/:applicationId/documents/:documentId/decision', async (c)
           AND ${currentChecklistDocumentPredicate('driver_application_documents')}
           AND EXISTS (SELECT 1 FROM driver_applications
                        WHERE id = ? AND status = ?
-                         AND retention_expires_at IS NOT NULL AND retention_expires_at > ?)`,
+                         AND retention_expires_at IS NOT NULL AND retention_expires_at > ?)
+          AND EXISTS (${reviewGuardSelect})`,
     ).bind(newStatus, reason.trim(), user.id, now, document.id,
-      c.req.param('applicationId'), c.req.param('applicationId'), now, c.req.param('applicationId'), application.status, now),
+      c.req.param('applicationId'), c.req.param('applicationId'), now, c.req.param('applicationId'), application.status, now,
+      ...reviewGuardBindings(authorization, now)),
     c.env.DB.prepare(
       `INSERT INTO marketplace_audit_events
         (id, actor_user_id, action, target_type, target_id, reason, prior_state, new_state, created_at)
@@ -831,6 +834,9 @@ adminDriversApp.post('/:applicationId/documents/:documentId/decision', async (c)
   ])
 
   if ((result[0]?.meta.changes ?? 0) !== 1) {
+    if (!await reviewSnapshotValid(c.env, authorization)) {
+      return c.json(apiError('REVIEW_UNLOCK_REQUIRED', 'Unlock reviews with your passkey or authenticator code.'), 428)
+    }
     return c.json(apiError('INVALID_DOCUMENT_STATE', 'This document changed before the review could be recorded.'), 409)
   }
 
@@ -910,6 +916,7 @@ adminDriversApp.post('/:applicationId/decision', async (c) => {
   }
 
   const now = Date.now()
+  const authorization = c.get('reviewAuthorization')
   const approvalGuard = targetState === 'approved'
     ? `
           AND driver_applications.citizenship_attested_at IS NOT NULL
@@ -979,10 +986,11 @@ adminDriversApp.post('/:applicationId/decision', async (c) => {
           SET status = ?, reviewer_reason = ?, applicant_message = ?, reviewed_by = ?, reviewed_at = ?, updated_at = ?
         WHERE id = ? AND status = ?
           AND (? != 'approved' OR (retention_expires_at IS NOT NULL AND retention_expires_at > ?))
-          ${approvalGuard}`,
+          ${approvalGuard}
+          AND EXISTS (${reviewGuardSelect})`,
     ).bind(targetState, reason.trim(), decision === 'reject' ? (applicantMessage as string).trim() : null,
       user.id, now, now, applicationId, application.status, targetState, now,
-      ...approvalGuardBindings),
+      ...approvalGuardBindings, ...reviewGuardBindings(authorization, now)),
     c.env.DB.prepare(
       `INSERT INTO marketplace_audit_events
         (id, actor_user_id, action, target_type, target_id, reason, prior_state, new_state, created_at)
@@ -991,6 +999,9 @@ adminDriversApp.post('/:applicationId/decision', async (c) => {
     ).bind(crypto.randomUUID(), user.id, applicationId, reason.trim(), application.status, targetState, now),
   ])
   if ((result[0]?.meta.changes ?? 0) !== 1) {
+    if (!await reviewSnapshotValid(c.env, authorization)) {
+      return c.json(apiError('REVIEW_UNLOCK_REQUIRED', 'Unlock reviews with your passkey or authenticator code.'), 428)
+    }
     return c.json(apiError('INVALID_APPLICATION_STATE', 'This application changed before the decision could be recorded.'), 409)
   }
 

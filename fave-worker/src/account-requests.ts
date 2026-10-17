@@ -1,8 +1,8 @@
 import { Hono } from 'hono'
-import { createAuth, getWebAppOrigins, type AuthBindings } from './auth'
+import { getWebAppOrigins, type AuthBindings } from './auth'
 import { deletionReceiptQuery, deletionStatus, receiveDeletionRequest, type DeletionReceipt } from './account-lifecycle'
 import { apiError, getSignedInUser } from './marketplace-auth'
-import { reviewAccess, reviewOrigin, reviewProofSelect } from './review-access'
+import { reviewAccess, reviewGuardBindings, reviewGuardSelect, type ReviewEnvironment } from './review-access'
 
 const accountRequests = new Hono<{ Bindings: AuthBindings }>()
 accountRequests.use('*', async (c, next) => {
@@ -36,7 +36,7 @@ accountRequests.post('/deletion-request', async c => {
   }
 })
 
-export const adminAccountRequests = new Hono<{ Bindings: AuthBindings }>()
+export const adminAccountRequests = new Hono<ReviewEnvironment>()
 adminAccountRequests.use('*', reviewAccess)
 adminAccountRequests.get('/pending', async c => {
   const after = c.req.query('after')
@@ -52,10 +52,7 @@ adminAccountRequests.get('/pending', async c => {
   return c.json({ requests, nextCursor: result.results.length > 150 ? requests[149].id : null })
 })
 adminAccountRequests.post('/:id/detail', async c => {
-  const session = await createAuth(c.env, c.req.raw.headers).api.getSession({headers:c.req.raw.headers, query:{disableCookieCache:true}})
-  if (!session) return c.json(apiError('UNAUTHORIZED', 'Sign in to continue.'), 401)
-  const origin = reviewOrigin(c.env, c.req.raw.headers)
-  if (!origin) return c.json(apiError('REVIEW_UNLOCK_REQUIRED', 'Unlock reviews to open this request.'), 428)
+  const authorization=c.get('reviewAuthorization'),session=authorization.session
   const now = Date.now()
   const auditId = crypto.randomUUID()
   const result = await c.env.DB.batch([
@@ -63,8 +60,8 @@ adminAccountRequests.post('/:id/detail', async c => {
       (id, actor_user_id, actor_type, action, target_type, target_id, created_at)
       SELECT ?, ?, 'user', 'account_deletion_request_viewed', 'account_deletion_request', id, ?
       FROM account_deletion_requests WHERE id = ?
-        AND EXISTS (${reviewProofSelect})`)
-      .bind(auditId, session.user.id, now, c.req.param('id'), session.session.id, session.user.id, origin, now, now),
+        AND EXISTS (${reviewGuardSelect})`)
+      .bind(auditId, session.user.id, now, c.req.param('id'), ...reviewGuardBindings(authorization,now)),
     c.env.DB.prepare(`SELECT request.id, request.status, request.requested_at AS requestedAt,
       request.user_id AS userId, user.name, user.email
       FROM account_deletion_requests AS request JOIN user ON user.id = request.user_id

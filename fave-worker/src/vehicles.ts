@@ -1,5 +1,5 @@
 import { evidenceRetirement, deleteRetiredEvidence } from './private-evidence-retention'
-import { reviewAccess, isReviewMember } from './review-access'
+import { reviewAccess, isReviewMember, reviewGuardSelect, reviewGuardBindings, reviewSnapshotValid, type ReviewEnvironment } from './review-access'
 import { Hono } from 'hono'
 import type { AuthBindings } from './auth'
 import { approvedDriverEvidencePredicate } from './drivers'
@@ -52,7 +52,7 @@ function currentVehicleRequirementPredicate(mediaAlias: string): string {
 }
 
 const vehiclesApp = new Hono<{ Bindings: AuthBindings }>()
-const adminVehiclesApp = new Hono<{ Bindings: AuthBindings }>()
+const adminVehiclesApp = new Hono<ReviewEnvironment>()
 adminVehiclesApp.use('*', reviewAccess)
 
 export function approvedVehicleEvidencePredicate(vehicleAlias: string): string {
@@ -1182,6 +1182,7 @@ adminVehiclesApp.post('/:vehicleId/media/:mediaId/decision', async (c) => {
 
   const nextState = input.decision === 'approve' ? 'approved' : 'rejected'
   const now = Date.now()
+  const authorization = c.get('reviewAuthorization')
   const result = await c.env.DB.batch([
     c.env.DB.prepare(
       `UPDATE vehicle_media SET review_status = ?, reviewer_reason = ?, applicant_message = ?, reviewed_by = ?, reviewed_at = ?
@@ -1189,9 +1190,11 @@ adminVehiclesApp.post('/:vehicleId/media/:mediaId/decision', async (c) => {
           AND EXISTS (SELECT 1 FROM vehicles WHERE vehicles.id=vehicle_media.vehicle_id AND vehicles.status=?)
           AND ${currentVehicleRequirementPredicate('vehicle_media')}
           AND (media_kind = 'client_photo' OR
-               (retention_expires_at IS NOT NULL AND retention_expires_at > ?))`,
+               (retention_expires_at IS NOT NULL AND retention_expires_at > ?))
+          AND EXISTS (${reviewGuardSelect})`,
     ).bind(nextState, input.reason.trim(), input.decision === 'reject' ? (input.applicantMessage as string).trim() : null,
-      user.id, now, media.id, c.req.param('vehicleId'), media.vehicle_status, now),
+      user.id, now, media.id, c.req.param('vehicleId'), media.vehicle_status, now,
+      ...reviewGuardBindings(authorization, now)),
     c.env.DB.prepare(
       `INSERT INTO marketplace_audit_events
         (id, actor_user_id, action, target_type, target_id, reason, prior_state, new_state, created_at)
@@ -1212,6 +1215,9 @@ adminVehiclesApp.post('/:vehicleId/media/:mediaId/decision', async (c) => {
     ] : []),
   ])
   if ((result[0]?.meta.changes ?? 0) !== 1) {
+    if (!await reviewSnapshotValid(c.env, authorization)) {
+      return c.json(apiError('REVIEW_UNLOCK_REQUIRED', 'Unlock reviews with your passkey or authenticator code.'), 428)
+    }
     return c.json(apiError('INVALID_MEDIA_STATE', 'This media changed before the review could be recorded.'), 409)
   }
 
@@ -1263,6 +1269,7 @@ adminVehiclesApp.post('/:vehicleId/decision', async (c) => {
 
   const nextState = input.decision === 'approve' ? 'approved' : 'rejected'
   const now = Date.now()
+  const authorization = c.get('reviewAuthorization')
   const approvalGuard = nextState === 'approved'
     ? `
           AND EXISTS (
@@ -1280,10 +1287,12 @@ adminVehiclesApp.post('/:vehicleId/decision', async (c) => {
     c.env.DB.prepare(
       `UPDATE vehicles SET status = ?, reviewer_reason = ?, applicant_message = ?, reviewed_by = ?, reviewed_at = ?, updated_at = ?
         WHERE id = ? AND status = ?
-          ${approvalGuard}`,
+          ${approvalGuard}
+          AND EXISTS (${reviewGuardSelect})`,
     ).bind(nextState, input.reason.trim(), input.decision === 'reject' ? (input.applicantMessage as string).trim() : null,
       user.id, now, now, vehicle.id, vehicle.status,
-      ...(nextState === 'approved' ? [now, now, now, now, now, now] : [])),
+      ...(nextState === 'approved' ? [now, now, now, now, now, now] : []),
+      ...reviewGuardBindings(authorization, now)),
     c.env.DB.prepare(
       `INSERT INTO marketplace_audit_events
         (id, actor_user_id, action, target_type, target_id, reason, prior_state, new_state, created_at)
@@ -1292,6 +1301,9 @@ adminVehiclesApp.post('/:vehicleId/decision', async (c) => {
     ).bind(crypto.randomUUID(), user.id, vehicle.id, input.reason.trim(), vehicle.status, nextState, now),
   ])
   if ((update[0]?.meta.changes ?? 0) !== 1) {
+    if (!await reviewSnapshotValid(c.env, authorization)) {
+      return c.json(apiError('REVIEW_UNLOCK_REQUIRED', 'Unlock reviews with your passkey or authenticator code.'), 428)
+    }
     return c.json(apiError('INVALID_VEHICLE_STATE', 'This vehicle changed before the review could be recorded.'), 409)
   }
 
