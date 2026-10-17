@@ -148,3 +148,26 @@ Historical static verification on 2026-10-03: `npx expo lint`, `npx tsc --noEmit
   signed-out vehicle availability, catalog and review-security APIs401JSON. The
   temporary fixture/tab were closed and viewport reset; owner security retained.
   No EAS binary/OTA release or physical-device foreground acceptance is claimed.
+
+### Driver application status refresh — 17 October 2026
+
+Browser reproduction with the actual static app and Worker/Better Auth synthetic
+fixture: Driver mounted as pending; the synthetic backend changed to approved;
+Home → Driver still showed pending verification. The parent screen loaded
+requirements/application/vehicles only once. Its nested availability refresh could
+not update parent approval or correction state.
+
+Driver now refreshes its parent records on route focus and focused AppState active,
+with generation guards and an explicit Refresh driver status retry. Background
+refresh does not replace the screen with the initial-loading branch. A failed read
+removes stale application/vehicle eligibility until retry. Saved profile values
+update untouched form fields; unsaved legal-name/phone/rate corrections remain.
+The terms checkbox is cleared when the current document set changes. Legacy offer
+polls are focus/generation guarded, so late results cannot repopulate blurred UI.
+No server permissions, pricing, verification or consent requirements changed.
+
+Five actual-component regressions failed before the repair. Status and existing
+availability suites passed, including an additional blurred-offer-poll case.
+Independent review found no material issue in the scoped final diff. Foreground
+lifecycle uses controlled AppState scheduling; browser evidence checks route focus
+and failure/retry without claiming new physical-device acceptance.

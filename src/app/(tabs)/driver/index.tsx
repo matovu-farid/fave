@@ -85,6 +85,7 @@ export default function DriverScreen() {
   const [tripOffers, setTripOffers] = useState<DriverTripOffer[]>([])
   const [offerMessage, setOfferMessage] = useState('')
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [accepted, setAccepted] = useState(false)
@@ -94,33 +95,71 @@ export default function DriverScreen() {
   const [nationalId, setNationalId] = useState('')
   const [citizenshipConfirmed, setCitizenshipConfirmed] = useState(false)
   const [files, setFiles] = useState<Record<string, Picked>>({})
+  const focused = useRef(false)
+  const readGeneration = useRef(0)
+  const savedProfile = useRef<{ legalName: string; phoneNumber: string; lodgingRate: string } | null>(null)
+  const documentSet = useRef<string | null>(null)
 
   const refresh = useCallback(async () => {
-    setLoading(true)
+    if (!focused.current) return
+    const generation = ++readGeneration.current
+    setRefreshing(true)
     setError('')
     try {
       const [requirements, result, mine] = await Promise.all([getDriverPrerequisites(), getDriverApplication(), getMyVehicles()])
+      if (generation !== readGeneration.current) return
       setPrerequisites(requirements)
       setApplication(result.application)
       setVehicles(mine.vehicles)
+      setTripOffers([])
+      const nextDocuments = requirements.documents.map(document => `${document.id}:${document.version}:${document.type}`).sort().join('|')
+      if (documentSet.current !== null && documentSet.current !== nextDocuments) setAccepted(false)
+      documentSet.current = nextDocuments
+      const previous = savedProfile.current
+      const next = {
+        legalName: result.application?.legalName ?? '',
+        phoneNumber: result.application?.phoneNumber ?? '',
+        lodgingRate: result.application?.lodgingRateUgx?.toString() ?? '',
+      }
+      // Adopt server edits only where the driver has no unsaved correction.
+      setLegalName(current => !previous || current === previous.legalName ? next.legalName : current)
+      setPhoneNumber(current => !previous || current === previous.phoneNumber ? next.phoneNumber : current)
+      setLodgingRateUgx(current => !previous || current === previous.lodgingRate ? next.lodgingRate : current)
+      savedProfile.current = next
       const offers = result.application?.status === 'approved'
         ? await getDriverTripOffers().catch(() => ({ offers: [] }))
         : { offers: [] }
-      setTripOffers(offers.offers)
-      if (result.application?.needsEvidenceRefresh || result.application?.needsPolicyAcceptance) setAccepted(false)
-      setLegalName(result.application?.legalName ?? '')
-      setPhoneNumber(result.application?.phoneNumber ?? '')
-      setLodgingRateUgx(result.application?.lodgingRateUgx?.toString() ?? '')
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not load driver requirements.')
-    } finally { setLoading(false) }
+      if (generation === readGeneration.current) setTripOffers(offers.offers)
+    } catch {
+      if (generation === readGeneration.current) {
+        setPrerequisites(null); setApplication(null); setVehicles([]); setTripOffers([])
+        setError('Could not refresh driver status. Please try again.')
+      }
+    } finally {
+      if (generation === readGeneration.current) { setLoading(false); setRefreshing(false) }
+    }
   }, [])
 
-  useEffect(() => { void Promise.resolve().then(refresh) }, [refresh])
+  useFocusEffect(useCallback(() => {
+    focused.current = true
+    void refresh()
+    const subscription = AppState.addEventListener('change', state => {
+      if (state === 'active') void refresh()
+    })
+    return () => {
+      focused.current = false
+      readGeneration.current += 1
+      subscription.remove()
+    }
+  }, [refresh]))
 
   const refreshOffers = useCallback(async () => {
-    if (application?.status !== 'approved') return
-    try { setTripOffers((await getDriverTripOffers()).offers) } catch { /* Preserve the last known offer list during a brief network failure. */ }
+    if (!focused.current || application?.status !== 'approved') return
+    const generation = readGeneration.current
+    try {
+      const result = await getDriverTripOffers()
+      if (focused.current && generation === readGeneration.current) setTripOffers(result.offers)
+    } catch { /* Preserve the last known offer list during a brief network failure. */ }
   }, [application?.status])
   useEffect(() => {
     if (application?.status !== 'approved') return
@@ -200,6 +239,7 @@ export default function DriverScreen() {
   return <ThemedView style={styles.page}>
     <ScrollView ref={scrollRef} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <SectionTitle title="Drive with Fave" detail="This release accepts applications from Ugandan citizen drivers with a National ID. Foreign nationals and refugees cannot apply as drivers. Your identity documents are private, reviewed by designated staff, and access is audited." />
+      <ActionButton title="Refresh driver status" onPress={() => void refresh()} busy={refreshing} disabled={busy} />
       {error ? <Message error>{error}</Message> : null}
       {application ? <Card>
         <ThemedText type="subtitle">Application · {application.status.replaceAll('_', ' ')}</ThemedText>
@@ -275,7 +315,6 @@ export default function DriverScreen() {
         </Card>
       </> : null}
       {application?.status === 'approved' && application.lodgingRateUgx !== null && !application.needsEvidenceRefresh && !application.needsPolicyAcceptance ? <VehicleSection vehicles={vehicles} refresh={refresh} /> : null}
-      {application && application.status !== 'approved' ? <ActionButton title="Refresh status" onPress={() => void refresh()} /> : null}
     </ScrollView>
   </ThemedView>
 }
