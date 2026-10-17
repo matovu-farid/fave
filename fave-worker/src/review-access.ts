@@ -91,7 +91,7 @@ export const reviewAccess: MiddlewareHandler<ReviewEnvironment> = async (c, next
   if (!session) return c.json(apiError('UNAUTHORIZED', 'Sign in to continue.'), 401)
   if (!await isReviewMember(c.env, session.user.id)) return c.json(apiError('FORBIDDEN', 'Only an authorized application reviewer can continue.'), 403)
   // Safe queues are the only review response allowed before strong verification.
-  if (c.req.method === 'GET' && c.req.path.endsWith('/pending')) return next()
+  if (c.req.method === 'GET' && c.req.path.endsWith('/pending') && c.req.query('status') !== 'reviewed') return next()
   const origin = reviewOrigin(c.env, c.req.raw.headers)
   const proof=origin?await reviewProof(c.env,session,origin):null
   if (!origin || !proof) {

@@ -64,7 +64,7 @@ not a conclusion that all of its acceptance criteria have passed.
 | --- | --- | --- |
 | [#5](https://github.com/matovu-farid/fave/issues/5) Service rules | `google-maps.ts`, `trip-dates.ts`, server validation in `bookings.ts`; Maps/date regressions. | Final live fare/deposit/policy configuration and readiness evidence; do not turn a proposed deposit default into an approved rule. |
 | [#6](https://github.com/matovu-farid/fave/issues/6) Driver application | `drivers.ts`, Driver screen, private uploads, correction/resubmission and saved retention snapshots; browser/test evidence in the retention plan. | Actual current legal/checklist activation and full lawful retention/rights lifecycle; no real driver enrollment is established by synthetic tests. |
-| [#7](https://github.com/matovu-farid/fave/issues/7) Driver verification | Owner-only review/MFA, checklist decisions/audit, API supports suspension. | Approved-driver operational suspension/recovery UI and review procedure; regulator/counsel eligibility evidence. Pending-application review screens do not supply this whole workflow. |
+| [#7](https://github.com/matovu-farid/fave/issues/7) Driver verification | Owner-only review/MFA, checklist decisions/audit, approved/suspended roster, guarded suspension/restore/corrections and durable booking-review flags; focused SQL/browser evidence in the driver-operations plan. | Regulator/counsel eligibility evidence, live checklist/policy readiness and real operating procedures remain required. |
 | [#8](https://github.com/matovu-farid/fave/issues/8) Vehicle listings | `vehicles.ts`, approval/private media, approved public derivatives, date holds and driver availability UI/tests. | Live required evidence/checklist/retention configuration, public-photo operational review and complete legal/incident procedures. |
 | [#9](https://github.com/matovu-farid/fave/issues/9) Estimates | Saved per-car benchmark, separate routed legs, registered lodging rate, immutable snapshots and fixed-price staff quote conversion. | Approved canonical benchmark endpoints/distance and live rate/policy readiness; accepted extension workflow/payment beyond the pure saved-rate calculation. |
 | [#10](https://github.com/matovu-farid/fave/issues/10) Booking journey | Trips UI and `bookings.ts`: estimate → staff request → same-price quote → disclosures/contact consent → atomic expiring deposit hold. Synthetic browser journeys documented. | Actual provider checkout, verified payment, post-deposit state, disclosures activated only after required readiness, and new device walkthrough. A deposit hold is not a collected deposit. |
@@ -115,13 +115,13 @@ Automatic account downloads are released. The owner's account-deletion choices
 are recorded above: stop new work immediately and preserve existing-trip access.
 Actual erasure and exceptional statutory-case completion remain open.
 
-The next operations step is approved-driver lookup, suspension and recovery
+The current operations implementation adds approved-driver lookup, suspension and recovery
 under #7/#17. The [concrete proposal](../superpowers/specs/2026-10-17-driver-operations-proposal.md)
 records the current code gap and implementation checks. The owner confirmed:
 **suspension stops new bookings and flags existing bookings for owner review.**
 The concrete design adds a separate driver-operations screen and durable booking
 review flags, preserving booking state and requiring an explicit review outcome.
-The written design awaits review; no new runtime behavior is implemented yet.
+The owner approved the written design and requested implementation on main with browser testing. The implementation now passes local tests and independent review; exact-source CI and production release checks are the remaining gates.
 
 Apple notification-key management remains separately pending specific
 authorization after an automatic approval-review rejection; do not enter
@@ -157,3 +157,22 @@ separately pending Apple key authorization/device check and events from those
 unimplemented domains. The proposal and existing research are ready for owner
 decisions; do not treat waiting as approval or start financial/credential actions
 to manufacture progress. The full goal is not complete.
+
+## Driver operations implementation — 17 October 2026
+
+The approved [driver operations plan](../superpowers/plans/2026-10-17-driver-operations.md)
+adds owner lookup, version-guarded suspension, restoration and corrections, plus
+atomic active-booking review flags. Existing booking state/price/consent and client
+access stay unchanged. Restoring or correcting a driver does not close open flags;
+an explicit audited review outcome closes only the flag. Safe queues omit private
+reasons and contact/location details; focused records and reviewed history require
+the existing ten-minute verification. Owned operational metadata is accounted for
+in automatic exports; private notes require individual access assessment.
+
+Local checks pass 665 tests, zero failures/skips, lint, app/Worker typechecks and
+production web export. Independent backend and UI reviews have no outstanding
+findings. Synthetic phone/desktop browser checks exercised suspension, restoration,
+corrections, preserved bookings/flags, review outcomes and lock/draft clearing.
+Exact-source CI and production release evidence will be recorded after publishing.
+This completes this bounded feature, not the broader #7/#17 operating or launch
+requirements. No cancellation, refund, replacement or payment execution is added.

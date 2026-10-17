@@ -8,6 +8,8 @@ const offer = `SELECT x.id FROM driver_trip_offers x WHERE ${tripOwn}`
 const request = `SELECT x.id FROM availability_requests x WHERE ${tripOwn}`
 const notification = `SELECT id FROM notifications WHERE recipient_user_id=${subject}`
 const outbox = `SELECT delivery_id FROM notification_outbox WHERE recipient_user_id=${subject} AND notification_id IN (${notification})`
+const driverOperation = `SELECT id FROM driver_operation_events WHERE application_id IN (${driver})`
+const bookingReview = `SELECT flag.id FROM booking_review_flags flag JOIN bookings booking ON booking.id=flag.booking_id WHERE booking.client_user_id=${subject} OR flag.event_id IN (${driverOperation})`
 const exportRequest = `SELECT id FROM account_export_requests WHERE user_id=${subject}`
 function withNotificationDomain(item: ExportSource, eventAlias: string): ExportSource {
   // An inbox recipient may be staff. Receiving a notification does not make
@@ -60,6 +62,8 @@ export function accountExportSources(): ExportSource[] {
     source('notification_outbox', 'notification_outbox x', 'x.delivery_id', 'delivery_id notification_id status not_before expires_at attempt_count queued_at last_attempt_at last_error_category created_at', `x.delivery_id IN (${outbox})`),
     source('notification_deliveries', 'notification_deliveries x', 'x.id', 'id delivery_id platform status receipt_status attempt_count last_error_category last_attempt_at receipt_checked_at created_at updated_at', `x.delivery_id IN (${outbox})`),
     source('notification_retry_audit', 'notification_retry_audit x', 'x.id', 'id delivery_id result created_at', `x.delivery_id IN (${outbox})`, { notes: ['reason'] }),
+    source('driver_operation_events', 'driver_operation_events x', 'x.id', 'id application_id version decision prior_state new_state applicant_message created_at', `x.application_id IN (${driver})`, { notes: ['reason'] }),
+    source('booking_review_flags', 'booking_review_flags x', 'x.id', 'id event_id booking_id association status created_at reviewed_at', `x.id IN (${bookingReview})`, { notes: ['outcome_note'] }),
     own('account_deletion_requests', 'id status requested_at'),
     own('admin_memberships', 'active granted_at', 'user_id', 'x.user_id'),
     own('review_memberships', 'active granted_at', 'user_id', 'x.user_id'),
@@ -91,6 +95,7 @@ export function accountExportSources(): ExportSource[] {
     OR (x.target_type='availability_request' AND x.target_id IN (${request}))
     OR (x.target_type IN ('trip_offer','driver_trip_offer') AND x.target_id IN (${offer}))
     OR (x.target_type='booking' AND x.target_id IN (SELECT x.id FROM bookings x WHERE ${tripOwn}))
+    OR (x.target_type='booking_review_flag' AND x.target_id IN (${bookingReview}))
     OR (x.target_type='account_deletion_request' AND x.target_id IN (SELECT id FROM account_deletion_requests WHERE user_id=${subject}))
     OR (x.target_type='account_export_request' AND x.target_id IN (${exportRequest}))`
   sources.push(source('marketplace_audit_events', 'marketplace_audit_events x', 'x.id', 'id actor_type action target_type target_id created_at', `(${auditOwn})`, { notes: ['reason', 'prior_state', 'new_state'] }))

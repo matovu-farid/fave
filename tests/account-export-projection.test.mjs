@@ -156,3 +156,16 @@ test('retained own review lock and unlock activity survives session deletion wit
   assert.equal(text.includes('OLD-SESSION-ID-CANARY'), false)
   assert.equal(text.includes('OLD-SESSION-TOKEN-CANARY'), false)
 })
+
+test('operational records export only subject-owned metadata and flag private notes for assessment',async t=>{
+  const f=availabilityFixture(t);f.grantReview()
+  f.insert('driver_operation_events',{id:'own-operation',application_id:'driver-app',version:1,decision:'suspend',prior_state:'approved',new_state:'suspended',reason:'PRIVATE-REVIEW-NOTE-CANARY',applicant_message:'Contact Fave support.',actor_user_id:'staff',created_at:1})
+  f.insert('driver_applications',{id:'other-driver',user_id:'client-2',legal_name:'Other driver',phone_e164:'+256700000000',national_id_number:'OTHER',national_id_last4:'THER',status:'draft',created_at:1,updated_at:1})
+  f.insert('driver_operation_events',{id:'OTHER-OPERATION-CANARY',application_id:'other-driver',version:1,decision:'suspend',prior_state:'approved',new_state:'suspended',reason:'OTHER-PRIVATE-NOTE-CANARY',actor_user_id:'staff',created_at:1})
+  const own=await collect(f,'driver'), staff=await collect(f,'staff')
+  assert.equal(JSON.parse(own.files.get('data/driver_operation_events.json'))[0].id,'own-operation')
+  assert.doesNotMatch(own.text,/PRIVATE-REVIEW-NOTE-CANARY|OTHER-OPERATION-CANARY|OTHER-PRIVATE-NOTE-CANARY/)
+  assert.equal(own.coverage.exceptions.some(x=>x.category==='driver_operation_events'&&x.code==='MIXED_PERSON_ACCESS_REVIEW'),true)
+  assert.equal(JSON.parse(staff.files.get('data/driver_operation_events.json')).length,0)
+  assert.equal(own.coverage.exceptions.some(x=>x.code==='UNREVIEWED_SOURCE_TABLE'),false)
+})

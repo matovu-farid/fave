@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import vm from 'node:vm'
 import ts from 'typescript'
+import * as driverEligibility from '../fave-worker/src/driver-eligibility.ts'
 import * as vehicleFares from '../fave-worker/src/vehicle-fares.ts'
 
 const driversSource = fileURLToPath(new URL('../fave-worker/src/drivers.ts', import.meta.url))
@@ -20,6 +21,9 @@ function loadModule(sourcePath, imports = {}) {
     require: (name) => {
       // Background retirement is covered by private-evidence-retention integration tests.
       if (name === './private-evidence-retention') return {}
+      if (name === './driver-eligibility') return driverEligibility
+      // Operational mutations have real-SQL coverage in driver-operations.test.mjs.
+      if (name === './driver-operations') return {}
       if (name in imports) return imports[name]
       if (name === './review-access') return {reviewAccess(){},isReviewMember(){}}
       if (name === 'hono') {

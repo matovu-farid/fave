@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import vm from 'node:vm'
 import ts from 'typescript'
+import * as driverEligibility from '../fave-worker/src/driver-eligibility.ts'
 
 const driversSource = fileURLToPath(new URL('../fave-worker/src/drivers.ts', import.meta.url))
 
@@ -26,6 +27,9 @@ function loadDrivers({ user = { id: 'client-1', name: 'Client', email: 'client@e
     require: (name) => {
       // Background retirement is covered by private-evidence-retention integration tests.
       if (name === './private-evidence-retention') return {}
+      if (name === './driver-eligibility') return driverEligibility
+      // Operational mutations have real-SQL coverage in driver-operations.test.mjs.
+      if (name === './driver-operations') return {}
       if (name === 'hono') return { Hono: CapturingHono }
       if (name === './review-access') return { reviewAccess: () => {}, isReviewMember: async (env, userId) => env.DB.prepare('SELECT 1 FROM review_memberships WHERE user_id = ? AND active = 1').bind(userId).first() }
       if (name === './marketplace-auth') return {

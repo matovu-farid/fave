@@ -1,3 +1,5 @@
+import adminDriverOperations from './admin-driver-operations'
+import adminBookingReviews from './admin-booking-reviews'
 import accountExports from './account-export-requests'
 import adminAccountExports from './admin-account-exports'
 import accountRequests, { adminAccountRequests } from './account-requests'
@@ -62,6 +64,8 @@ app.route('/api/marketplace', policiesApp)
 app.route('/api/drivers', driversApp)
 app.route('/api/admin/review-security', adminReviewSecurity)
 app.route('/api/admin/drivers', adminDriversApp)
+app.route('/api/admin/driver-operations', adminDriverOperations)
+app.route('/api/admin/booking-reviews', adminBookingReviews)
 app.route('/api/vehicles', vehiclesApp)
 app.route('/api/admin/vehicles', adminVehiclesApp)
 app.route('/api/admin/trip-offers', adminTripOffersApp)

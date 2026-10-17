@@ -38,7 +38,7 @@ export function Field({ label, value, onChangeText, placeholder, keyboardType, m
 }
 
 export function ActionButton({ title, onPress, disabled, busy }: { title: string; onPress: () => void; disabled?: boolean; busy?: boolean }) {
-  return <Pressable accessibilityRole="button" disabled={disabled || busy} onPress={onPress} style={({ pressed }) => [styles.button, (disabled || busy) && styles.buttonDisabled, pressed && styles.pressed]}>
+  return <Pressable accessibilityRole="button" accessibilityLabel={title} accessibilityState={{ disabled: !!(disabled || busy), busy: !!busy }} disabled={disabled || busy} onPress={onPress} style={({ pressed }) => [styles.button, (disabled || busy) && styles.buttonDisabled, pressed && styles.pressed]}>
     {busy ? <ActivityIndicator color="#fff" /> : <ThemedText type="smallBold" style={styles.buttonText}>{title}</ThemedText>}
   </Pressable>
 }

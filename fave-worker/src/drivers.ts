@@ -52,75 +52,9 @@ function currentChecklistDocumentPredicate(documentAlias: string): string {
 )`
 }
 
-export function currentDriverEvidencePredicate(applicationAlias: string): string {
-  return `EXISTS (
-    SELECT 1 FROM driver_verification_requirements AS current_requirement
-     WHERE current_requirement.active = 1 AND current_requirement.required = 1
-       AND current_requirement.approved_at IS NOT NULL
-  )
-  AND NOT EXISTS (
-    SELECT 1 FROM driver_verification_requirements AS requirement
-     WHERE requirement.active = 1 AND requirement.required = 1
-       AND requirement.approved_at IS NOT NULL
-       AND NOT EXISTS (
-         SELECT 1 FROM driver_application_documents AS document
-          WHERE document.application_id = ${applicationAlias}.id
-            AND document.submission_version = ${applicationAlias}.submission_version
-            AND document.document_type = requirement.document_type
-            AND document.requirement_version = requirement.version
-            AND document.review_status = 'approved'
-            AND document.retention_expires_at IS NOT NULL
-            AND document.retention_expires_at > ?
-       )
-  )
-  AND (
-    SELECT COUNT(DISTINCT document.document_type)
-      FROM driver_application_documents AS document
-     WHERE document.application_id = ${applicationAlias}.id
-       AND document.submission_version = ${applicationAlias}.submission_version
-       AND document.review_status = 'approved'
-       AND document.retention_expires_at IS NOT NULL
-       AND document.retention_expires_at > ?
-       AND document.document_type IN ('national_id_front', 'national_id_back', 'passport_photo')
-  ) = 3`
-}
-
-export function approvedDriverEvidencePredicate(driverApplicationId: string): string {
-  return `EXISTS (
-    SELECT 1 FROM driver_applications AS eligible_driver
-     WHERE eligible_driver.id = ${driverApplicationId}
-       AND eligible_driver.status = 'approved'
-       AND NOT EXISTS (SELECT 1 FROM account_deletion_requests closing_account WHERE closing_account.user_id = eligible_driver.user_id)
-       AND eligible_driver.citizenship_attested_at IS NOT NULL
-       AND eligible_driver.retention_expires_at IS NOT NULL
-       AND eligible_driver.retention_expires_at > ?
-       AND EXISTS (
-         SELECT 1 FROM retention_policies AS retention
-          WHERE retention.record_type = 'driver_application'
-            AND retention.active = 1 AND retention.approved_at IS NOT NULL
-       )
-       AND ${currentDriverEvidencePredicate('eligible_driver')}
-       AND (
-         SELECT COUNT(DISTINCT acceptance.document_id)
-           FROM policy_acceptances AS acceptance
-           JOIN policy_documents AS policy ON policy.id = acceptance.document_id
-          WHERE acceptance.user_id = eligible_driver.user_id
-            AND acceptance.onboarding_context = 'driver_onboarding'
-            AND policy.document_type IN ('driver_terms', 'driver_privacy')
-            AND policy.language = 'en' AND policy.status = 'approved'
-            AND policy.effective_at IS NOT NULL AND policy.effective_at <= ?
-            AND NOT EXISTS (
-              SELECT 1 FROM policy_documents AS newer
-               WHERE newer.document_type = policy.document_type
-                 AND newer.language = policy.language
-                 AND newer.status = 'approved'
-                 AND newer.effective_at IS NOT NULL AND newer.effective_at <= ?
-                 AND (newer.effective_at > policy.effective_at OR
-                      (newer.effective_at = policy.effective_at AND newer.id > policy.id))
-            )
-       ) = 2
-  )`
-}
+export { currentDriverEvidencePredicate, approvedDriverEvidencePredicate } from './driver-eligibility'
+import { currentDriverEvidencePredicate } from './driver-eligibility'
+import { performDriverOperation, parseDriverOperation } from './driver-operations'
 
 function isFile(value: FormEntryValue): value is File {
   return typeof value !== 'string' && typeof value.stream === 'function'
@@ -851,6 +785,12 @@ adminDriversApp.post('/:applicationId/decision', async (c) => {
   }
 
   const body: unknown = await c.req.json().catch(() => null)
+  if (body && typeof body === 'object' && 'decision' in body && body.decision === 'suspend') {
+    const input = parseDriverOperation(body)
+    if (!input) return c.json(apiError('INVALID_DECISION', 'Confirm the driver, version, internal reason and driver-facing next step.'), 400)
+    const result = await performDriverOperation(c.env, c.get('reviewAuthorization'), c.req.param('applicationId'), input)
+    return c.json(result.body, result.status)
+  }
   const decision = typeof body === 'object' && body !== null && !Array.isArray(body)
     ? (body as Record<string, unknown>).decision
     : null
@@ -861,7 +801,7 @@ adminDriversApp.post('/:applicationId/decision', async (c) => {
     ? (body as Record<string, unknown>).applicantMessage
     : null
   if (
-    !['approve', 'reject', 'suspend'].includes(String(decision)) ||
+    (decision !== 'approve' && decision !== 'reject') ||
     typeof reason !== 'string' || reason.trim().length < 4 || reason.trim().length > 300 ||
     (decision === 'reject' && (typeof applicantMessage !== 'string' || applicantMessage.trim().length < 4 || applicantMessage.trim().length > 300))
   ) {
@@ -870,13 +810,13 @@ adminDriversApp.post('/:applicationId/decision', async (c) => {
 
   const applicationId = c.req.param('applicationId')
   const application = await c.env.DB.prepare(
-    'SELECT id, user_id, phone_e164, citizenship_attested_at, status FROM driver_applications WHERE id = ? LIMIT 1',
+    'SELECT id, user_id, phone_e164, citizenship_attested_at, status, operations_version FROM driver_applications WHERE id = ? LIMIT 1',
   )
     .bind(applicationId)
-    .first<{ id: string; user_id: string; phone_e164: string; citizenship_attested_at: number | null; status: string }>()
+    .first<{ id: string; user_id: string; phone_e164: string; citizenship_attested_at: number | null; status: string; operations_version: number }>()
   if (!application) return c.json(apiError('NOT_FOUND', 'Driver application was not found.'), 404)
 
-  const targetState = decision === 'approve' ? 'approved' : decision === 'reject' ? 'rejected' : 'suspended'
+  const targetState = decision === 'approve' ? 'approved' : 'rejected'
   let approvalPolicyIds: string[] = []
   if (decision === 'approve') {
     const [policies, requirements, retention, documentsApproved] = await Promise.all([
@@ -904,13 +844,7 @@ adminDriversApp.post('/:applicationId/decision', async (c) => {
     }
   }
 
-  if (decision === 'suspend' && application.status !== 'approved') {
-    return c.json(apiError('INVALID_APPLICATION_STATE', 'Only an approved driver can be suspended.'), 409)
-  }
-
-  const allowedPriorStates = decision === 'approve' || decision === 'reject'
-    ? ['pending_verification', 'needs_correction', 'rejected']
-    : ['approved']
+  const allowedPriorStates = ['pending_verification', 'needs_correction', 'rejected']
   if (!allowedPriorStates.includes(application.status)) {
     return c.json(apiError('INVALID_APPLICATION_STATE', 'This application is no longer awaiting this decision.'), 409)
   }
@@ -984,12 +918,12 @@ adminDriversApp.post('/:applicationId/decision', async (c) => {
     c.env.DB.prepare(
       `UPDATE driver_applications
           SET status = ?, reviewer_reason = ?, applicant_message = ?, reviewed_by = ?, reviewed_at = ?, updated_at = ?
-        WHERE id = ? AND status = ?
+        WHERE id = ? AND status = ? AND operations_version = ?
           AND (? != 'approved' OR (retention_expires_at IS NOT NULL AND retention_expires_at > ?))
           ${approvalGuard}
           AND EXISTS (${reviewGuardSelect})`,
     ).bind(targetState, reason.trim(), decision === 'reject' ? (applicantMessage as string).trim() : null,
-      user.id, now, now, applicationId, application.status, targetState, now,
+      user.id, now, now, applicationId, application.status, application.operations_version, targetState, now,
       ...approvalGuardBindings, ...reviewGuardBindings(authorization, now)),
     c.env.DB.prepare(
       `INSERT INTO marketplace_audit_events

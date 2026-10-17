@@ -63,6 +63,8 @@ export default function AdminScreen() {
           <Card>
             <SectionTitle title="Application reviews" detail="Review driver and vehicle applications separately. Private evidence requires your staff verification."/>
             <Link href={'/admin/drivers' as Href}><ThemedText type="link">Driver applications</ThemedText></Link>
+            <Link href={'/admin/driver-operations' as Href}><ThemedText type="link">Driver operations</ThemedText></Link>
+            <Link href={'/admin/booking-reviews' as Href}><ThemedText type="link">Bookings needing review</ThemedText></Link>
             <Link href={'/admin/vehicles' as Href}><ThemedText type="link">Vehicle applications</ThemedText></Link>
             <Link href={'/admin/account-exports' as Href}><ThemedText type="link">Account export follow-up · owner review</ThemedText></Link>
             <Link href={'/admin/account-requests' as Href}><ThemedText type="link">Account deletion requests · owner review</ThemedText></Link>

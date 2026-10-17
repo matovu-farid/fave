@@ -1,7 +1,8 @@
 # Driver operations proposal
 
-Status: concrete design awaiting owner review, 17 October 2026. The owner has
-confirmed the suspension rule below; the implementation has not started.
+Status: approved by the owner, 17 October 2026. Implement inline on main and
+manually test in the browser. The suspension rule and concrete design below
+are approved; implementation is in progress.
 
 Tracks [driver verification #7](https://github.com/matovu-farid/fave/issues/7)
 and [operations #17](https://github.com/matovu-farid/fave/issues/17), both currently

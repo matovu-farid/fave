@@ -60,7 +60,7 @@ function decide(f, action) {
     ? '/driver-app/documents/national_id_front/decision'
     : '/driver-app/decision'
   return f.reviewDriver('POST', path, {
-    body: { decision: action.decision, reason: 'Synthetic review reason', applicantMessage: 'Please provide a clearer document.' },
+    body: { expectedVersion: 0, confirmed: true, decision: action.decision, reason: 'Synthetic review reason', applicantMessage: 'Please provide a clearer document.' },
   })
 }
 
@@ -138,7 +138,7 @@ for (const action of actions) {
     const result = await decide(f, action)
     assert.deepEqual(reviewState(f), concurrentState, 'A stale decision must not modify the concurrent state or write an audit')
     assert.equal(result.status, 409, JSON.stringify(result))
-    assert.equal(result.body.error.code, action.target === 'document' ? 'INVALID_DOCUMENT_STATE' : 'INVALID_APPLICATION_STATE')
+    assert.equal(result.body.error.code, action.target === 'document' ? 'INVALID_DOCUMENT_STATE' : action.decision === 'suspend' ? 'DRIVER_OPERATION_CONFLICT' : 'INVALID_APPLICATION_STATE')
   })
 
   test(`driver ${action.target} ${action.decision} cannot commit after its proof naturally expires while its batch is queued`, async t => {
