@@ -226,3 +226,44 @@ No payment-provider contract, legal-policy approval, or payment launch gate was 
   Production still has zero active approved fare policies; live payments and legal
   publication were not activated. The isolated test server/tab were stopped;
   viewport restored. No production test transaction was created.
+
+### Withdrawal, unavailable-car and expiry recovery — 17 October 2026
+
+- Browser verification reproduced two recovery defects. Opening an unavailable
+  request could show its error alongside success text from a previous withdrawal.
+  After opening an old alert and submitting a replacement request, reload still
+  followed the old alert ID and hid the replacement pending request.
+- Recovery now clears the opposite feedback channel. A successfully saved request
+  updates the existing screen's Expo Router search parameters to its new request
+  ID/type without pushing another history entry. A failed submission leaves the
+  original target and retryable estimate intact. Server ownership checks and
+  disclosure/contact-consent resets are unchanged.
+- Two tests exercise the actual Trips component with controlled hooks, routing
+  and service boundaries. The success case first failed with old-request instead
+  of replacement-request, then passed after the fix; a new mount follows the
+  saved replacement. The failure case verifies no route change and a retryable
+  error. Expo SDK57 URL-parameter documentation and installed Router types were
+  checked before using setParams.
+- Actual static app/Better Auth/production-handler SQLite browser walkthrough:
+  withdraw a pending request, reload preserved details, edit destination, choose
+  another car, review the new estimate, request staff availability, reveal test
+  contact, record a simulated reached call, mark unavailable, follow its inbox
+  alert, select a replacement and save a new request. The replacement survives
+  reload at390px and old unavailable/withdrawn feedback is absent.
+- Separate disposable fixture: confirmed24-hour quote at saved484006UGX; advance
+  only the test clock to its exact deadline, reload, observe expiry/no deposit
+  action, search both released cars and obtain a new estimate for car-2. Backend
+  metadata confirms the original request expired, two estimates, one expiry
+  notice and zero bookings. No actual call, production request, policy acceptance,
+  payment or push was created. Fixtures use non-binding disclosures, synthetic
+  identities/maps and controlled clocks; simulated sessions outlive the expiry
+  scenario so authentication expiry cannot mask quote expiry.
+- Full suite344 passed, zero failures/skips; Expo lint and app/Worker typechecks
+  passed. Independent review of both fixes/tests found no material issues.
+  Proofs: `/tmp/fave-replacement-request-recovered.png`,
+  `/tmp/fave-unavailable-recovery-fixed.png`,
+  `/tmp/fave-expired-quote-new-estimate.png`. No browser warnings/errors; viewport
+  restored, test tab closed and owner production tab retained. These checks do not
+  complete provider/live-payment or physical-device acceptance gates.
+- Documentation: [Expo SDK57](https://docs.expo.dev/versions/v57.0.0/) and
+  [Router search-parameter updates](https://docs.expo.dev/router/reference/url-parameters/#updating-url-parameters).

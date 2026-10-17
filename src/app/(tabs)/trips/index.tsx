@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Image, ScrollView, StyleSheet, View } from 'react-native'
-import { useLocalSearchParams } from 'expo-router'
+import { router, useLocalSearchParams } from 'expo-router'
 
 import { ActionButton, Card, CheckRow, Field, Message, SectionTitle, formStyles } from '@/components/marketplace-ui'
 import { GoogleMapsAttribution } from '@/components/google-maps-attribution'
@@ -98,9 +98,9 @@ export default function TripsScreen() {
     setEstimate(['checking', 'review', 'quote'].includes(view.phase) ? request.estimate : null)
     setCheckedPolicies([]); setSharePhone(false)
     if (['expired', 'unavailable'].includes(view.phase)) {
-      setSelectedVehicle(''); setError(view.message)
+      setSelectedVehicle(''); setSuccess(''); setError(view.message)
     } else {
-      setSuccess(view.message)
+      setError(''); setSuccess(view.message)
     }
   }, [restoreEstimateInputs])
 
@@ -343,6 +343,7 @@ export default function TripsScreen() {
       setAvailabilityRequest(next)
       setQuote(null)
       setSuccess('Fave will call the driver to check these dates. You will not pay while we check.')
+      router.setParams({ focusTargetId: result.requestId, focusTargetType: 'availability' })
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not ask Fave to check availability.') }
     finally { setBusy(false) }
   }
