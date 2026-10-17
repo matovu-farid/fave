@@ -154,3 +154,34 @@ an audit before returning409; six positive/conflict regressions pass.
   enrollment, unlock and explicit lock rather than waiting for automatic expiry.
   Real owner passkey enrollment remains untested and optional. No real applicant
   evidence was opened or application decision made during this check.
+
+### Review locking and navigation recovery — 17 October 2026
+
+The approved hide/lock requirement had a client request-order race: returning
+before server revocation completed could restore the old unlocked status. A failed
+lock likewise allowed refresh to restore it. Two actual-hook regressions failed
+before the fix. Independent review reproduced a second route mounting past a
+per-hook barrier; coordination now belongs to the shared review service.
+
+Both explicit and background lock requests share one in-flight revocation and
+security refresh waits for it. Failure retains the requirement and a generic
+retryable error. A same-tab sessionStorage marker contains only the value `1`,
+never credentials, identity, OTP, enrollment URI or proof; a full reload retries
+an unfinished lock. A successful lock clears the marker. Keepalive reduces
+cancellation during unload, but does not guarantee network delivery. If browser
+storage is unavailable, only the in-memory barrier can survive navigation; a
+fresh tab has no marker. Server proof expiry and authorization remain enforced.
+
+Six focused tests execute the actual service and security hook with controlled
+HTTP and React lifecycle boundaries: delayed hide/show, failed lock/retry, stale
+status response, route remount sharing the pending lock, reload after background
+failure and reload after explicit failure. The two reload regressions also failed
+before their corresponding repair. Final independent review found no remaining
+material issue; limitations above are explicit.
+
+Local full-suite verification executed 350 tests: 349 passed and the existing
+1.5-second decoder subprocess timeout failed under host contention. The unchanged
+decoder regression passed on the subsequent focused rerun; a diagnostic measured
+correct parsing at about 13 ms. No timeout or parser implementation was changed.
+Exact-commit CI and browser/release evidence are recorded on issue #17 after the
+remaining checks complete.

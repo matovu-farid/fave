@@ -6,8 +6,37 @@ export type ReviewDocument = { id:string;type:string;status:string;reason:string
 export type ReviewDetail = {id:string;label:string;status:string;reason:string|null;applicantMessage:string|null;documents:ReviewDocument[];checklist:{type:string;version:string}[];blockers:string[];lodgingRateUgx?:number|null}
 export type ReviewSecurity = {unlocked:boolean;expiresAt:number|null;method:'passkey'|'totp'|null;passkeys:{id:string;name:string|null}[];authenticator:boolean;authenticatorPending:boolean;firstEnrollment:boolean}
 const jsonPost = (body:unknown):RequestInit => ({method:'POST',cache:'no-store',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
-export const getReviewSecurity = () => authenticatedFetch<ReviewSecurity>('/api/admin/review-security',{cache:'no-store'})
-export const lockReviews = () => authenticatedFetch('/api/admin/review-security/lock',jsonPost({}))
+const requestReviewLock = () => authenticatedFetch('/api/admin/review-security/lock',{...jsonPost({}),keepalive:true})
+// Review routes share this barrier: navigating cannot outrun a pending lock.
+// Persist only the revocation intent, so a reload retries an interrupted lock.
+const reviewLockKey='fave:review-lock-required'
+function savedReviewLock() {
+  try{return typeof sessionStorage!=='undefined'&&sessionStorage.getItem(reviewLockKey)==='1'}catch{return false}
+}
+function saveReviewLock(required:boolean) {
+  try{if(typeof sessionStorage!=='undefined'){if(required)sessionStorage.setItem(reviewLockKey,'1');else sessionStorage.removeItem(reviewLockKey)}}catch{/* Storage can be unavailable; retain the in-memory barrier. */}
+}
+let reviewLockRequired=savedReviewLock()
+let pendingReviewLock:Promise<void>|null=null
+async function finishReviewLock() {
+  if(!reviewLockRequired)return
+  if(!pendingReviewLock){
+    pendingReviewLock=requestReviewLock()
+      .then(()=>{reviewLockRequired=false;saveReviewLock(false)})
+      .catch(()=>{throw new Error('Reviews could not be locked. Check your connection and try again.')})
+      .finally(()=>{pendingReviewLock=null})
+  }
+  await pendingReviewLock
+}
+export function lockReviews() {
+  reviewLockRequired=true
+  saveReviewLock(true)
+  return finishReviewLock()
+}
+export async function getReviewSecurity() {
+  await finishReviewLock()
+  return authenticatedFetch<ReviewSecurity>('/api/admin/review-security',{cache:'no-store'})
+}
 export async function getReviewQueue(kind:ReviewKind) {
   const result=await authenticatedFetch<{applications?:ReviewQueueItem[];vehicles?:ReviewQueueItem[]}>(`/api/admin/${kind}/pending`,{cache:'no-store'})
   return result.applications??result.vehicles??[]
