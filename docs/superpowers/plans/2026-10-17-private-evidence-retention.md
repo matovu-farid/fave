@@ -1,5 +1,54 @@
 # Private evidence retention repair
 
+## Parent-deletion guard — 17 October 2026
+
+Account-lifecycle investigation reproduced a separate bypass of durable cleanup.
+With every production migration applied, deleting an unbooked synthetic driver
+identity removed its application, three driver-file rows, two vehicles and six
+vehicle-media rows with zero cleanup jobs. The R2 object keys were lost. A client
+with a booking was instead blocked by audit/other foreign keys; raw identity
+deletion is not a retention-aware workflow in either case.
+
+Migration `0023_evidence_cleanup_guards.sql` adds two BEFORE DELETE guards.
+Driver-file and vehicle-media deletion, including a parent cascade, requires a
+durable cleanup job matching the exact evidence type, row ID and object key.
+Vehicle media includes private originals of client-facing photos. An incomplete
+multi-row cascade aborts rather than losing unqueued keys. Existing expiry code
+already inserts the job before deletion in the same transaction, so its behavior
+remains compatible. The migration creates triggers only; it changes no rows,
+deadline, policy, account permission, Worker binding or public endpoint.
+
+This protects DELETE/cascade paths. It does not authorize deletion, establish a
+lawful retention period, implement legal holds/account-deletion fulfillment, or
+guard arbitrary privileged key updates/replacement writes. Current production
+evidence writers use inserts and metadata updates rather than replacement writes.
+Do not bypass these guards or discard cleanup jobs as an account-deletion shortcut.
+
+Validation:
+
+- Thirteen regressions failed before the migration with missing expected
+  exceptions. All fourteen new tests and fifteen existing retention tests pass.
+  Cases cover direct/parent deletions, photo sources, mismatched type/ID/key,
+  rollback of a partly prepared batch, durable jobs after parent removal, storage
+  failure, retry and completion audit. Independent review found no actionable
+  issue within the documented scope.
+- Full suite: 389 passed, zero failures/skips; Expo lint and app/Worker TypeScript
+  pass. Isolated Wrangler local D1 applied all migrations, rejected a raw driver
+  identity deletion with SQLITE_CONSTRAINT_TRIGGER, and preserved all four users,
+  three driver files and six vehicle-media rows.
+- Manual browser test used actual exported app/Better Auth/Worker handlers and
+  isolated SQLite/synthetic files. A rejected cascade preserved the session and
+  three displayed driver-file records. Expiring only the test files then running
+  the normal purge removed all three objects and rows, left zero cleanup jobs,
+  and refreshing the driver screen removed their approved-file entries. Checked
+  at 390px; no real account, policy acceptance, identity file or trip changed.
+  Screenshot: `/tmp/fave-cascade-driver-after-expiry.png`.
+
+Sources checked: [D1 foreign-key/cascade enforcement](https://developers.cloudflare.com/d1/sql-api/foreign-keys/)
+and [SQLite trigger/RAISE behavior](https://www.sqlite.org/lang_createtrigger.html).
+Remote migration application and trigger-presence/health checks are the release
+gate; this database-only repair requires no new native build or Worker assets.
+
 **Scope:** existing #6/#8/#14 evidence-retention and verification requirements. Execute inline on `main`; no branch or worktree. Preserve saved retention decisions, not introduce or activate a new legal schedule.
 
 **Root cause:** resubmission overwrote all older file deadlines with `now`. Driver purge also treated the application's mutable deadline as a file deadline. Both purge paths deleted R2 content before the final conditional database operation, allowing stale candidates and audit failures to leave live references without files. Expiring an older vehicle proof could pause a listing even when current proof remained valid.
