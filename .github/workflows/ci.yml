@@ -55,6 +55,12 @@ jobs:
             printf 'const ciValidationFailure: string = 1;\n' > "$failure_file"
           fi
           npm run typecheck
+      - name: Bundle iOS, Android, and web
+        env:
+          CI: '1'
+          EXPO_NO_DOTENV: '1'
+          EXPO_PUBLIC_API_URL: https://api.fave.fidexa.org
+        run: npx expo export --platform all --max-workers 2 --output-dir /tmp/fave-ci-platform-export --clear
 
   worker:
     name: Worker checks
