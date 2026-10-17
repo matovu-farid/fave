@@ -18,6 +18,8 @@ function loadModule(sourcePath, imports = {}) {
   vm.runInNewContext(code, {
     exports,
     require: (name) => {
+      // Background retirement is covered by private-evidence-retention integration tests.
+      if (name === './private-evidence-retention') return {}
       if (name in imports) return imports[name]
       if (name === './review-access') return {reviewAccess(){},isReviewMember(){}}
       if (name === 'hono') {

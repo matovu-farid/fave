@@ -108,7 +108,7 @@ export function availabilityFixture(t) {
     const code = ts.transpileModule(readFileSync(path, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, esModuleInterop: true } }).outputText
     vm.runInNewContext(code, {
       module, exports: module.exports, console, crypto: webcrypto, Date: ClockDate, Number, String, Math, Intl, JSON, Promise,
-      Request, Response, Headers, URL, File, FormData, AbortSignal, TextEncoder, TextDecoder, Uint8Array, Buffer, setTimeout, clearTimeout,
+      Request, Response, Headers, URL, File, FormData, AbortSignal, TextEncoder, TextDecoder, Uint8Array, Buffer, atob, btoa, setTimeout, clearTimeout,
       require: (name) => name.startsWith('.') ? load(resolve(dirname(path), `${name}.ts`)) : nodeRequire(name),
     }, { filename: path })
     return module.exports

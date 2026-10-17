@@ -24,6 +24,8 @@ function loadDrivers({ user = { id: 'client-1', name: 'Client', email: 'client@e
   vm.runInNewContext(code, {
     exports,
     require: (name) => {
+      // Background retirement is covered by private-evidence-retention integration tests.
+      if (name === './private-evidence-retention') return {}
       if (name === 'hono') return { Hono: CapturingHono }
       if (name === './review-access') return { reviewAccess: () => {}, isReviewMember: async (env, userId) => env.DB.prepare('SELECT 1 FROM review_memberships WHERE user_id = ? AND active = 1').bind(userId).first() }
       if (name === './marketplace-auth') return {

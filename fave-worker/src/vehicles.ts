@@ -1,3 +1,4 @@
+import { evidenceRetirement, deleteRetiredEvidence } from './private-evidence-retention'
 import { reviewAccess, isReviewMember } from './review-access'
 import { Hono } from 'hono'
 import type { AuthBindings } from './auth'
@@ -1305,55 +1306,34 @@ export async function purgeExpiredVehicleEvidence(env: AuthBindings): Promise<nu
       ORDER BY retention_expires_at ASC LIMIT 50`,
   ).bind(now).all<{ id: string; vehicle_id: string; object_key: string }>()
 
-  let purged = 0
   for (const media of expired.results) {
     try {
-      const reviewRequiredAt = Date.now()
+      const retirement = evidenceRetirement(env, 'vehicle_media', media, now)
       await env.DB.batch([
+        ...retirement.statements,
         env.DB.prepare(
           `UPDATE vehicles
               SET status = 'needs_correction',
                   reviewer_reason = 'Private vehicle evidence expired. Submit current replacement evidence for review.',
                   applicant_message = 'Your vehicle evidence expired. Upload current replacement documents so Fave can review the listing again.',
                   updated_at = ?
-            WHERE id = ? AND status = 'approved'`,
-        ).bind(reviewRequiredAt, media.vehicle_id),
+            WHERE id = ? AND status = 'approved'
+              AND EXISTS (SELECT 1 FROM private_evidence_deletion_jobs WHERE id = ?)
+              AND NOT (${approvedVehicleEvidencePredicate('vehicles')})`,
+        ).bind(now, media.vehicle_id, retirement.jobId, now, now, now, now, now, now),
         env.DB.prepare(
           `INSERT INTO marketplace_audit_events
             (id, actor_user_id, actor_type, action, target_type, target_id, reason,
              prior_state, new_state, created_at)
            SELECT ?, NULL, 'system', 'vehicle_evidence_expiry_requires_review',
                   'vehicle', ?,
-                  'Private vehicle evidence expired; the listing was paused pending replacement evidence.',
-                  'approved', 'needs_correction', ?
-            WHERE changes() = 1`,
-        ).bind(crypto.randomUUID(), media.vehicle_id, reviewRequiredAt),
+                  'Required private vehicle evidence expired; listing paused pending replacement evidence.',
+                  'approved', 'needs_correction', ? WHERE changes() = 1`,
+        ).bind(crypto.randomUUID(), media.vehicle_id, now),
       ])
-
-      await env.DRIVER_FILES.delete(media.object_key)
-      const purgedAt = Date.now()
-      const result = await env.DB.batch([
-        env.DB.prepare(
-          `DELETE FROM vehicle_media
-            WHERE id = ? AND media_kind != 'client_photo'
-              AND retention_expires_at IS NOT NULL AND retention_expires_at <= ?`,
-        ).bind(media.id, purgedAt),
-        env.DB.prepare(
-          `INSERT INTO marketplace_audit_events
-            (id, actor_user_id, actor_type, action, target_type, target_id, reason,
-             prior_state, new_state, created_at)
-           SELECT ?, NULL, 'system', 'vehicle_evidence_retention_expired',
-                  'vehicle_media', ?,
-                  'Approved retention period elapsed; private vehicle evidence was deleted.',
-                  'stored', 'deleted', ?
-            WHERE changes() = 1`,
-        ).bind(crypto.randomUUID(), media.id, purgedAt),
-      ])
-      purged += result[0]?.meta.changes === 1 ? 1 : 0
     } catch {
-      // The row and expiry stay in place so the next scheduled run retries deletion.
+      // Retirement, eligibility transition and audits commit together or retry.
     }
   }
-
-  return purged
+  return deleteRetiredEvidence(env, 'vehicle_media')
 }

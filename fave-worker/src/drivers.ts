@@ -1,3 +1,4 @@
+import { evidenceRetirement, deleteRetiredEvidence } from './private-evidence-retention'
 import { reviewAccess, isReviewMember } from './review-access'
 import { Hono } from 'hono'
 import type { AuthBindings } from './auth'
@@ -501,13 +502,6 @@ driversApp.post('/application', async (c) => {
       existing?.status ?? null,
       now,
     ),
-    ...(existing
-      ? [c.env.DB.prepare(
-          `UPDATE driver_application_documents SET retention_expires_at = ?
-            WHERE application_id = ? AND submission_version < ?
-              AND EXISTS (SELECT 1 FROM marketplace_audit_events WHERE id = ?)`,
-        ).bind(now, applicationId, submissionVersion, submissionAuditId)]
-      : []),
     ...storedFiles.map((file) =>
       c.env.DB.prepare(
         `INSERT INTO driver_application_documents
@@ -1008,68 +1002,30 @@ export async function purgeExpiredDriverEvidence(env: AuthBindings): Promise<num
   if (!env.DRIVER_FILES) return 0
   const now = Date.now()
   const expiredDocuments = await env.DB.prepare(
-    `SELECT document.id, document.application_id, document.object_key
+    `SELECT document.id, document.object_key
        FROM driver_application_documents AS document
-       JOIN driver_applications AS application ON application.id = document.application_id
-      WHERE document.retention_expires_at <= ? OR application.retention_expires_at <= ?
-      ORDER BY COALESCE(document.retention_expires_at, application.retention_expires_at) ASC
-      LIMIT 100`,
-  ).bind(now, now).all<{ id: string; application_id: string; object_key: string }>()
+      WHERE document.retention_expires_at IS NOT NULL AND document.retention_expires_at <= ?
+      ORDER BY document.retention_expires_at ASC LIMIT 100`,
+  ).bind(now).all<{ id: string; object_key: string }>()
 
-  let purged = 0
   for (const document of expiredDocuments.results) {
     try {
-      await env.DRIVER_FILES.delete(document.object_key)
-      const deletedAt = Date.now()
-      const result = await env.DB.batch([
-        env.DB.prepare(
-          `DELETE FROM driver_application_documents
-            WHERE id = ? AND (retention_expires_at <= ? OR EXISTS (
-              SELECT 1 FROM driver_applications
-               WHERE id = ? AND retention_expires_at <= ?
-            ))`,
-        ).bind(document.id, deletedAt, document.application_id, deletedAt),
-        env.DB.prepare(
-          `INSERT INTO marketplace_audit_events
-            (id, actor_user_id, actor_type, action, target_type, target_id, reason,
-             prior_state, new_state, created_at)
-           SELECT ?, NULL, 'system', 'driver_document_retention_expired',
-                  'driver_application_document', ?,
-                  'Superseded or expired private driver evidence was deleted.',
-                  'stored', 'deleted', ?
-            WHERE changes() = 1`,
-        ).bind(crypto.randomUUID(), document.id, deletedAt),
-      ])
-      purged += result[0]?.meta.changes === 1 ? 1 : 0
+      await env.DB.batch(evidenceRetirement(env, 'driver_application_document', document, now).statements)
     } catch {
-      // Keep the row and expiry so the next scheduled run retries deletion.
+      // No object is touched unless retirement and its audit commit together.
     }
   }
 
   const expiredApplications = await env.DB.prepare(
-    `SELECT id FROM driver_applications
+    `SELECT id, submission_version, retention_expires_at FROM driver_applications
       WHERE retention_expires_at IS NOT NULL AND retention_expires_at <= ?
       ORDER BY retention_expires_at ASC LIMIT 50`,
-  ).bind(now).all<{ id: string }>()
+  ).bind(now).all<{ id: string; submission_version: number; retention_expires_at: number }>()
 
+  let redacted = 0
   for (const application of expiredApplications.results) {
-    const documents = await env.DB.prepare(
-      `SELECT id, object_key FROM driver_application_documents
-        WHERE application_id = ? AND (retention_expires_at <= ? OR EXISTS (
-          SELECT 1 FROM driver_applications
-           WHERE id = ? AND retention_expires_at <= ?
-        ))`,
-    ).bind(application.id, now, application.id, now).all<{ id: string; object_key: string }>()
-
     try {
-      if (documents.results.length > 0) {
-        await env.DRIVER_FILES.delete(documents.results.map((document) => document.object_key))
-      }
-      const now = Date.now()
-      await env.DB.batch([
-        ...documents.results.map((document) => env.DB.prepare(
-          'DELETE FROM driver_application_documents WHERE id = ? AND application_id = ?',
-        ).bind(document.id, application.id)),
+      const result = await env.DB.batch([
         env.DB.prepare(
           `UPDATE driver_applications
               SET national_id_number = '', national_id_last4 = '',
@@ -1082,26 +1038,24 @@ export async function purgeExpiredDriverEvidence(env: AuthBindings): Promise<num
                     WHEN status = 'needs_correction'
                       THEN COALESCE(applicant_message || ' ', '') || 'Identity evidence reached its retention deadline; upload the required current files again.'
                     ELSE applicant_message END,
-                  retention_expires_at = NULL,
-                  updated_at = ?
-            WHERE id = ? AND retention_expires_at IS NOT NULL AND retention_expires_at <= ?`,
-        ).bind(now, application.id, now),
+                  retention_expires_at = NULL, updated_at = ?
+            WHERE id = ? AND submission_version = ? AND retention_expires_at = ?
+              AND retention_expires_at <= ?`,
+        ).bind(now, application.id, application.submission_version, application.retention_expires_at, now),
         env.DB.prepare(
           `INSERT INTO marketplace_audit_events
             (id, actor_user_id, actor_type, action, target_type, target_id, reason,
              prior_state, new_state, created_at)
            SELECT ?, NULL, 'system', 'driver_identity_evidence_retention_expired',
                   'driver_application', ?,
-                  'Approved retention period elapsed; private ID evidence and submitted ID number were deleted.',
-                  NULL, 'redacted', ?
-            WHERE changes() > 0`,
+                  'Approved retention period elapsed; the submitted ID number was redacted. Files follow their own deadlines.',
+                  NULL, 'redacted', ? WHERE changes() = 1`,
         ).bind(crypto.randomUUID(), application.id, now),
       ])
-      purged += 1
+      redacted += result[0]?.meta.changes === 1 ? 1 : 0
     } catch {
-      // Keep the retention deadline intact so the next scheduled run retries deletion.
+      // A concurrent resubmission wins; failed redaction is retried next sweep.
     }
   }
-
-  return purged
+  return redacted + await deleteRetiredEvidence(env, 'driver_application_document')
 }
