@@ -117,10 +117,11 @@ Actual erasure and exceptional statutory-case completion remain open.
 
 The next operations step is approved-driver lookup, suspension and recovery
 under #7/#17. The [concrete proposal](../superpowers/specs/2026-10-17-driver-operations-proposal.md)
-records the current code gap and implementation checks. One owner question is
-pending: whether suspension should stop new bookings and flag existing bookings
-for review, rather than automatically cancelling them. No such new rule is
-implemented or activated yet.
+records the current code gap and implementation checks. The owner confirmed:
+**suspension stops new bookings and flags existing bookings for owner review.**
+The concrete design adds a separate driver-operations screen and durable booking
+review flags, preserving booking state and requiring an explicit review outcome.
+The written design awaits review; no new runtime behavior is implemented yet.
 
 Apple notification-key management remains separately pending specific
 authorization after an automatic approval-review rejection; do not enter
@@ -131,18 +132,20 @@ operating/legal readiness remain distinct decisions. Do not fill them with new
 defaults, activate policies, invent a payment provider or treat the 389-test
 baseline as permission to accept public trips.
 
-## Decision-wait audit — 17 October 2026
+## Decision-wait audit and resumption — 17 October 2026
 
 A fresh repository query returns the same 17 open MVP issues and no open PR.
 The scope/evidence table above still applies; the released repairs do not close
 those broader requirements. No currently approved implementation is queued
 behind a running test/build/deployment for these releases.
 
-The unanswered suspension/existing-booking question has persisted through the
+The suspension/existing-booking question was unanswered during the
 driver-operations proposal, Operations lifecycle repair and booking-copy repair.
-The independent work found during that wait has been completed and released.
-Continue with that one question, rather than silently selecting cancellation,
-refund, replacement or restoration behavior or opening multiple new questions.
+The independent work found during that wait was completed and released. The
+owner has now answered, resolving that blocker. Continue the driver-operations
+design and implementation workflow using the confirmed rule. Cancellation,
+refund and replacement remain separate decisions; the answer does not authorize
+those actions.
 
 Other remaining feature dependencies are distinct, not substitutes for that
 answer: #11/#16 require a chosen/eligible provider and confirmed funds flow;

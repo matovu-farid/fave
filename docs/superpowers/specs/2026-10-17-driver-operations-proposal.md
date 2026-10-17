@@ -1,7 +1,7 @@
 # Driver operations proposal
 
-Status: proposed for owner review, 17 October 2026. No operational rule or
-production permission is activated by this document.
+Status: concrete design awaiting owner review, 17 October 2026. The owner has
+confirmed the suspension rule below; the implementation has not started.
 
 Tracks [driver verification #7](https://github.com/matovu-farid/fave/issues/7)
 and [operations #17](https://github.com/matovu-farid/fave/issues/17), both currently
@@ -59,16 +59,84 @@ paid-trip, incident or replacement workflow.
 - The driver sees their status and driver-facing next step, never internal
   reasons, other people's details or private review history.
 
-## Owner decision being requested
+## Confirmed suspension rule
 
-If a driver is suspended, should Fave stop new bookings and flag existing
-bookings for owner review? The alternative is automatic cancellation. The
-recommendation is owner review because cancellation, refunds, replacement and
-urgent safety response need their own explicit decisions and working workflows.
+The owner answered: **“Yes, stop new bookings and flag existing ones.”**
+Suspension must prevent new work and create an owner-review flag for each
+existing active booking associated with that driver. Preserve booking state,
+saved price, client access and existing consent. Do not automatically cancel,
+refund, replace the driver/car or send a new promise to the client.
 
-Until the owner answers, existing booking handling remains unchanged. This
-proposal does not authorize cancellation, refunds, moving money, replacing a
-driver/car or sending a new promise to a client.
+## Proposed booking review queue
+
+- Add **Bookings needing review** to Operations, separate from availability
+  requests and application reviews. Display open flags in bounded pages, oldest
+  first, with booking reference, dates, booking status and driver reference.
+  Keep client contact, exact locations and private suspension reasons out of
+  queue responses. Only the owner reviewer can read this queue.
+- Suspending a driver atomically saves the status change, audit and durable
+  review flags. A failure saves none of them. A repeated/stale request does not
+  duplicate a suspension event or its flags. Cover the existing suspension API
+  as well as the new screen so direct calls cannot omit the flags.
+- At suspension time, include confirmed bookings and deposit-pending bookings
+  whose payment hold is still valid. Exclude cancelled, expired and expired
+  deposit holds. Do not infer completion from the scheduled end date: this app
+  does not yet record trip completion. Older confirmed bookings therefore remain
+  candidates for explicit owner review.
+- Identify the booked driver from the immutable saved quote's
+  `driverApplicationId`, not the car's current driver relationship. For a legacy
+  snapshot without a valid driver reference, conservatively flag a booking on a
+  car currently assigned to this driver and label the association as needing
+  verification. Do not rewrite its snapshot or silently invent its booked driver.
+- A selected flag requires the current ten-minute review unlock. Show the
+  booking status/dates, suspension event and relevant driver decision history.
+  No new client-contact disclosure is needed for this feature.
+- Provide **Mark reviewed**, with a required internal outcome note and a clear
+  confirmation that this only closes the review flag. Record reviewer, time and
+  note atomically. It does not cancel, refund, reassign or mark the trip complete.
+  A later suspension creates its own flags, even if an earlier flag was reviewed.
+- Restoring the driver, requesting corrections, passing a scheduled trip end or
+  expiring a deposit hold does not silently close an open flag. Show the latest
+  booking status so the owner can record an informed review outcome. Keep a
+  bounded reviewed-history view behind the same unlock.
+- Persist flags and history as private operational records, subject to the
+  existing account-access and retention boundaries. This feature adds no new
+  public disclosure or automatic retention/deletion policy.
+
+## Focused implementation boundaries
+
+Use a driver-operations router/service for safe lookup, protected detail and
+guarded suspend/restore/corrections transitions. Keep booking-review persistence
+and queries in a focused module shared by the suspension transaction and its
+review router. Reuse the existing audit infrastructure and exact review-proof
+guards. Keep the existing pending application queue and evidence-review flow.
+
+Use separate Expo Router screens for Driver operations and Bookings needing
+review, reusing the existing review frame and controls. A small lifecycle-aware
+controller owns each screen's server data and drafts. Do not put continuing
+driver operations into the application evidence component or add more unrelated
+branches to the main Operations screen.
+
+## Errors and acceptance criteria
+
+- Invalid or changed status, stale version, changed prerequisites or revoked
+  authorization returns a conflict/access error, with no partial mutation or
+  success audit. Refresh from server truth before retrying; never auto-retry a
+  suspension or review-outcome write.
+- Clear private data and drafts on leaving/backgrounding the screen, lock,
+  expiry or account change. Ignore late reads and prevent duplicate submissions.
+  A committed action remains committed if its response is later blocked by lock;
+  show the actual result only after a newly authorized refresh.
+- A suspended driver cannot acquire new work through direct APIs. Their own
+  screen shows the supplied next step without leaking the internal reason.
+- Restore succeeds only when every current approval prerequisite passes.
+  Corrections permit the supported evidence-resubmission path without granting
+  new-work eligibility. Existing booking flags remain open in both cases.
+- A suspension/booking-creation race either rejects the new booking or includes
+  it in the flags; a booking cannot slip between eligibility and flag creation.
+  Concurrent suspension/review actions produce one matching audited transition.
+- An ordinary staff member, another user or a locked owner cannot read private
+  details/history, suspend/restore, request corrections or close review flags.
 
 ## Implementation and verification requirements after design approval
 
