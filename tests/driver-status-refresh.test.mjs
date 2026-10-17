@@ -10,7 +10,7 @@ const prerequisites = () => ({ documents: [{ id: 'terms-v1', type: 'driver_terms
 
 // Render the production Driver screen. Only lifecycle and service boundaries are
 // controlled; read ordering, draft fields, status and consent transitions are real.
-function driverHarness({ load = async () => ({ application: application('pending_verification') }), requirements = async () => prerequisites(), offers = async () => ({ offers: [] }) } = {}) {
+function driverHarness({ load = async () => ({ application: application('pending_verification') }), requirements = async () => prerequisites(), offers = async () => ({ offers: [] }), respond = async () => ({ status: 'declined' }) } = {}) {
   const slots = [], effects = [], listeners = new Set(), timers = new Map()
   let cursor = 0, dirty = true, tree, focusCallback, focusCleanup, focused = true, reads = 0, writes = 0
   const same = (a, b) => a && b && a.length === b.length && a.every((value, i) => Object.is(value, b[i]))
@@ -42,6 +42,7 @@ function driverHarness({ load = async () => ({ application: application('pending
         getDriverApplication() { reads++; return load() },
         async getMyVehicles() { return { vehicles: [] } },
         getDriverTripOffers: offers,
+        respondToDriverTripOffer: respond,
       }
       if (name === '@/components/marketplace-ui') return { ...Object.fromEntries(['ActionButton', 'Card', 'CheckRow', 'Field', 'Message', 'SectionTitle'].map(key => [key, key])), formStyles: {} }
       if (name.startsWith('@/components/')) return new Proxy({}, { get: (_object, key) => key === '__esModule' ? true : key })
@@ -160,4 +161,24 @@ test('legacy offer polls neither load nor write while Driver is blurred', async 
   assert.equal(screen.writes(), writes)
   screen.tick(); await screen.settle()
   assert.equal(calls, 2)
+})
+
+const accountRestrictedOffer = canAccept => ({ offerId:'retained-offer',vehicleId:'car',pickup:{address:'Synthetic pickup',formattedAddress:null},destination:{address:'Synthetic destination',formattedAddress:null},startDate:'2026-11-01',endDate:'2026-11-02',passengerCount:2,luggageCount:1,expiresAt:Date.now()+600000,vehicle:{make:'Synthetic',model:'Car',year:2024},...(canAccept===undefined?{}:{canAccept}) })
+
+test('restricted drivers can decline existing offers but cannot accept them',async()=>{
+  const responses=[]
+  const screen=driverHarness({load:async()=>({application:application('approved')}),offers:async()=>({offers:[accountRestrictedOffer(false)]}),respond:async(id,decision)=>{responses.push([id,decision]);return {status:'declined'}}})
+  await screen.settle()
+  assert.equal(screen.button('Accept trip').props.disabled,true)
+  assert.notEqual(screen.button('Decline').props.disabled,true)
+  screen.button('Accept trip').props.onPress();await screen.settle()
+  assert.deepEqual(responses,[])
+  screen.button('Decline').props.onPress();await screen.settle()
+  assert.deepEqual(responses,[['retained-offer','decline']])
+})
+
+test('older offer responses without canAccept remain compatible',async()=>{
+  const screen=driverHarness({load:async()=>({application:application('approved')}),offers:async()=>({offers:[accountRestrictedOffer(undefined)]})})
+  await screen.settle()
+  assert.notEqual(screen.button('Accept trip').props.disabled,true)
 })

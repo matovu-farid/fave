@@ -1,3 +1,5 @@
+import accountRequests, { adminAccountRequests } from './account-requests'
+import { accountLifecycleErrorHandler } from './account-lifecycle'
 import adminReviewSecurity from './admin-review-security'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
@@ -23,6 +25,8 @@ import { isHourlyMaintenanceTick } from './schedules'
 
 const app = new Hono<{ Bindings: AuthBindings }>()
 
+app.onError(accountLifecycleErrorHandler)
+
 app.use(
   '/api/*',
   cors({
@@ -42,6 +46,8 @@ app.all('/api/auth/*', async c => {
   }
   return response
 })
+app.route('/api/account', accountRequests)
+app.route('/api/admin/account-requests', adminAccountRequests)
 app.route('/api/marketplace', policiesApp)
 app.route('/api/drivers', driversApp)
 app.route('/api/admin/review-security', adminReviewSecurity)

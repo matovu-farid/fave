@@ -9,6 +9,7 @@ import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme'
 import { authClient } from '@/lib/auth-client'
 import { ClientPrerequisites, DriverApplication, getClientPrerequisites, getDriverApplication, updateClientProfile } from '@/lib/marketplace'
 import { unregisterPushNotifications } from '@/lib/push-notifications'
+import AccountDeletionCard from '@/components/account-deletion-card'
 
 export default function AccountScreen({ onClose }: { onClose: () => void }) {
   const { data: session } = authClient.useSession()
@@ -124,9 +125,11 @@ export default function AccountScreen({ onClose }: { onClose: () => void }) {
         <ActionButton title={driver ? 'Open driver profile' : 'Apply to drive'} onPress={() => router.push('/driver')} />
       </Card>
 
+      <AccountDeletionCard key={session?.user.id} />
+
       <Card>
         <ThemedText type="subtitle">Account access</ThemedText>
-        <ThemedText themeColor="textSecondary">Your Fave account is signed in. Data export and deletion requests will be added when the approved retention rules are available.</ThemedText>
+        <ThemedText themeColor="textSecondary">Your Fave account is signed in. You can still sign out while a deletion request is awaiting review.</ThemedText>
         {signOutError ? <Message error>{signOutError}</Message> : null}
         <ActionButton title="Sign out" onPress={() => void signOut()} busy={signingOut} />
         <ActionButton title="Back to home" onPress={onClose} />

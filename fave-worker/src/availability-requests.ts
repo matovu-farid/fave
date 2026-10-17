@@ -6,6 +6,7 @@ import { kampalaToday } from './trip-dates'
 export function requestNeedsReviewPredicate(alias: string) {
   return `(${alias}.status IN ('requested', 'confirmed') AND (
     ${alias}.start_date < ?
+    OR EXISTS (SELECT 1 FROM account_deletion_requests closing_account WHERE closing_account.user_id = ${alias}.client_user_id)
     OR NOT EXISTS (
       SELECT 1 FROM vehicles AS eligible_vehicle
       JOIN trip_estimates AS saved_estimate ON saved_estimate.id = ${alias}.estimate_id

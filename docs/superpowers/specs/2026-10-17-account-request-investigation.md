@@ -1,10 +1,10 @@
 # Account export and deletion request investigation
 
-**Status: investigation and proposed boundaries, not an approved implementation design.**
+**Status: baseline investigation; approved intake/access slice now implemented separately.**
 Issue [#21](https://github.com/matovu-farid/fave/issues/21). Source inspected at
 `794b42e49bc59c75c72200f2593ae7a111e54954`; all work remains on main.
 
-## Confirmed decisions and outstanding question
+## Confirmed decisions
 
 - One Better Auth identity can hold both client and driver profiles. Neither
   profile grants the permissions of the other or of staff.
@@ -12,13 +12,13 @@ Issue [#21](https://github.com/matovu-farid/fave/issues/21). Source inspected at
   bookings and new driver assignments for that identity.
 - Signing out is not a deletion request. Neither answer authorizes automatic
   trip cancellation or raw deletion of the Better Auth identity.
-- The owner has one pending question: should the person retain access to
-  already-booked trips until those trips and payments are finished? Do not choose
-  an access policy or implement its dependent behavior before that answer.
+- On 17 October 2026 the owner confirmed: keep existing-trip access until those
+  trips and payments are finished. New work stops immediately; authentication,
+  existing-trip access and payment/support resolution remain available.
 
-## Current implementation and verified limitations
+## Investigation baseline and verified limitations
 
-`src/components/account-screen.tsx` loads the two role profiles, permits current
+At the inspected baseline, `src/components/account-screen.tsx` loads the two role profiles, permits current
 client-profile updates, and signs out. Its Account access card states that export
 and deletion requests are not available. `src/lib/marketplace.ts` has no request
 intake/status helpers. The route registration in `fave-worker/src/index.ts` and
@@ -27,7 +27,7 @@ the migrations contain no account-request API or durable closure state.
 `getSignedInUser` in `marketplace-auth.ts` resolves authentication only. It is
 also used by existing-trip reads and unrelated recovery actions. Making that
 function return null for every deletion request would impose a blanket loss of
-access and would pre-empt the unanswered product question.
+access and would contradict the subsequently confirmed existing-trip access decision.
 
 Actual migration-backed experiments show why raw identity deletion is unsuitable:
 an unbooked driver deletion previously cascaded away private file metadata with
@@ -73,7 +73,7 @@ Existing records, document acceptances, consent evidence and saved quotes must
 not be erased or repriced by submitting the request. A fresh social sign-in,
 profile edit, resubmission or delayed callback must not silently remove the
 durable restriction. Existing-trip reads, payment resolution, support and
-sign-out need explicit purpose-based treatment after the owner answers.
+sign-out remain available under the owner’s confirmed access decision.
 
 ### Fulfillment is part of the full issue
 
@@ -109,5 +109,14 @@ by this investigation.
   error/retry and affected client/driver/staff journeys in the browser; run lint,
   app/Worker typechecks and meaningful migration-backed regressions on main.
 
-The next step is the owner's existing-trip access answer, followed by a concrete
-design for review. This file does not authorize implementation or policy activation.
+The existing-trip access question is answered. The approved restriction/access
+behavior is implemented separately from retention-aware final fulfillment; this
+investigation does not authorize policy activation or raw identity deletion.
+
+## Delivered intake/access slice
+
+See the [implementation plan and evidence](../plans/2026-10-17-account-deletion-request.md).
+The app now provides a durable deletion receipt, atomic new-work restrictions,
+preserved existing reads/decline and a protected paginated owner queue. Export
+requests still use the disclosed support email; final erasure/export fulfillment
+and retention/hold/backup decisions remain outstanding in #21/#14.

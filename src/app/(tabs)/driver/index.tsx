@@ -168,6 +168,7 @@ export default function DriverScreen() {
   }, [application?.status, refreshOffers])
 
   const respondToOffer = async (offer: DriverTripOffer, decision: 'accept' | 'decline') => {
+    if (decision === 'accept' && offer.canAccept === false) return
     setBusy(true); setError(''); setOfferMessage('')
     try {
       const result = await respondToDriverTripOffer(offer.offerId, decision)
@@ -260,8 +261,9 @@ export default function DriverScreen() {
           <ThemedText>Destination · {offer.destination.formattedAddress ?? offer.destination.address}</ThemedText>
           <ThemedText>{offer.passengerCount} passengers · {offer.luggageCount} luggage pieces</ThemedText>
           <ThemedText type="small">Respond by {new Date(offer.expiresAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</ThemedText>
+          {offer.canAccept === false ? <Message>This offer cannot be accepted. You can still decline it.</Message> : null}
           <View style={formStyles.row}>
-            <ActionButton title="Accept trip" onPress={() => void respondToOffer(offer, 'accept')} busy={busy} />
+            <ActionButton title="Accept trip" disabled={offer.canAccept === false} onPress={() => void respondToOffer(offer, 'accept')} busy={busy} />
             <ActionButton title="Decline" onPress={() => void respondToOffer(offer, 'decline')} busy={busy} />
           </View>
         </View>)}

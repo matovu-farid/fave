@@ -24,9 +24,8 @@ export async function isReviewMember(env: AuthBindings, userId: string): Promise
   return !!await env.DB.prepare('SELECT 1 FROM review_memberships WHERE user_id = ? AND active = 1').bind(userId).first()
 }
 
-export async function reviewProof(env: AuthBindings, session: ReviewSession, origin: string) {
-  const now = Date.now()
-  return env.DB.prepare(`SELECT proof.expires_at, proof.method FROM review_session_proofs AS proof
+// Shared by ordinary review checks and transactional private-detail disclosure.
+export const reviewProofSelect = `SELECT proof.expires_at, proof.method FROM review_session_proofs AS proof
     JOIN session ON session.id = proof.session_id AND session.userId = proof.user_id
     JOIN review_memberships AS member ON member.user_id = proof.user_id AND member.active = 1
     WHERE proof.session_id = ? AND proof.user_id = ? AND proof.origin = ?
@@ -35,7 +34,11 @@ export async function reviewProof(env: AuthBindings, session: ReviewSession, ori
         WHERE passkey.id = proof.credential_id AND passkey.userId = proof.user_id))
         OR (proof.method = 'totp' AND EXISTS (SELECT 1 FROM twoFactor
         JOIN user ON user.id = twoFactor.userId WHERE twoFactor.id = proof.credential_id
-        AND twoFactor.userId = proof.user_id AND twoFactor.verified = 1 AND user.twoFactorEnabled = 1)))`)
+        AND twoFactor.userId = proof.user_id AND twoFactor.verified = 1 AND user.twoFactorEnabled = 1)))`
+
+export async function reviewProof(env: AuthBindings, session: ReviewSession, origin: string) {
+  const now = Date.now()
+  return env.DB.prepare(reviewProofSelect)
     .bind(session.session.id, session.user.id, origin, now, now)
     .first<{ expires_at: number; method: ReviewMethod }>()
 }

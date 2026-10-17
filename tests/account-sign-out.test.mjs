@@ -37,6 +37,7 @@ function accountHarness({ signOut, unregisterPushNotifications = async () => {} 
       if (name === '@/components/themed-view') return { ThemedView: 'ThemedView' }
       if (name === '@/constants/theme') return { Spacing: {}, BottomTabInset: 0, MaxContentWidth: 700 }
       if (name === '@/lib/auth-client') return { authClient: { useSession: () => ({ data: { user: { email: 'synthetic@example.test' } } }), signOut } }
+      if (name === '@/components/account-deletion-card') return { default: 'AccountDeletionCard' }
       if (name === '@/lib/marketplace') return {}
       if (name === '@/lib/push-notifications') return { unregisterPushNotifications }
       return require(name)

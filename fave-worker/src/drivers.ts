@@ -90,6 +90,7 @@ export function approvedDriverEvidencePredicate(driverApplicationId: string): st
     SELECT 1 FROM driver_applications AS eligible_driver
      WHERE eligible_driver.id = ${driverApplicationId}
        AND eligible_driver.status = 'approved'
+       AND NOT EXISTS (SELECT 1 FROM account_deletion_requests closing_account WHERE closing_account.user_id = eligible_driver.user_id)
        AND eligible_driver.citizenship_attested_at IS NOT NULL
        AND eligible_driver.retention_expires_at IS NOT NULL
        AND eligible_driver.retention_expires_at > ?

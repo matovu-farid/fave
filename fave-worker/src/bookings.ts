@@ -833,22 +833,24 @@ tripsApp.get('/driver-offers', async (c) => {
   const offers = await c.env.DB.prepare(
     `SELECT offer.id, offer.vehicle_id, offer.origin_json, offer.destination_json,
             offer.start_date, offer.end_date, offer.party_size, offer.luggage_count,
-            offer.expires_at, vehicle.make, vehicle.model, vehicle.model_year
+            offer.expires_at, vehicle.make, vehicle.model, vehicle.model_year,
+            (vehicle.status = 'approved' AND ${approvedVehicleEvidencePredicate('vehicle')}
+              AND NOT EXISTS (SELECT 1 FROM account_deletion_requests closing_account
+                WHERE closing_account.user_id = offer.client_user_id)) AS can_accept
        FROM driver_trip_offers AS offer
        JOIN vehicles AS vehicle ON vehicle.id = offer.vehicle_id
       WHERE offer.driver_application_id = ? AND offer.status = 'pending' AND offer.expires_at > ?
-        AND vehicle.status = 'approved' AND ${approvedVehicleEvidencePredicate('vehicle')}
       ORDER BY offer.created_at ASC LIMIT 50`,
-  ).bind(application.id, now, now, now, now, now, now, now).all<{
+  ).bind(now, now, now, now, now, now, application.id, now).all<{
     id: string; vehicle_id: string; origin_json: string; destination_json: string
     start_date: string; end_date: string; party_size: number; luggage_count: number
-    expires_at: number; make: string; model: string; model_year: number
+    expires_at: number; make: string; model: string; model_year: number; can_accept: number
   }>()
 
   return c.json({ offers: offers.results.map((offer) => {
     try {
       return {
-        offerId: offer.id, vehicleId: offer.vehicle_id,
+        offerId: offer.id, vehicleId: offer.vehicle_id, canAccept: Boolean(offer.can_accept),
         pickup: JSON.parse(offer.origin_json) as TripLocationSnapshot,
         destination: JSON.parse(offer.destination_json) as TripLocationSnapshot,
         startDate: offer.start_date, endDate: offer.end_date,
@@ -884,9 +886,10 @@ tripsApp.post('/driver-offers/:offerId/respond', async (c) => {
        FROM driver_trip_offers AS offer
        JOIN driver_applications AS driver ON driver.id = offer.driver_application_id
        JOIN vehicles AS vehicle ON vehicle.id = offer.vehicle_id
-      WHERE offer.id = ? AND driver.user_id = ? AND driver.status = 'approved'
-        AND vehicle.status = 'approved' AND ${approvedVehicleEvidencePredicate('vehicle')} LIMIT 1`,
-  ).bind(c.req.param('offerId'), user.id, now, now, now, now, now, now).first<{
+      WHERE offer.id = ? AND driver.user_id = ?
+        ${decision === 'decline' ? '' : `AND driver.status = 'approved' AND vehicle.status = 'approved'
+          AND ${approvedVehicleEvidencePredicate('vehicle')}`} LIMIT 1`,
+  ).bind(c.req.param('offerId'), user.id, ...(decision === 'decline' ? [] : [now, now, now, now, now, now])).first<{
     id: string; client_user_id: string; vehicle_id: string; origin_json: string; destination_json: string
     start_date: string; end_date: string; party_size: number; luggage_count: number
     status: string; expires_at: number; driver_application_id: string; driver_lodging_rate_ugx: number | null

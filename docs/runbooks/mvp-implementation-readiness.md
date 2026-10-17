@@ -48,7 +48,7 @@ not a conclusion that all of its acceptance criteria have passed.
 | [#17](https://github.com/matovu-farid/fave/issues/17) Operations | Staff availability queue, separate application reviews, ten-minute MFA and notification health/retry. | Suspension/recovery operation, payment exceptions, incident queue, policy/rate lifecycle, rights requests and protected investigation/export. Existing review screens are not the entire admin console. |
 | [#19](https://github.com/matovu-farid/fave/issues/19) Safety | Published-source safety copy and versioned notification contracts. No incident/check-in store or incident router exists. | Approved support coverage/escalation/rest/check-in/replacement rules, reporting and protected incident workflow, missed-check-in records/alerts, replacement consent and actual operational exercises. |
 | [#20](https://github.com/matovu-farid/fave/issues/20) End-to-end launch | CI, multiple synthetic browser journeys, signed artifact and deployment checks. | Full paid client/driver/operations journey, incident/completion/refund/dispute cases, newer physical-device evidence and responsible go/no-go sign-off. Remains a launch blocker. |
-| [#21](https://github.com/matovu-farid/fave/issues/21) Accounts | Shared identity/separate profiles, consent/version snapshots and sign-out recovery; private-file cascade guard. | Durable export/deletion requests/status, immediate new-work restrictions, existing-trip access decision, protected fulfillment and retained-record/hold/backup handling. See [investigation](../superpowers/specs/2026-10-17-account-request-investigation.md). |
+| [#21](https://github.com/matovu-farid/fave/issues/21) Accounts | Shared identity/separate profiles, consent/version snapshots and sign-out recovery; private-file cascade guard; durable deletion receipt, immediate new-work restrictions and preserved existing-trip access, with protected paginated owner intake. | Actual deletion/export fulfillment, retained-record categories, legal holds and backup handling. See [investigation](../superpowers/specs/2026-10-17-account-request-investigation.md). |
 | [#22](https://github.com/matovu-farid/fave/issues/22) Notifications | Durable inbox, D1 outbox, Queue/DLQ, token ownership, Expo adapter/receipts, quiet hours and admin recovery. | Native APNs configuration/observed delivery and domain producers for payments, trip progress/completion and incidents as their owning modules are implemented. No automatic notification-history cleanup is approved. |
 
 Issue #31's staff follow-up workflow is closed with its recorded evidence. Keep
@@ -82,7 +82,7 @@ than reopening a completed, narrower issue or calling the launch complete.
 
 ## Current next step
 
-The immediate engineering sequence is account request design and restrictions,
+The next account engineering step is authorized deletion/export fulfillment,
 with the owner's existing-trip access answer first. Only one owner question is
 being pursued at a time. Apple notification-key management remains separately
 pending specific authorization after an automatic approval-review rejection;

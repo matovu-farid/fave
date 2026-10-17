@@ -96,7 +96,7 @@ export function availabilityFixture(t) {
     computeDrivingRoute: async () => ({ kind: 'ok', distanceMeters: 80000, durationSeconds: 7200 }),
   }
   function load(path) {
-    if (path === `${worker}/src/auth.ts`) return { createAuth: () => ({ api: { getSession: async ({ headers }) => {
+    if (path === `${worker}/src/auth.ts`) return { getWebAppOrigins: (env) => [env.BETTER_AUTH_URL, ...(env.WEB_APP_ORIGINS ?? '').split(',')].filter(Boolean), createAuth: () => ({ api: { getSession: async ({ headers }) => {
       const user = sql.prepare('SELECT id, name, email FROM user WHERE id = ?').get(headers.get('x-test-user') ?? '')
       const session = user ? sql.prepare('SELECT * FROM session WHERE userId = ?').get(user.id) : null
       return user && session && session.expiresAt > clock.now ? { user, session } : null

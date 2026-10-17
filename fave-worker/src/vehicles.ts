@@ -920,7 +920,11 @@ vehiclesApp.get('/:vehicleId/availability', async (c) => {
   const user = await getSignedInUser(c.env, c.req.raw)
   if (!user) return c.json(apiError('UNAUTHORIZED', 'Sign in to continue.'), 401)
   const vehicle = await getVehicle(c.env, c.req.param('vehicleId'))
-  if (!vehicle || !(await canManageVehicle(c.env, vehicle, user.id))) {
+  // Existing obligations remain readable after new-work eligibility ends.
+  const ownsVehicle = vehicle && await c.env.DB.prepare(
+    'SELECT 1 FROM driver_applications WHERE id = ? AND user_id = ?',
+  ).bind(vehicle.driver_application_id, user.id).first()
+  if (!vehicle || !ownsVehicle) {
     return c.json(apiError('NOT_FOUND', 'Vehicle listing was not found.'), 404)
   }
 

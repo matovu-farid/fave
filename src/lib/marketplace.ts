@@ -166,6 +166,7 @@ export type ClientTripOffer = {
   tripRequest?: ClientTripRequestSnapshot
 }
 export type DriverTripOffer = {
+  canAccept?: boolean
   offerId: string
   vehicleId: string
   pickup: { address: string; formattedAddress: string | null }
