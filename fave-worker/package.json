@@ -13,6 +13,7 @@
     "@better-auth/core": "1.7.5",
     "@better-auth/expo": "1.7.5",
     "@better-auth/passkey": "1.7.5",
+    "@zip.js/zip.js": "2.24.0",
     "better-auth": "1.7.5",
     "hono": "^4.13.9",
     "jose": "^6.2.12"

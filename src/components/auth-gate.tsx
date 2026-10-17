@@ -56,7 +56,8 @@ export function AuthGate({ children }: { children: ReactNode }) {
 
     setIsSigningIn(true)
     // Native OAuth must return to the registered app scheme, independently of Metro's URL.
-    const callbackURL = Platform.OS === 'web' ? Linking.createURL('/') : 'fave:///'
+    const returnPath = Platform.OS === 'web' && typeof window !== 'undefined' && window.location.pathname === '/account/export' ? '/account/export' : '/'
+    const callbackURL = Platform.OS === 'web' ? Linking.createURL(returnPath) : 'fave:///'
 
     try {
       const result = await authClient.signIn.social({ provider, callbackURL })

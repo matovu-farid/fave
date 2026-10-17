@@ -9,6 +9,7 @@ import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme'
 import { authClient } from '@/lib/auth-client'
 import { ClientPrerequisites, DriverApplication, getClientPrerequisites, getDriverApplication, updateClientProfile } from '@/lib/marketplace'
 import { unregisterPushNotifications } from '@/lib/push-notifications'
+import AccountExportCard from '@/components/account-export-card'
 import AccountDeletionCard from '@/components/account-deletion-card'
 
 export default function AccountScreen({ onClose }: { onClose: () => void }) {
@@ -124,6 +125,8 @@ export default function AccountScreen({ onClose }: { onClose: () => void }) {
         </> : !driverError ? <ThemedText themeColor="textSecondary">No driver profile yet. Apply separately if you want to drive with Fave.</ThemedText> : null}
         <ActionButton title={driver ? 'Open driver profile' : 'Apply to drive'} onPress={() => router.push('/driver')} />
       </Card>
+
+      <AccountExportCard />
 
       <AccountDeletionCard key={session?.user.id} />
 

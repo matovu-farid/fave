@@ -26,7 +26,7 @@ function loadSource(path, modules, globals = {}) {
   return exports
 }
 
-function renderAuthGate(platform, executionEnvironment) {
+function renderAuthGate(platform, executionEnvironment, pathname = '/') {
   const constants = {
     executionEnvironment,
     expoConfig: { scheme: 'fave', hostUri: '192.168.1.65:8081' },
@@ -63,7 +63,7 @@ function renderAuthGate(platform, executionEnvironment) {
       useSession: () => ({ data: null, isPending: false }),
       signIn: { social: async request => { requests.push(request); return {} } },
     } },
-  }, { React: react, process: { env: { EXPO_PUBLIC_API_URL: 'https://api.fave.fidexa.org' } } })
+  }, { React: react, window: {location:{pathname}}, process: { env: { EXPO_PUBLIC_API_URL: 'https://api.fave.fidexa.org' } } })
   function buttons(node) {
     return node?.type === 'Pressable' ? [node] : (node?.children ?? []).flatMap(buttons)
   }
@@ -101,4 +101,17 @@ test('web sign-in returns to the website origin', async () => {
   controls[0].props.onPress()
   await new Promise(resolve => setImmediate(resolve))
   assert.equal(requests[0].callbackURL, 'https://fave.example')
+})
+
+for (const [index,provider] of ['google','apple'].entries()) {
+  test(`${provider} returns to the secure export page after its browser sign-in`, async()=>{
+    const {controls,requests}=renderAuthGate('web','bare','/account/export')
+    controls[index].props.onPress();await new Promise(resolve=>setImmediate(resolve))
+    assert.equal(requests[0].callbackURL,'https://fave.example/account/export')
+  })
+}
+test('an arbitrary return pathname cannot change the auth callback destination',async()=>{
+  const {controls,requests}=renderAuthGate('web','bare','//untrusted.example')
+  controls[0].props.onPress();await new Promise(resolve=>setImmediate(resolve))
+  assert.equal(requests[0].callbackURL,'https://fave.example')
 })

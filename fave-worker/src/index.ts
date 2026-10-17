@@ -1,3 +1,5 @@
+import accountExports from './account-export-requests'
+import adminAccountExports from './admin-account-exports'
 import accountRequests, { adminAccountRequests } from './account-requests'
 import { accountLifecycleErrorHandler } from './account-lifecycle'
 import adminReviewSecurity from './admin-review-security'
@@ -46,6 +48,8 @@ app.all('/api/auth/*', async c => {
   }
   return response
 })
+app.route('/api/account/exports', accountExports)
+app.route('/api/admin/account-exports', adminAccountExports)
 app.route('/api/account', accountRequests)
 app.route('/api/admin/account-requests', adminAccountRequests)
 app.route('/api/marketplace', policiesApp)

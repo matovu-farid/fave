@@ -6,6 +6,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { webcrypto } from 'node:crypto'
 import vm from 'node:vm'
 import ts from 'typescript'
+import { ZipWriter } from '../../fave-worker/node_modules/@zip.js/zip.js/lib/zip-core-writer.js'
 
 const worker = resolve(fileURLToPath(new URL('../../fave-worker/', import.meta.url)))
 const nodeRequire = createRequire(`${worker}/package.json`)
@@ -17,7 +18,7 @@ export const tripInput = {
 
 // Execute production SQL against every production migration. Only the external
 // identity provider, map provider, and wall clock are substituted.
-export function availabilityFixture(t) {
+export function availabilityFixture(t, options = {}) {
   const sql = new DatabaseSync(':memory:')
   sql.exec('PRAGMA foreign_keys = ON')
   for (const name of readdirSync(`${worker}/migrations`).filter((name) => name.endsWith('.sql')).sort()) {
@@ -96,6 +97,8 @@ export function availabilityFixture(t) {
     computeDrivingRoute: async () => ({ kind: 'ok', distanceMeters: 80000, durationSeconds: 7200 }),
   }
   function load(path) {
+    const override = options.modules?.[path.split('/').at(-1).replace(/\.ts$/, '')]
+    if (override) return override
     if (path === `${worker}/src/auth.ts`) return { getWebAppOrigins: (env) => [env.BETTER_AUTH_URL, ...(env.WEB_APP_ORIGINS ?? '').split(',')].filter(Boolean), createAuth: () => ({ api: { getSession: async ({ headers }) => {
       const user = sql.prepare('SELECT id, name, email FROM user WHERE id = ?').get(headers.get('x-test-user') ?? '')
       const session = user ? sql.prepare('SELECT * FROM session WHERE userId = ?').get(user.id) : null
@@ -108,8 +111,8 @@ export function availabilityFixture(t) {
     const code = ts.transpileModule(readFileSync(path, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, esModuleInterop: true } }).outputText
     vm.runInNewContext(code, {
       module, exports: module.exports, console, crypto: webcrypto, Date: ClockDate, Number, String, Math, Intl, JSON, Promise,
-      Request, Response, Headers, URL, File, FormData, AbortSignal, TextEncoder, TextDecoder, Uint8Array, Buffer, atob, btoa, setTimeout, clearTimeout,
-      require: (name) => name.startsWith('.') ? load(resolve(dirname(path), `${name}.ts`)) : nodeRequire(name),
+      Request, Response, Headers, URL, File, FormData, AbortSignal, AbortController, ReadableStream, WritableStream, TransformStream, CompressionStream, DecompressionStream, TextEncoder, TextDecoder, Uint8Array, Buffer, atob, btoa, setTimeout, clearTimeout,
+      require: (name) => name === '@zip.js/zip.js/lib/zip-core-writer.js' ? { ZipWriter } : name.startsWith('.') ? load(resolve(dirname(path), `${name}.ts`)) : nodeRequire(name),
     }, { filename: path })
     return module.exports
   }
