@@ -267,3 +267,20 @@ No payment-provider contract, legal-policy approval, or payment launch gate was 
   complete provider/live-payment or physical-device acceptance gates.
 - Documentation: [Expo SDK57](https://docs.expo.dev/versions/v57.0.0/) and
   [Router search-parameter updates](https://docs.expo.dev/router/reference/url-parameters/#updating-url-parameters).
+
+### Recovery repair release checkpoint
+
+- Main `64566d0a045339502497e3d1b0a8ded890690201` passed
+  [CI38990751790](https://github.com/matovu-farid/fave/actions/runs/38990751790).
+  Cleared production web export targets the production API with no fixture URL;
+  Worker packaging dry-run passed. No database migration was needed or pending.
+- Worker version `1fde2feb-5a89-4f78-92fb-222060caefac` (`main-64566d0`)
+  serves100% traffic in deployment `da7d6347-2ec8-4fb8-9bea-7da7fcbd3ddc`,
+  created `2026-10-17T01:29:49.24944Z`. Runtime and all17 bindings match
+  predecessor `323bd116-7c76-4744-957e-7b69b8720196`; no trigger,
+  authentication configuration, policy activation or payment setting changed.
+- Production checks: health/database200ok, Trips200HTML, anonymous current-request,
+  staff availability and review-security APIs401JSON. Served Trips HTML references
+  the same script assets as the fresh production export. This publishes the web
+  repair and shared source; no EAS native binary/OTA release or new device test
+  is claimed.
