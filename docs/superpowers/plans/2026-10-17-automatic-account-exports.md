@@ -48,9 +48,9 @@ workerd, Expo SDK57/Router and React Native Web; no new native dependency.
   Test both-role ownership, cross-account/file denial, full pagination, secrets,
   old/revoked sessions, midstream failures/cancel, source expiry, duplicate/stale
   actions, archive byte equality, locked owner access and original deletion gates.
-- [ ] Independent spec/privacy and quality review; repair findings. Full tests,
+- [x] Independent spec/privacy and quality review; repair findings. Full tests,
   lint, app/Worker typechecks, web/native exports and actual browser checks.
-- [ ] Commit/push main, exact-commit CI, additive migration before code, staged
+- [x] Commit/push main, exact-commit CI, additive migration before code, staged
   upload/binding/runtime verification and authorized production release. Record
   minimal product/validation summary in #21/#20; no real-user export smoke test.
 
@@ -78,3 +78,17 @@ authenticated ZIP download, independent Python ZIP integrity, explicit receipt
 acknowledgement, owner audited detail and written response, lock hiding private
 details and the client reading their response. Mobile layout was inspected.
 No real user's archive or identity evidence was downloaded for these checks.
+
+Final release source `fed74cea1e1cd5bba967d9ca64a017e4b1a6f5a0` passed
+[CI39018021304](https://github.com/matovu-farid/fave/actions/runs/39018021304):
+472 tests, zero failures/skips, lint, both typechecks and iOS/Android/web bundles.
+Production account-download and owner-follow-up pages respond successfully;
+anonymous private API/archive access is rejected with no-store responses, and
+health/database checks pass. No real account export was created by verification.
+
+The final browser recheck also caught and repaired sign-out resetting the route:
+renewed sign-in now starts from the fixed secure download page. A synthetic
+driver archive independently verified the decrypted own ID and byte equality for
+all three retained test ID uploads, without unrelated client identity. The owner
+written-response/lock/client-readback journey passed. Issue21 remains open for
+its broader rights and erasure scope.

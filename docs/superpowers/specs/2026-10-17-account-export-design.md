@@ -1,6 +1,6 @@
 # Automatic account downloads and access-request fulfillment
 
-**Status:** owner-approved automatic download flow on 17 October 2026; implementation in progress, not yet shipped or legal-operating approval.
+**Status:** owner-approved automatic download flow implemented and released on 17 October 2026; broader statutory-case and legal-operating completion remain separate.
 **Issue:** [#21](https://github.com/matovu-farid/fave/issues/21).
 **Baseline:** main `f46c403059d50f99d237bd52d0159bb629efddba`.
 All implementation stays on main. Preserve deletion-request restrictions and

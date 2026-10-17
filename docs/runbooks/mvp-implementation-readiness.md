@@ -26,6 +26,14 @@ rendered screen does not prove the entire corresponding workflow is complete.
   unverified. Earlier device sign-in/sign-out observations are not a push test of
   the newer binary. See [the device runbook](ios-device-build.md).
 
+The account-download addition was subsequently released from source `fed74ce`.
+[Its CI](https://github.com/matovu-farid/fave/actions/runs/39018021304) passed
+472 tests with zero failures/skips, lint, both typechecks and all platform bundles.
+Synthetic browser checks covered private client/driver archives, own retained ID
+bytes, renewed sign-in, and protected owner follow-up. Production smoke checks
+created no real export. The original inspected baseline above remains historical;
+this addition does not establish full launch or statutory-case completion.
+
 ## Open issue coverage and remaining work
 
 Every issue below remains open. “Present” identifies implementation to preserve,
