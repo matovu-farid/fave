@@ -41,6 +41,7 @@ export default function AdminScreen() {
     refresh, revealAvailabilityDriver, callAvailabilityDriver, saveAvailabilityCall, decideAvailability,
     revealDriverContact, callDriver, saveFollowUp, setOutcomes, setNotes, setDecisionRequestId, setLoggingOfferId,
   } = useBookingOperations()
+  const hasEarlierOffers = pendingOffers.length + processingOffers.length + recentOffers.length > 0
 
   return (
     <ThemedView style={styles.container}>
@@ -172,7 +173,9 @@ export default function AdminScreen() {
             <ThemedText themeColor="textSecondary">{request.route.pickupArea} → {request.route.destinationArea}</ThemedText>
           </Card>)}
 
-          <SectionTitle title="Waiting for drivers" detail="Offers close after 15 minutes. Fave will not charge the client while waiting." />
+          {hasEarlierOffers ? <>
+          <SectionTitle title="Earlier trip requests" detail="These requests still use driver responses. Use the availability checks above for new bookings." />
+          <SectionTitle title="Awaiting driver responses" detail="These earlier offers keep their original 15-minute response window. No payment is taken while the client waits." />
           {loading ? <ActivityIndicator accessibilityLabel="Loading trip offers" /> : null}
           {!loading && pendingOffers.length === 0 ? (
             <Card><ThemedText>No driver offers need follow-up right now.</ThemedText></Card>
@@ -267,6 +270,7 @@ export default function AdminScreen() {
             </Card>
           ))}
           <ThemedText type="small" themeColor="textSecondary">Follow-up never accepts, declines, or extends a driver offer. Client contact details are not shown here.</ThemedText>
+          </> : null}
           </>:null}
         </ScrollView>
       </SafeAreaView>

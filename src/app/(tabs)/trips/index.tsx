@@ -533,6 +533,7 @@ export default function TripsScreen() {
         <ActionButton title="Refresh status" onPress={() => void refresh()} disabled={busy} />
       </Card> : null}
       {currentBookingStage === 'driver' && offer ? <Card>
+        <ThemedText type="smallBold">Earlier trip request</ThemedText>
         {(() => {
           const vehicle = offer.tripRequest?.vehicle ?? vehicles.find((item) => item.id === offer.vehicleId)
           return vehicle ? <ThemedText type="smallBold">Selected car · {vehicle.year} {vehicle.make} {vehicle.model}</ThemedText> : null

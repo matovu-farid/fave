@@ -250,9 +250,11 @@ export default function DriverScreen() {
         {application.documents.map((doc) => <ThemedText key={doc.id} type="small">{doc.type.replaceAll('_', ' ')}{doc.requirementVersion ? ` · v${doc.requirementVersion}` : ''} · {doc.status}</ThemedText>)}
       </Card> : null}
       {application?.status === 'approved' ? <Card>
-        <ThemedText type="subtitle">Trip offers</ThemedText>
+        <ThemedText type="subtitle">Trip availability</ThemedText>
+        <ThemedText>When a client asks to book your car, Fave will call you to check the requested dates. New booking requests do not need an in-app acceptance.</ThemedText>
         {offerMessage ? <Message>{offerMessage}</Message> : null}
-        {tripOffers.length === 0 ? <ThemedText>No new trip offers. This section refreshes automatically.</ThemedText> : tripOffers.map((offer) => <View key={offer.offerId} style={styles.offer} onLayout={(event) => {
+        {tripOffers.length > 0 ? <ThemedText type="smallBold">Earlier trip offers · respond before their original deadlines</ThemedText> : null}
+        {tripOffers.map((offer) => <View key={offer.offerId} style={styles.offer} onLayout={(event) => {
           if (focusTargetId === offer.offerId) scrollRef.current?.scrollTo({ y: event.nativeEvent.layout.y, animated: true })
         }}>
           {focusTargetId === offer.offerId ? <ThemedText type="smallBold">This is the request from your alert</ThemedText> : null}
